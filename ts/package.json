@@ -1,13 +1,45 @@
 {
   "name": "@panyam/massrelay",
-  "version": "0.0.1",
-  "main": "src/gen/massrelay/v1/models/collab_pb.ts",
-  "types": "src/gen/massrelay/v1/models/collab_pb.ts",
+  "version": "0.0.2",
+  "type": "module",
+  "main": "dist/gen/massrelay/v1/models/collab_pb.js",
+  "types": "dist/gen/massrelay/v1/models/collab_pb.d.ts",
   "exports": {
-    "./models": "./src/gen/massrelay/v1/models/collab_pb.ts",
-    "./services": "./src/gen/massrelay/v1/services/collab_pb.ts"
+    "./models": {
+      "types": "./dist/gen/massrelay/v1/models/collab_pb.d.ts",
+      "default": "./dist/gen/massrelay/v1/models/collab_pb.js"
+    },
+    "./services": {
+      "types": "./dist/gen/massrelay/v1/services/collab_pb.d.ts",
+      "default": "./dist/gen/massrelay/v1/services/collab_pb.js"
+    },
+    "./client": {
+      "types": "./dist/CollabClient.d.ts",
+      "default": "./dist/CollabClient.js"
+    },
+    "./sync": {
+      "types": "./dist/SyncAdapter.d.ts",
+      "default": "./dist/SyncAdapter.js"
+    },
+    "./url": {
+      "types": "./dist/url-params.d.ts",
+      "default": "./dist/url-params.js"
+    }
   },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
   "peerDependencies": {
-    "@bufbuild/protobuf": "^2.0.0"
+    "@bufbuild/protobuf": "^2.0.0",
+    "@panyam/servicekit-client": "^0.0.6"
+  },
+  "devDependencies": {
+    "@bufbuild/protobuf": "^2.11.0",
+    "@panyam/servicekit-client": "^0.0.6",
+    "typescript": "^5.9.3"
   }
 }
