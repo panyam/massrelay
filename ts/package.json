@@ -1,0 +1,13 @@
+{
+  "name": "@panyam/massrelay",
+  "version": "0.0.1",
+  "main": "src/gen/massrelay/v1/models/collab_pb.ts",
+  "types": "src/gen/massrelay/v1/models/collab_pb.ts",
+  "exports": {
+    "./models": "./src/gen/massrelay/v1/models/collab_pb.ts",
+    "./services": "./src/gen/massrelay/v1/services/collab_pb.ts"
+  },
+  "peerDependencies": {
+    "@bufbuild/protobuf": "^2.0.0"
+  }
+}

@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/user/excaliframe/relay/services"
+	"github.com/panyam/massrelay/services"
 )
 
 // RelayApp is the HTTP application for the relay server.

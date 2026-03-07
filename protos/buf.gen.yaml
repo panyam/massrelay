@@ -4,7 +4,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/user/excaliframe/relay/gen/go
+      value: github.com/panyam/massrelay/gen/go
 plugins:
   # Go protobuf
   - remote: buf.build/protocolbuffers/go
@@ -23,5 +23,5 @@ plugins:
 
   # TypeScript (protobuf-es) → browser client
   - local: protoc-gen-es
-    out: ../../src/collab/gen
+    out: ../ts/src/gen
     opt: target=ts

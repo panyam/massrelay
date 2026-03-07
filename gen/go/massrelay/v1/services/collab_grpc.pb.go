@@ -2,13 +2,14 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             (unknown)
-// source: excaliframe/v1/services/collab.proto
+// source: massrelay/v1/services/collab.proto
 
 package services
 
 import (
 	context "context"
-	models "github.com/user/excaliframe/relay/gen/go/excaliframe/v1/models"
+
+	models "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -20,9 +21,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CollabService_Sync_FullMethodName      = "/excaliframe.v1.services.CollabService/Sync"
-	CollabService_GetRoom_FullMethodName   = "/excaliframe.v1.services.CollabService/GetRoom"
-	CollabService_ListRooms_FullMethodName = "/excaliframe.v1.services.CollabService/ListRooms"
+	CollabService_Sync_FullMethodName      = "/massrelay.v1.services.CollabService/Sync"
+	CollabService_GetRoom_FullMethodName   = "/massrelay.v1.services.CollabService/GetRoom"
+	CollabService_ListRooms_FullMethodName = "/massrelay.v1.services.CollabService/ListRooms"
 )
 
 // CollabServiceClient is the client API for CollabService service.
@@ -173,7 +174,7 @@ func _CollabService_ListRooms_Handler(srv interface{}, ctx context.Context, dec 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var CollabService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "excaliframe.v1.services.CollabService",
+	ServiceName: "massrelay.v1.services.CollabService",
 	HandlerType: (*CollabServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -193,5 +194,5 @@ var CollabService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "excaliframe/v1/services/collab.proto",
+	Metadata: "massrelay/v1/services/collab.proto",
 }

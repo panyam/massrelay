@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	pb "github.com/user/excaliframe/relay/gen/go/excaliframe/v1/models"
+	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 
 	"github.com/panyam/servicekit/grpcws"
 	gohttp "github.com/panyam/servicekit/http"

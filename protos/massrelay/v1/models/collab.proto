@@ -1,7 +1,7 @@
 syntax = "proto3";
-package excaliframe.v1.models;
+package massrelay.v1.models;
 
-option go_package = "github.com/user/excaliframe/relay/gen/go/excaliframe/v1/models";
+option go_package = "github.com/panyam/massrelay/gen/go/massrelay/v1/models";
 
 // ─── Client → Server ────────────────────────────
 

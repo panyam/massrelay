@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/user/excaliframe/relay/web/server"
+	"github.com/panyam/massrelay/web/server"
 )
 
 func main() {

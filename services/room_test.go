@@ -3,7 +3,7 @@ package services
 import (
 	"testing"
 
-	pb "github.com/user/excaliframe/relay/gen/go/excaliframe/v1/models"
+	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 )
 
 func newTestClient(id, username string) *CollabClient {

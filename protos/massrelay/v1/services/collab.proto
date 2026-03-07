@@ -1,0 +1,20 @@
+syntax = "proto3";
+package massrelay.v1.services;
+
+option go_package = "github.com/panyam/massrelay/gen/go/massrelay/v1/services";
+
+import "massrelay/v1/models/collab.proto";
+
+service CollabService {
+  // Bidi stream: main real-time connection
+  rpc Sync(stream massrelay.v1.models.CollabAction)
+      returns (stream massrelay.v1.models.CollabEvent);
+
+  // Unary: room info
+  rpc GetRoom(massrelay.v1.models.GetRoomRequest)
+      returns (massrelay.v1.models.GetRoomResponse);
+
+  // Unary: list active rooms
+  rpc ListRooms(massrelay.v1.models.ListRoomsRequest)
+      returns (massrelay.v1.models.ListRoomsResponse);
+}

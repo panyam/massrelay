@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/user/excaliframe/relay/gen/go/excaliframe/v1/models"
+	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 )
 
 // CollabRoom holds the state for a single collaboration session.

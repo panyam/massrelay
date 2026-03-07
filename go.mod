@@ -1,4 +1,4 @@
-module github.com/user/excaliframe/relay
+module github.com/panyam/massrelay
 
 go 1.24.0
 

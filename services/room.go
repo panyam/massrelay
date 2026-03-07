@@ -3,7 +3,7 @@ package services
 import (
 	"time"
 
-	pb "github.com/user/excaliframe/relay/gen/go/excaliframe/v1/models"
+	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 )
 
 // NewCollabRoom creates a new room with the given session ID.

@@ -6,8 +6,8 @@ import (
 	"log"
 	"sync"
 
-	pb "github.com/user/excaliframe/relay/gen/go/excaliframe/v1/models"
-	"github.com/user/excaliframe/relay/services"
+	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
+	"github.com/panyam/massrelay/services"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
