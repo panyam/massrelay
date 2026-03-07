@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/panyam/gocurrent v0.0.9 // indirect
+	github.com/panyam/gocurrent v0.0.10 // indirect
 	github.com/panyam/goutils v0.1.8 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
