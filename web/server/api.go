@@ -25,9 +25,7 @@ func NewApiHandler(app *RelayApp) *ApiHandler {
 // SetupRoutes registers all API routes on the app's mux.
 func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.HandleHealth)
-	mux.HandleFunc("GET /api/v1/rooms", h.HandleListRooms)
 	mux.HandleFunc("GET /api/v1/rooms/{session_id}", h.HandleGetRoom)
-	mux.HandleFunc("GET /api/v1/session-by-hint", h.HandleSessionByHint)
 
 	// WebSocket bidi endpoint using servicekit grpcws
 	wsHandler := grpcws.NewBidiStreamHandler(

@@ -33,24 +33,16 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
-func TestListRoomsEndpoint_Empty(t *testing.T) {
+func TestListRoomsEndpoint_NotExposed(t *testing.T) {
 	app := newTestApp(t)
 	req := httptest.NewRequest("GET", "/api/v1/rooms", nil)
 	w := httptest.NewRecorder()
 	app.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	var body map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&body)
-	rooms, ok := body["rooms"].([]interface{})
-	if !ok {
-		t.Fatal("expected rooms array in response")
-	}
-	if len(rooms) != 0 {
-		t.Fatalf("expected empty rooms, got %d", len(rooms))
+	// List-rooms route is intentionally not registered (security: prevents session enumeration).
+	// Handler method is kept for future authenticated admin use.
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected list-rooms endpoint to not be exposed, got 200")
 	}
 }
 
