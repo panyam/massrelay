@@ -97,17 +97,19 @@ export class CollabClient {
     if (!this.grpc) return;
 
     const wasConnected = this._isConnected;
+    const grpc = this.grpc;
 
     // Send LeaveRoom before closing
     if (wasConnected) {
-      this.grpc.send({ leave: { reason: 'user disconnected' } });
+      grpc.send({ leave: { reason: 'user disconnected' } });
     }
 
-    this.grpc.close();
+    // Reset state BEFORE close so that handleConnectionClosed (triggered by
+    // onClose) sees _isConnected=false and becomes a no-op.
     this.resetState();
+    grpc.close();
 
     // Fire onDisconnect synchronously so the caller can clear state immediately.
-    // handleConnectionClosed will be a no-op since _isConnected is already false.
     if (wasConnected) {
       this.options.onDisconnect?.();
     }
