@@ -3,6 +3,8 @@ package server
 import (
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -52,10 +54,18 @@ type ipLimiterEntry struct {
 }
 
 // NewRelayApp creates a new RelayApp.
+// Set RELAY_LOG_PAYLOADS=N (env var) to log first N chars of content payloads for debugging.
 func NewRelayApp() *RelayApp {
 	cfg := DefaultRateLimitConfig()
+	svc := services.NewCollabService()
+	// Check env var for payload logging
+	if v := os.Getenv("RELAY_LOG_PAYLOADS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			svc.LogPayloads = n
+		}
+	}
 	app := &RelayApp{
-		Service:       services.NewCollabService(),
+		Service:       svc,
 		RateLimit:     cfg,
 		mux:           http.NewServeMux(),
 		globalLimiter: rate.NewLimiter(rate.Limit(cfg.GlobalConnPerSec), int(cfg.GlobalConnPerSec)),

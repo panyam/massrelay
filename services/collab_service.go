@@ -44,6 +44,10 @@ type CollabService struct {
 	mu              sync.RWMutex
 	MaxPeersPerRoom int   // 0 = unlimited, default 10
 	ProtocolVersion int32 // relay protocol version, default 2
+	// LogPayloads enables logging of first N chars of content payloads (SceneUpdate, TextUpdate, SceneInitResponse).
+	// Useful for verifying E2EE — encrypted data appears as base64, plaintext as JSON.
+	// 0 = disabled (default), >0 = number of chars to log.
+	LogPayloads int
 }
 
 // NewCollabService creates a new CollabService.
@@ -468,14 +472,40 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 	switch a := action.Action.(type) {
 	case *pb.CollabAction_SceneUpdate:
 		event.Event = &pb.CollabEvent_SceneUpdate{SceneUpdate: a.SceneUpdate}
+		if s.LogPayloads > 0 {
+			for i, el := range a.SceneUpdate.GetElements() {
+				data := el.GetData()
+				if len(data) > s.LogPayloads {
+					data = data[:s.LogPayloads]
+				}
+				log.Printf("[DATA-PEEK] SceneUpdate element[%d] id=%s data=%q", i, el.GetId(), data)
+				if i >= 2 {
+					break
+				}
+			}
+		}
 	case *pb.CollabAction_CursorUpdate:
 		event.Event = &pb.CollabEvent_CursorUpdate{CursorUpdate: a.CursorUpdate}
 	case *pb.CollabAction_TextUpdate:
 		event.Event = &pb.CollabEvent_TextUpdate{TextUpdate: a.TextUpdate}
+		if s.LogPayloads > 0 {
+			text := a.TextUpdate.GetText()
+			if len(text) > s.LogPayloads {
+				text = text[:s.LogPayloads]
+			}
+			log.Printf("[DATA-PEEK] TextUpdate text=%q", text)
+		}
 	case *pb.CollabAction_SceneInitRequest:
 		event.Event = &pb.CollabEvent_SceneInitRequest{SceneInitRequest: a.SceneInitRequest}
 	case *pb.CollabAction_SceneInitResponse:
 		event.Event = &pb.CollabEvent_SceneInitResponse{SceneInitResponse: a.SceneInitResponse}
+		if s.LogPayloads > 0 {
+			payload := a.SceneInitResponse.GetPayload()
+			if len(payload) > s.LogPayloads {
+				payload = payload[:s.LogPayloads]
+			}
+			log.Printf("[DATA-PEEK] SceneInitResponse payload=%q", payload)
+		}
 	case *pb.CollabAction_CredentialsChanged:
 		// Update room encrypted state based on reason
 		if a.CredentialsChanged.GetReason() == "password_removed" {
