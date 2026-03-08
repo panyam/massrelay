@@ -47,13 +47,19 @@ func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg S
 	if cfg.MaxMessageRate > 0 {
 		msgLimiter = rate.NewLimiter(rate.Limit(cfg.MaxMessageRate), int(cfg.MaxMessageRate))
 	}
-	return &CollabBidiStream{
+	s := &CollabBidiStream{
 		ctx:            ctx,
 		cancel:         cancel,
 		service:        svc,
 		sendCh:         make(chan *pb.CollabEvent, 64),
 		messageLimiter: msgLimiter,
 	}
+	// Watch for context cancellation (WebSocket close) and clean up the client.
+	// BidiStreamConn.OnClose() cancels the context but does NOT call CloseSend(),
+	// so ungraceful disconnects (browser refresh, network drop) would leave zombie
+	// clients in the room without this goroutine.
+	go s.watchClose()
+	return s
 }
 
 // Send processes a CollabAction from the client (WS → service).
@@ -136,22 +142,37 @@ func (s *CollabBidiStream) Recv() (*pb.CollabEvent, error) {
 	}
 }
 
-// CloseSend signals that the client is done sending (half-close).
-func (s *CollabBidiStream) CloseSend() error {
-	// Trigger leave on half-close
+// leaveAndCleanup sends a LeaveRoom action for this client if still joined.
+// Safe to call multiple times — clears sessionId/clientId on first call.
+func (s *CollabBidiStream) leaveAndCleanup(reason string) {
 	s.mu.Lock()
 	sessionId := s.sessionId
 	clientId := s.clientId
+	s.sessionId = ""
+	s.clientId = ""
 	s.mu.Unlock()
 
 	if sessionId != "" && clientId != "" {
-		s.service.HandleAction(s.ctx, &pb.CollabAction{
+		log.Printf("[STREAM] Cleanup: leaving session %s for client %s reason=%s", sessionId, clientId, reason)
+		// Use Background context — the original ctx may already be cancelled
+		s.service.HandleAction(context.Background(), &pb.CollabAction{
 			ClientId: clientId,
 			Action: &pb.CollabAction_Leave{
-				Leave: &pb.LeaveRoom{Reason: "client closed"},
+				Leave: &pb.LeaveRoom{Reason: reason},
 			},
 		})
 	}
+}
+
+// watchClose waits for context cancellation (WebSocket drop) and cleans up.
+func (s *CollabBidiStream) watchClose() {
+	<-s.ctx.Done()
+	s.leaveAndCleanup("connection closed")
+}
+
+// CloseSend signals that the client is done sending (half-close).
+func (s *CollabBidiStream) CloseSend() error {
+	s.leaveAndCleanup("client closed")
 	close(s.sendCh)
 	return nil
 }
