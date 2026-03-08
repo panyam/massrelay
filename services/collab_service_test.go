@@ -949,3 +949,266 @@ func drainCh(ch chan *pb.CollabEvent) {
 		}
 	}
 }
+
+// ─── Participant Limits ─────────────────────────
+
+func TestJoinRoom_RoomFull(t *testing.T) {
+	svc := NewCollabService()
+	svc.MaxPeersPerRoom = 3
+	ctx := context.Background()
+
+	// Join 3 clients (fill the room)
+	for i := 0; i < 3; i++ {
+		action := &pb.CollabAction{
+			Action: &pb.CollabAction_Join{
+				Join: &pb.JoinRoom{
+					SessionId: "sess-full",
+					Username:  "User",
+					Tool:      "excalidraw",
+				},
+			},
+		}
+		event, err := svc.HandleAction(ctx, action)
+		if err != nil {
+			t.Fatalf("join %d: unexpected error: %v", i, err)
+		}
+		if event.GetRoomJoined() == nil {
+			t.Fatalf("join %d: expected RoomJoined event", i)
+		}
+	}
+
+	// 4th client should be rejected with ROOM_FULL ErrorEvent (not an error)
+	action := &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId: "sess-full",
+				Username:  "Overflow",
+				Tool:      "excalidraw",
+			},
+		},
+	}
+	event, err := svc.HandleAction(ctx, action)
+	if err != nil {
+		t.Fatalf("expected no stream error, got: %v", err)
+	}
+	if event == nil {
+		t.Fatal("expected ErrorEvent, got nil")
+	}
+	errEvent := event.GetError()
+	if errEvent == nil {
+		t.Fatalf("expected ErrorEvent, got %T", event.Event)
+	}
+	if errEvent.Code != "ROOM_FULL" {
+		t.Fatalf("expected code ROOM_FULL, got %s", errEvent.Code)
+	}
+}
+
+func TestRoomJoined_IncludesMaxPeers(t *testing.T) {
+	svc := NewCollabService()
+	svc.MaxPeersPerRoom = 25
+	ctx := context.Background()
+
+	event, err := svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId: "sess-info",
+				Username:  "Alice",
+				Tool:      "excalidraw",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rj := event.GetRoomJoined()
+	if rj == nil {
+		t.Fatal("expected RoomJoined")
+	}
+	if rj.MaxPeers != 25 {
+		t.Fatalf("expected max_peers=25, got %d", rj.MaxPeers)
+	}
+	if rj.ProtocolVersion != svc.ProtocolVersion {
+		t.Fatalf("expected protocol_version=%d, got %d", svc.ProtocolVersion, rj.ProtocolVersion)
+	}
+}
+
+// ─── Encrypted Rooms ─────────────────────────
+
+func TestJoinRoom_EncryptedRoom(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+
+	// Owner creates encrypted room
+	event, err := svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:       "sess-enc",
+				Username:        "Owner",
+				Tool:            "excalidraw",
+				IsOwner:         true,
+				Encrypted:       true,
+				ProtocolVersion: 2,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rj := event.GetRoomJoined()
+	if rj == nil {
+		t.Fatal("expected RoomJoined")
+	}
+	if !rj.Encrypted {
+		t.Fatal("expected encrypted=true in RoomJoined")
+	}
+
+	// v2 client joins — should succeed
+	event2, err2 := svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:       "sess-enc",
+				Username:        "ModernClient",
+				Tool:            "excalidraw",
+				ProtocolVersion: 2,
+			},
+		},
+	})
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	if event2.GetRoomJoined() == nil {
+		t.Fatal("expected v2 client to join successfully")
+	}
+}
+
+func TestJoinRoom_OldProtocolRejected(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+
+	// Owner creates encrypted room
+	svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:       "sess-enc2",
+				Username:        "Owner",
+				Tool:            "excalidraw",
+				IsOwner:         true,
+				Encrypted:       true,
+				ProtocolVersion: 2,
+			},
+		},
+	})
+
+	// Old client (no protocol_version = 0) tries to join encrypted room
+	event, err := svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId: "sess-enc2",
+				Username:  "OldClient",
+				Tool:      "excalidraw",
+				// ProtocolVersion intentionally omitted (defaults to 0)
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	errEvent := event.GetError()
+	if errEvent == nil {
+		t.Fatal("expected PROTOCOL_VERSION_TOO_OLD ErrorEvent")
+	}
+	if errEvent.Code != "PROTOCOL_VERSION_TOO_OLD" {
+		t.Fatalf("expected code PROTOCOL_VERSION_TOO_OLD, got %s", errEvent.Code)
+	}
+}
+
+func TestCredentialsChanged_Broadcast(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+
+	// Two clients join
+	event1, _ := svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:       "sess-cred",
+				Username:        "Owner",
+				Tool:            "excalidraw",
+				IsOwner:         true,
+				Encrypted:       true,
+				ProtocolVersion: 2,
+			},
+		},
+	})
+	ownerClientId := event1.GetRoomJoined().ClientId
+
+	event2, _ := svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:       "sess-cred",
+				Username:        "Peer",
+				Tool:            "excalidraw",
+				ProtocolVersion: 2,
+			},
+		},
+	})
+	peerClientId := event2.GetRoomJoined().ClientId
+
+	// Drain PeerJoined from owner's channel
+	ownerCh := svc.GetClientSendCh("sess-cred", ownerClientId)
+	drainCh(ownerCh)
+
+	// Owner sends CredentialsChanged
+	svc.HandleAction(ctx, &pb.CollabAction{
+		ClientId: ownerClientId,
+		Action: &pb.CollabAction_CredentialsChanged{
+			CredentialsChanged: &pb.CredentialsChanged{
+				Reason: "password_changed",
+			},
+		},
+	})
+
+	// Peer should receive CredentialsChanged event
+	peerCh := svc.GetClientSendCh("sess-cred", peerClientId)
+	if peerCh == nil {
+		t.Fatal("expected non-nil peer channel")
+	}
+	select {
+	case event := <-peerCh:
+		cc := event.GetCredentialsChanged()
+		if cc == nil {
+			t.Fatalf("expected CredentialsChanged event, got %T", event.Event)
+		}
+		if cc.Reason != "password_changed" {
+			t.Fatalf("expected reason=password_changed, got %s", cc.Reason)
+		}
+	default:
+		t.Fatal("expected CredentialsChanged event on peer channel")
+	}
+}
+
+func TestGetRoom_IncludesEncrypted(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+
+	// Create encrypted room
+	svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:       "sess-enc-rest",
+				Username:        "Owner",
+				Tool:            "excalidraw",
+				IsOwner:         true,
+				Encrypted:       true,
+				ProtocolVersion: 2,
+			},
+		},
+	})
+
+	resp, err := svc.GetRoom(ctx, &pb.GetRoomRequest{SessionId: "sess-enc-rest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Encrypted {
+		t.Fatal("expected encrypted=true in GetRoomResponse")
+	}
+}
