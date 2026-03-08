@@ -5,14 +5,13 @@
 package servicesconnect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	http "net/http"
-	strings "strings"
-
-	connect "connectrpc.com/connect"
 	models "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 	services "github.com/panyam/massrelay/gen/go/massrelay/v1/services"
+	http "net/http"
+	strings "strings"
 )
 
 // This is a compile-time assertion to ensure that this generated file and the connect package are

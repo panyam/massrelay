@@ -19,6 +19,7 @@ type CollabRoom struct {
 	OwnerClientId  string
 	OwnerBrowserId string
 	Tool           string // "excalidraw" | "mermaid" — set from first joiner
+	Encrypted      bool   // true if room owner declared E2EE
 	mu             sync.RWMutex
 }
 
@@ -38,16 +39,20 @@ type CollabClient struct {
 
 // CollabService manages rooms and peer lifecycle.
 type CollabService struct {
-	rooms     map[string]*CollabRoom
-	hintIndex map[string]string // client_hint → sessionId (for session reuse)
-	mu        sync.RWMutex
+	rooms           map[string]*CollabRoom
+	hintIndex       map[string]string // client_hint → sessionId (for session reuse)
+	mu              sync.RWMutex
+	MaxPeersPerRoom int   // 0 = unlimited, default 10
+	ProtocolVersion int32 // relay protocol version, default 2
 }
 
 // NewCollabService creates a new CollabService.
 func NewCollabService() *CollabService {
 	return &CollabService{
-		rooms:     make(map[string]*CollabRoom),
-		hintIndex: make(map[string]string),
+		rooms:           make(map[string]*CollabRoom),
+		hintIndex:       make(map[string]string),
+		MaxPeersPerRoom: 10,
+		ProtocolVersion: 2,
 	}
 }
 
@@ -135,7 +140,8 @@ func (s *CollabService) HandleAction(ctx context.Context, action *pb.CollabActio
 		*pb.CollabAction_CursorUpdate,
 		*pb.CollabAction_TextUpdate,
 		*pb.CollabAction_SceneInitRequest,
-		*pb.CollabAction_SceneInitResponse:
+		*pb.CollabAction_SceneInitResponse,
+		*pb.CollabAction_CredentialsChanged:
 		return s.handleBroadcast(ctx, action)
 	default:
 		return nil, fmt.Errorf("unknown or empty action type")
@@ -150,12 +156,16 @@ func (s *CollabService) GetRoom(ctx context.Context, req *pb.GetRoomRequest) (*p
 	if !ok {
 		return nil, fmt.Errorf("room not found: %s", req.GetSessionId())
 	}
+	room.mu.RLock()
+	encrypted := room.Encrypted
+	room.mu.RUnlock()
 	return &pb.GetRoomResponse{
 		SessionId:     room.SessionId,
 		Peers:         room.GetPeerInfo(),
 		CreatedAt:     room.Created.Unix(),
 		OwnerClientId: room.OwnerClientId,
 		Tool:          room.Tool,
+		Encrypted:     encrypted,
 	}, nil
 }
 
@@ -212,6 +222,19 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 
 	room := s.GetOrCreateRoom(sessionId)
 
+	// Participant limit check — return graceful ErrorEvent, not a stream-killing error
+	if s.MaxPeersPerRoom > 0 && room.ClientCount() >= s.MaxPeersPerRoom {
+		return &pb.CollabEvent{
+			EventId: uuid.New().String(),
+			Event: &pb.CollabEvent_Error{
+				Error: &pb.ErrorEvent{
+					Code:    "ROOM_FULL",
+					Message: fmt.Sprintf("Room is full (%d/%d)", room.ClientCount(), s.MaxPeersPerRoom),
+				},
+			},
+		}, nil
+	}
+
 	// Owner validation
 	if isOwner {
 		room.mu.Lock()
@@ -220,6 +243,27 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 			return nil, fmt.Errorf("room already has an owner from a different browser")
 		}
 		room.mu.Unlock()
+	}
+
+	// Encrypted room: owner declares it, old clients rejected
+	if isOwner && join.GetEncrypted() {
+		room.mu.Lock()
+		room.Encrypted = true
+		room.mu.Unlock()
+	}
+	room.mu.RLock()
+	roomEncrypted := room.Encrypted
+	room.mu.RUnlock()
+	if roomEncrypted && join.GetProtocolVersion() < 2 {
+		return &pb.CollabEvent{
+			EventId: uuid.New().String(),
+			Event: &pb.CollabEvent_Error{
+				Error: &pb.ErrorEvent{
+					Code:    "PROTOCOL_VERSION_TOO_OLD",
+					Message: "This room requires encryption (protocol version >= 2)",
+				},
+			},
+		}, nil
 	}
 
 	// Snapshot existing peers BEFORE adding the new client
@@ -274,10 +318,13 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 		EventId: uuid.New().String(),
 		Event: &pb.CollabEvent_RoomJoined{
 			RoomJoined: &pb.RoomJoined{
-				ClientId:      clientId,
-				SessionId:     sessionId,
-				Peers:         existingPeers,
-				OwnerClientId: room.OwnerClientId,
+				ClientId:        clientId,
+				SessionId:       sessionId,
+				Peers:           existingPeers,
+				OwnerClientId:   room.OwnerClientId,
+				MaxPeers:        int32(s.MaxPeersPerRoom),
+				Encrypted:       roomEncrypted,
+				ProtocolVersion: s.ProtocolVersion,
 			},
 		},
 	}, nil
@@ -429,6 +476,14 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 		event.Event = &pb.CollabEvent_SceneInitRequest{SceneInitRequest: a.SceneInitRequest}
 	case *pb.CollabAction_SceneInitResponse:
 		event.Event = &pb.CollabEvent_SceneInitResponse{SceneInitResponse: a.SceneInitResponse}
+	case *pb.CollabAction_CredentialsChanged:
+		// Update room encrypted state based on reason
+		if a.CredentialsChanged.GetReason() == "password_removed" {
+			room.mu.Lock()
+			room.Encrypted = false
+			room.mu.Unlock()
+		}
+		event.Event = &pb.CollabEvent_CredentialsChanged{CredentialsChanged: a.CredentialsChanged}
 	default:
 		return nil, fmt.Errorf("unsupported broadcast action type")
 	}

@@ -28,13 +28,29 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/rooms/{session_id}", h.HandleGetRoom)
 
 	// WebSocket bidi endpoint using servicekit grpcws
+	streamCfg := DefaultStreamConfig()
 	wsHandler := grpcws.NewBidiStreamHandler(
 		func(ctx context.Context) (*CollabBidiStream, error) {
-			return NewCollabBidiStream(ctx, h.app.Service), nil
+			return NewCollabBidiStream(ctx, h.app.Service, streamCfg), nil
 		},
 		func() *pb.CollabAction { return &pb.CollabAction{} },
 	)
-	mux.HandleFunc("/ws/v1/{session_id}/sync", gohttp.WSServe(wsHandler, nil))
+	// Wrap with rate limiting
+	rawWSHandler := gohttp.WSServe(wsHandler, nil)
+	mux.HandleFunc("/ws/v1/{session_id}/sync", func(w http.ResponseWriter, r *http.Request) {
+		// Global connection rate limit
+		if !h.app.globalLimiter.Allow() {
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		// Per-IP connection rate limit
+		ip := clientIP(r)
+		if !h.app.getIPLimiter(ip).Allow() {
+			http.Error(w, `{"error":"per-IP rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		rawWSHandler(w, r)
+	})
 	log.Println("Registered Collab WebSocket handler at /ws/v1/{session_id}/sync")
 }
 

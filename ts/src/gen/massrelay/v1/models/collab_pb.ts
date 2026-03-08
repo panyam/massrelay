@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file massrelay/v1/models/collab.proto.
  */
 export const file_massrelay_v1_models_collab: GenFile = /*@__PURE__*/
-  fileDesc("CiBtYXNzcmVsYXkvdjEvbW9kZWxzL2NvbGxhYi5wcm90bxITbWFzc3JlbGF5LnYxLm1vZGVscyKkBAoMQ29sbGFiQWN0aW9uEhEKCWFjdGlvbl9pZBgBIAEoCRIRCgljbGllbnRfaWQYAiABKAkSEQoJdGltZXN0YW1wGAMgASgDEi0KBGpvaW4YCiABKAsyHS5tYXNzcmVsYXkudjEubW9kZWxzLkpvaW5Sb29tSAASLwoFbGVhdmUYCyABKAsyHi5tYXNzcmVsYXkudjEubW9kZWxzLkxlYXZlUm9vbUgAEjcKCHByZXNlbmNlGAwgASgLMiMubWFzc3JlbGF5LnYxLm1vZGVscy5QcmVzZW5jZVVwZGF0ZUgAEjgKDHNjZW5lX3VwZGF0ZRgNIAEoCzIgLm1hc3NyZWxheS52MS5tb2RlbHMuU2NlbmVVcGRhdGVIABI6Cg1jdXJzb3JfdXBkYXRlGA4gASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5DdXJzb3JVcGRhdGVIABI2Cgt0ZXh0X3VwZGF0ZRgPIAEoCzIfLm1hc3NyZWxheS52MS5tb2RlbHMuVGV4dFVwZGF0ZUgAEkMKEnNjZW5lX2luaXRfcmVxdWVzdBgQIAEoCzIlLm1hc3NyZWxheS52MS5tb2RlbHMuU2NlbmVJbml0UmVxdWVzdEgAEkUKE3NjZW5lX2luaXRfcmVzcG9uc2UYESABKAsyJi5tYXNzcmVsYXkudjEubW9kZWxzLlNjZW5lSW5pdFJlc3BvbnNlSABCCAoGYWN0aW9uIqIBCghKb2luUm9vbRISCgpzZXNzaW9uX2lkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEgwKBHRvb2wYAyABKAkSEwoLY2xpZW50X3R5cGUYBCABKAkSEgoKYXZhdGFyX3VybBgFIAEoCRIQCghpc19vd25lchgGIAEoCBISCgpicm93c2VyX2lkGAcgASgJEhMKC2NsaWVudF9oaW50GAggASgJIhsKCUxlYXZlUm9vbRIOCgZyZWFzb24YASABKAkiNQoOUHJlc2VuY2VVcGRhdGUSEQoJaXNfYWN0aXZlGAEgASgIEhAKCHVzZXJuYW1lGAIgASgJIkMKC1NjZW5lVXBkYXRlEjQKCGVsZW1lbnRzGAEgAygLMiIubWFzc3JlbGF5LnYxLm1vZGVscy5FbGVtZW50VXBkYXRlImIKDUVsZW1lbnRVcGRhdGUSCgoCaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoBRIVCg12ZXJzaW9uX25vbmNlGAMgASgFEgwKBGRhdGEYBCABKAkSDwoHZGVsZXRlZBgFIAEoCCLWAQoMQ3Vyc29yVXBkYXRlEgkKAXgYASABKAISCQoBeRgCIAEoAhIMCgR0b29sGAMgASgJEg4KBmJ1dHRvbhgEIAEoCRJXChRzZWxlY3RlZF9lbGVtZW50X2lkcxgFIAMoCzI5Lm1hc3NyZWxheS52MS5tb2RlbHMuQ3Vyc29yVXBkYXRlLlNlbGVjdGVkRWxlbWVudElkc0VudHJ5GjkKF1NlbGVjdGVkRWxlbWVudElkc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCDoCOAEiRAoKVGV4dFVwZGF0ZRIMCgR0ZXh0GAEgASgJEg8KB3ZlcnNpb24YAiABKAUSFwoPY3Vyc29yX3Bvc2l0aW9uGAMgASgFIhIKEFNjZW5lSW5pdFJlcXVlc3QiJAoRU2NlbmVJbml0UmVzcG9uc2USDwoHcGF5bG9hZBgBIAEoCSKbBgoLQ29sbGFiRXZlbnQSEAoIZXZlbnRfaWQYASABKAkSFgoOZnJvbV9jbGllbnRfaWQYAiABKAkSGAoQc2VydmVyX3RpbWVzdGFtcBgDIAEoAxI2Cgtyb29tX2pvaW5lZBgKIAEoCzIfLm1hc3NyZWxheS52MS5tb2RlbHMuUm9vbUpvaW5lZEgAEjYKC3BlZXJfam9pbmVkGAsgASgLMh8ubWFzc3JlbGF5LnYxLm1vZGVscy5QZWVySm9pbmVkSAASMgoJcGVlcl9sZWZ0GAwgASgLMh0ubWFzc3JlbGF5LnYxLm1vZGVscy5QZWVyTGVmdEgAEjcKCHByZXNlbmNlGA0gASgLMiMubWFzc3JlbGF5LnYxLm1vZGVscy5QcmVzZW5jZVVwZGF0ZUgAEjgKDHNjZW5lX3VwZGF0ZRgOIAEoCzIgLm1hc3NyZWxheS52MS5tb2RlbHMuU2NlbmVVcGRhdGVIABI6Cg1jdXJzb3JfdXBkYXRlGA8gASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5DdXJzb3JVcGRhdGVIABI2Cgt0ZXh0X3VwZGF0ZRgQIAEoCzIfLm1hc3NyZWxheS52MS5tb2RlbHMuVGV4dFVwZGF0ZUgAEkUKE3NjZW5lX2luaXRfcmVzcG9uc2UYESABKAsyJi5tYXNzcmVsYXkudjEubW9kZWxzLlNjZW5lSW5pdFJlc3BvbnNlSAASMAoFZXJyb3IYEiABKAsyHy5tYXNzcmVsYXkudjEubW9kZWxzLkVycm9yRXZlbnRIABJDChJzY2VuZV9pbml0X3JlcXVlc3QYEyABKAsyJS5tYXNzcmVsYXkudjEubW9kZWxzLlNjZW5lSW5pdFJlcXVlc3RIABI6Cg1zZXNzaW9uX2VuZGVkGBQgASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5TZXNzaW9uRW5kZWRIABI6Cg1vd25lcl9jaGFuZ2VkGBUgASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5Pd25lckNoYW5nZWRIAEIHCgVldmVudCJ6CgpSb29tSm9pbmVkEhEKCWNsaWVudF9pZBgBIAEoCRISCgpzZXNzaW9uX2lkGAIgASgJEiwKBXBlZXJzGAMgAygLMh0ubWFzc3JlbGF5LnYxLm1vZGVscy5QZWVySW5mbxIXCg9vd25lcl9jbGllbnRfaWQYBCABKAkifQoIUGVlckluZm8SEQoJY2xpZW50X2lkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEhIKCmF2YXRhcl91cmwYAyABKAkSEwoLY2xpZW50X3R5cGUYBCABKAkSEQoJaXNfYWN0aXZlGAUgASgIEhAKCGlzX293bmVyGAYgASgIIjkKClBlZXJKb2luZWQSKwoEcGVlchgBIAEoCzIdLm1hc3NyZWxheS52MS5tb2RlbHMuUGVlckluZm8iQQoIUGVlckxlZnQSEQoJY2xpZW50X2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCRISCgpwZWVyX2NvdW50GAMgASgFIisKCkVycm9yRXZlbnQSDAoEY29kZRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIh4KDFNlc3Npb25FbmRlZBIOCgZyZWFzb24YASABKAkiKwoMT3duZXJDaGFuZ2VkEhsKE25ld19vd25lcl9jbGllbnRfaWQYASABKAkiJAoOR2V0Um9vbVJlcXVlc3QSEgoKc2Vzc2lvbl9pZBgBIAEoCSKOAQoPR2V0Um9vbVJlc3BvbnNlEhIKCnNlc3Npb25faWQYASABKAkSLAoFcGVlcnMYAiADKAsyHS5tYXNzcmVsYXkudjEubW9kZWxzLlBlZXJJbmZvEhIKCmNyZWF0ZWRfYXQYAyABKAMSFwoPb3duZXJfY2xpZW50X2lkGAQgASgJEgwKBHRvb2wYBSABKAkiEgoQTGlzdFJvb21zUmVxdWVzdCJEChFMaXN0Um9vbXNSZXNwb25zZRIvCgVyb29tcxgBIAMoCzIgLm1hc3NyZWxheS52MS5tb2RlbHMuUm9vbVN1bW1hcnkiSQoLUm9vbVN1bW1hcnkSEgoKc2Vzc2lvbl9pZBgBIAEoCRISCgpwZWVyX2NvdW50GAIgASgFEhIKCmNyZWF0ZWRfYXQYAyABKANCzAEKF2NvbS5tYXNzcmVsYXkudjEubW9kZWxzQgtDb2xsYWJQcm90b1ABWjZnaXRodWIuY29tL3BhbnlhbS9tYXNzcmVsYXkvZ2VuL2dvL21hc3NyZWxheS92MS9tb2RlbHOiAgNNVk2qAhNNYXNzcmVsYXkuVjEuTW9kZWxzygITTWFzc3JlbGF5XFYxXE1vZGVsc+ICH01hc3NyZWxheVxWMVxNb2RlbHNcR1BCTWV0YWRhdGHqAhVNYXNzcmVsYXk6OlYxOjpNb2RlbHNiBnByb3RvMw");
+  fileDesc("CiBtYXNzcmVsYXkvdjEvbW9kZWxzL2NvbGxhYi5wcm90bxITbWFzc3JlbGF5LnYxLm1vZGVscyLsBAoMQ29sbGFiQWN0aW9uEhEKCWFjdGlvbl9pZBgBIAEoCRIRCgljbGllbnRfaWQYAiABKAkSEQoJdGltZXN0YW1wGAMgASgDEi0KBGpvaW4YCiABKAsyHS5tYXNzcmVsYXkudjEubW9kZWxzLkpvaW5Sb29tSAASLwoFbGVhdmUYCyABKAsyHi5tYXNzcmVsYXkudjEubW9kZWxzLkxlYXZlUm9vbUgAEjcKCHByZXNlbmNlGAwgASgLMiMubWFzc3JlbGF5LnYxLm1vZGVscy5QcmVzZW5jZVVwZGF0ZUgAEjgKDHNjZW5lX3VwZGF0ZRgNIAEoCzIgLm1hc3NyZWxheS52MS5tb2RlbHMuU2NlbmVVcGRhdGVIABI6Cg1jdXJzb3JfdXBkYXRlGA4gASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5DdXJzb3JVcGRhdGVIABI2Cgt0ZXh0X3VwZGF0ZRgPIAEoCzIfLm1hc3NyZWxheS52MS5tb2RlbHMuVGV4dFVwZGF0ZUgAEkMKEnNjZW5lX2luaXRfcmVxdWVzdBgQIAEoCzIlLm1hc3NyZWxheS52MS5tb2RlbHMuU2NlbmVJbml0UmVxdWVzdEgAEkUKE3NjZW5lX2luaXRfcmVzcG9uc2UYESABKAsyJi5tYXNzcmVsYXkudjEubW9kZWxzLlNjZW5lSW5pdFJlc3BvbnNlSAASRgoTY3JlZGVudGlhbHNfY2hhbmdlZBgSIAEoCzInLm1hc3NyZWxheS52MS5tb2RlbHMuQ3JlZGVudGlhbHNDaGFuZ2VkSABCCAoGYWN0aW9uIs8BCghKb2luUm9vbRISCgpzZXNzaW9uX2lkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEgwKBHRvb2wYAyABKAkSEwoLY2xpZW50X3R5cGUYBCABKAkSEgoKYXZhdGFyX3VybBgFIAEoCRIQCghpc19vd25lchgGIAEoCBISCgpicm93c2VyX2lkGAcgASgJEhMKC2NsaWVudF9oaW50GAggASgJEhgKEHByb3RvY29sX3ZlcnNpb24YCSABKAUSEQoJZW5jcnlwdGVkGAogASgIIhsKCUxlYXZlUm9vbRIOCgZyZWFzb24YASABKAkiNQoOUHJlc2VuY2VVcGRhdGUSEQoJaXNfYWN0aXZlGAEgASgIEhAKCHVzZXJuYW1lGAIgASgJIkMKC1NjZW5lVXBkYXRlEjQKCGVsZW1lbnRzGAEgAygLMiIubWFzc3JlbGF5LnYxLm1vZGVscy5FbGVtZW50VXBkYXRlImIKDUVsZW1lbnRVcGRhdGUSCgoCaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoBRIVCg12ZXJzaW9uX25vbmNlGAMgASgFEgwKBGRhdGEYBCABKAkSDwoHZGVsZXRlZBgFIAEoCCLWAQoMQ3Vyc29yVXBkYXRlEgkKAXgYASABKAISCQoBeRgCIAEoAhIMCgR0b29sGAMgASgJEg4KBmJ1dHRvbhgEIAEoCRJXChRzZWxlY3RlZF9lbGVtZW50X2lkcxgFIAMoCzI5Lm1hc3NyZWxheS52MS5tb2RlbHMuQ3Vyc29yVXBkYXRlLlNlbGVjdGVkRWxlbWVudElkc0VudHJ5GjkKF1NlbGVjdGVkRWxlbWVudElkc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCDoCOAEiRAoKVGV4dFVwZGF0ZRIMCgR0ZXh0GAEgASgJEg8KB3ZlcnNpb24YAiABKAUSFwoPY3Vyc29yX3Bvc2l0aW9uGAMgASgFIhIKEFNjZW5lSW5pdFJlcXVlc3QiJAoRU2NlbmVJbml0UmVzcG9uc2USDwoHcGF5bG9hZBgBIAEoCSLjBgoLQ29sbGFiRXZlbnQSEAoIZXZlbnRfaWQYASABKAkSFgoOZnJvbV9jbGllbnRfaWQYAiABKAkSGAoQc2VydmVyX3RpbWVzdGFtcBgDIAEoAxI2Cgtyb29tX2pvaW5lZBgKIAEoCzIfLm1hc3NyZWxheS52MS5tb2RlbHMuUm9vbUpvaW5lZEgAEjYKC3BlZXJfam9pbmVkGAsgASgLMh8ubWFzc3JlbGF5LnYxLm1vZGVscy5QZWVySm9pbmVkSAASMgoJcGVlcl9sZWZ0GAwgASgLMh0ubWFzc3JlbGF5LnYxLm1vZGVscy5QZWVyTGVmdEgAEjcKCHByZXNlbmNlGA0gASgLMiMubWFzc3JlbGF5LnYxLm1vZGVscy5QcmVzZW5jZVVwZGF0ZUgAEjgKDHNjZW5lX3VwZGF0ZRgOIAEoCzIgLm1hc3NyZWxheS52MS5tb2RlbHMuU2NlbmVVcGRhdGVIABI6Cg1jdXJzb3JfdXBkYXRlGA8gASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5DdXJzb3JVcGRhdGVIABI2Cgt0ZXh0X3VwZGF0ZRgQIAEoCzIfLm1hc3NyZWxheS52MS5tb2RlbHMuVGV4dFVwZGF0ZUgAEkUKE3NjZW5lX2luaXRfcmVzcG9uc2UYESABKAsyJi5tYXNzcmVsYXkudjEubW9kZWxzLlNjZW5lSW5pdFJlc3BvbnNlSAASMAoFZXJyb3IYEiABKAsyHy5tYXNzcmVsYXkudjEubW9kZWxzLkVycm9yRXZlbnRIABJDChJzY2VuZV9pbml0X3JlcXVlc3QYEyABKAsyJS5tYXNzcmVsYXkudjEubW9kZWxzLlNjZW5lSW5pdFJlcXVlc3RIABI6Cg1zZXNzaW9uX2VuZGVkGBQgASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5TZXNzaW9uRW5kZWRIABI6Cg1vd25lcl9jaGFuZ2VkGBUgASgLMiEubWFzc3JlbGF5LnYxLm1vZGVscy5Pd25lckNoYW5nZWRIABJGChNjcmVkZW50aWFsc19jaGFuZ2VkGBYgASgLMicubWFzc3JlbGF5LnYxLm1vZGVscy5DcmVkZW50aWFsc0NoYW5nZWRIAEIHCgVldmVudCK6AQoKUm9vbUpvaW5lZBIRCgljbGllbnRfaWQYASABKAkSEgoKc2Vzc2lvbl9pZBgCIAEoCRIsCgVwZWVycxgDIAMoCzIdLm1hc3NyZWxheS52MS5tb2RlbHMuUGVlckluZm8SFwoPb3duZXJfY2xpZW50X2lkGAQgASgJEhEKCW1heF9wZWVycxgFIAEoBRIRCgllbmNyeXB0ZWQYBiABKAgSGAoQcHJvdG9jb2xfdmVyc2lvbhgHIAEoBSJ9CghQZWVySW5mbxIRCgljbGllbnRfaWQYASABKAkSEAoIdXNlcm5hbWUYAiABKAkSEgoKYXZhdGFyX3VybBgDIAEoCRITCgtjbGllbnRfdHlwZRgEIAEoCRIRCglpc19hY3RpdmUYBSABKAgSEAoIaXNfb3duZXIYBiABKAgiOQoKUGVlckpvaW5lZBIrCgRwZWVyGAEgASgLMh0ubWFzc3JlbGF5LnYxLm1vZGVscy5QZWVySW5mbyJBCghQZWVyTGVmdBIRCgljbGllbnRfaWQYASABKAkSDgoGcmVhc29uGAIgASgJEhIKCnBlZXJfY291bnQYAyABKAUiKwoKRXJyb3JFdmVudBIMCgRjb2RlGAEgASgJEg8KB21lc3NhZ2UYAiABKAkiHgoMU2Vzc2lvbkVuZGVkEg4KBnJlYXNvbhgBIAEoCSIrCgxPd25lckNoYW5nZWQSGwoTbmV3X293bmVyX2NsaWVudF9pZBgBIAEoCSIkChJDcmVkZW50aWFsc0NoYW5nZWQSDgoGcmVhc29uGAEgASgJIiQKDkdldFJvb21SZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkioQEKD0dldFJvb21SZXNwb25zZRISCgpzZXNzaW9uX2lkGAEgASgJEiwKBXBlZXJzGAIgAygLMh0ubWFzc3JlbGF5LnYxLm1vZGVscy5QZWVySW5mbxISCgpjcmVhdGVkX2F0GAMgASgDEhcKD293bmVyX2NsaWVudF9pZBgEIAEoCRIMCgR0b29sGAUgASgJEhEKCWVuY3J5cHRlZBgGIAEoCCISChBMaXN0Um9vbXNSZXF1ZXN0IkQKEUxpc3RSb29tc1Jlc3BvbnNlEi8KBXJvb21zGAEgAygLMiAubWFzc3JlbGF5LnYxLm1vZGVscy5Sb29tU3VtbWFyeSJJCgtSb29tU3VtbWFyeRISCgpzZXNzaW9uX2lkGAEgASgJEhIKCnBlZXJfY291bnQYAiABKAUSEgoKY3JlYXRlZF9hdBgDIAEoA0LMAQoXY29tLm1hc3NyZWxheS52MS5tb2RlbHNCC0NvbGxhYlByb3RvUAFaNmdpdGh1Yi5jb20vcGFueWFtL21hc3NyZWxheS9nZW4vZ28vbWFzc3JlbGF5L3YxL21vZGVsc6ICA01WTaoCE01hc3NyZWxheS5WMS5Nb2RlbHPKAhNNYXNzcmVsYXlcVjFcTW9kZWxz4gIfTWFzc3JlbGF5XFYxXE1vZGVsc1xHUEJNZXRhZGF0YeoCFU1hc3NyZWxheTo6VjE6Ok1vZGVsc2IGcHJvdG8z");
 
 /**
  * @generated from message massrelay.v1.models.CollabAction
@@ -84,6 +84,12 @@ export type CollabAction = Message<"massrelay.v1.models.CollabAction"> & {
      */
     value: SceneInitResponse;
     case: "sceneInitResponse";
+  } | {
+    /**
+     * @generated from field: massrelay.v1.models.CredentialsChanged credentials_changed = 18;
+     */
+    value: CredentialsChanged;
+    case: "credentialsChanged";
   } | { case: undefined; value?: undefined };
 };
 
@@ -147,6 +153,20 @@ export type JoinRoom = Message<"massrelay.v1.models.JoinRoom"> & {
    * @generated from field: string client_hint = 8;
    */
   clientHint: string;
+
+  /**
+   * client protocol version (current = 2, legacy implicit = 1)
+   *
+   * @generated from field: int32 protocol_version = 9;
+   */
+  protocolVersion: number;
+
+  /**
+   * owner declares room as encrypted (password-based E2EE)
+   *
+   * @generated from field: bool encrypted = 10;
+   */
+  encrypted: boolean;
 };
 
 /**
@@ -447,6 +467,12 @@ export type CollabEvent = Message<"massrelay.v1.models.CollabEvent"> & {
      */
     value: OwnerChanged;
     case: "ownerChanged";
+  } | {
+    /**
+     * @generated from field: massrelay.v1.models.CredentialsChanged credentials_changed = 22;
+     */
+    value: CredentialsChanged;
+    case: "credentialsChanged";
   } | { case: undefined; value?: undefined };
 };
 
@@ -480,6 +506,27 @@ export type RoomJoined = Message<"massrelay.v1.models.RoomJoined"> & {
    * @generated from field: string owner_client_id = 4;
    */
   ownerClientId: string;
+
+  /**
+   * relay's max-peers setting (informational for UI)
+   *
+   * @generated from field: int32 max_peers = 5;
+   */
+  maxPeers: number;
+
+  /**
+   * true if room owner set a password
+   *
+   * @generated from field: bool encrypted = 6;
+   */
+  encrypted: boolean;
+
+  /**
+   * relay protocol version
+   *
+   * @generated from field: int32 protocol_version = 7;
+   */
+  protocolVersion: number;
 };
 
 /**
@@ -632,6 +679,25 @@ export const OwnerChangedSchema: GenMessage<OwnerChanged> = /*@__PURE__*/
   messageDesc(file_massrelay_v1_models_collab, 17);
 
 /**
+ * @generated from message massrelay.v1.models.CredentialsChanged
+ */
+export type CredentialsChanged = Message<"massrelay.v1.models.CredentialsChanged"> & {
+  /**
+   * "password_changed" | "password_removed" | "key_rotated"
+   *
+   * @generated from field: string reason = 1;
+   */
+  reason: string;
+};
+
+/**
+ * Describes the message massrelay.v1.models.CredentialsChanged.
+ * Use `create(CredentialsChangedSchema)` to create a new message.
+ */
+export const CredentialsChangedSchema: GenMessage<CredentialsChanged> = /*@__PURE__*/
+  messageDesc(file_massrelay_v1_models_collab, 18);
+
+/**
  * @generated from message massrelay.v1.models.GetRoomRequest
  */
 export type GetRoomRequest = Message<"massrelay.v1.models.GetRoomRequest"> & {
@@ -646,7 +712,7 @@ export type GetRoomRequest = Message<"massrelay.v1.models.GetRoomRequest"> & {
  * Use `create(GetRoomRequestSchema)` to create a new message.
  */
 export const GetRoomRequestSchema: GenMessage<GetRoomRequest> = /*@__PURE__*/
-  messageDesc(file_massrelay_v1_models_collab, 18);
+  messageDesc(file_massrelay_v1_models_collab, 19);
 
 /**
  * @generated from message massrelay.v1.models.GetRoomResponse
@@ -678,6 +744,13 @@ export type GetRoomResponse = Message<"massrelay.v1.models.GetRoomResponse"> & {
    * @generated from field: string tool = 5;
    */
   tool: string;
+
+  /**
+   * true if room has E2EE enabled
+   *
+   * @generated from field: bool encrypted = 6;
+   */
+  encrypted: boolean;
 };
 
 /**
@@ -685,7 +758,7 @@ export type GetRoomResponse = Message<"massrelay.v1.models.GetRoomResponse"> & {
  * Use `create(GetRoomResponseSchema)` to create a new message.
  */
 export const GetRoomResponseSchema: GenMessage<GetRoomResponse> = /*@__PURE__*/
-  messageDesc(file_massrelay_v1_models_collab, 19);
+  messageDesc(file_massrelay_v1_models_collab, 20);
 
 /**
  * @generated from message massrelay.v1.models.ListRoomsRequest
@@ -698,7 +771,7 @@ export type ListRoomsRequest = Message<"massrelay.v1.models.ListRoomsRequest"> &
  * Use `create(ListRoomsRequestSchema)` to create a new message.
  */
 export const ListRoomsRequestSchema: GenMessage<ListRoomsRequest> = /*@__PURE__*/
-  messageDesc(file_massrelay_v1_models_collab, 20);
+  messageDesc(file_massrelay_v1_models_collab, 21);
 
 /**
  * @generated from message massrelay.v1.models.ListRoomsResponse
@@ -715,7 +788,7 @@ export type ListRoomsResponse = Message<"massrelay.v1.models.ListRoomsResponse">
  * Use `create(ListRoomsResponseSchema)` to create a new message.
  */
 export const ListRoomsResponseSchema: GenMessage<ListRoomsResponse> = /*@__PURE__*/
-  messageDesc(file_massrelay_v1_models_collab, 21);
+  messageDesc(file_massrelay_v1_models_collab, 22);
 
 /**
  * @generated from message massrelay.v1.models.RoomSummary
@@ -742,5 +815,5 @@ export type RoomSummary = Message<"massrelay.v1.models.RoomSummary"> & {
  * Use `create(RoomSummarySchema)` to create a new message.
  */
 export const RoomSummarySchema: GenMessage<RoomSummary> = /*@__PURE__*/
-  messageDesc(file_massrelay_v1_models_collab, 22);
+  messageDesc(file_massrelay_v1_models_collab, 23);
 

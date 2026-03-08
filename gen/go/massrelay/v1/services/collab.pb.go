@@ -7,12 +7,11 @@
 package services
 
 import (
-	reflect "reflect"
-	unsafe "unsafe"
-
 	models "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	unsafe "unsafe"
 )
 
 const (

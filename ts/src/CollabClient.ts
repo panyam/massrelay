@@ -11,6 +11,9 @@ export interface CollabClientOptions {
   onDisconnect?: () => void;
   onSessionEnded?: (reason: string) => void;
   onOwnerChanged?: (newOwnerClientId: string) => void;
+  onCredentialsChanged?: (reason: string) => void;
+  /** Called when relay returns an ErrorEvent (e.g. ROOM_FULL). */
+  onErrorEvent?: (code: string, message: string) => void;
   maxRetries?: number;
   /** Factory for creating GRPCWSClient instances. Defaults to `() => new GRPCWSClient()`.
    *  Override in tests with `GRPCWSClient.createMock()`. */
@@ -34,6 +37,9 @@ export class CollabClient {
   private _sessionId: string = '';
   private _username: string = '';
   private _tool: string = '';
+  private _encrypted: boolean = false;
+  private _maxPeers: number = 0;
+  private _roomEncrypted: boolean = false;
   private options: CollabClientOptions;
   private retryCount: number = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,8 +57,10 @@ export class CollabClient {
   get isConnected(): boolean { return this._isConnected; }
   get isConnecting(): boolean { return this._isConnecting; }
   get isOwner(): boolean { return this._isOwner; }
+  get maxPeers(): number { return this._maxPeers; }
+  get roomEncrypted(): boolean { return this._roomEncrypted; }
 
-  connect(relayUrl: string, sessionId: string, username: string, tool: string, isOwner: boolean = false, browserId: string = '', clientHint: string = ''): void {
+  connect(relayUrl: string, sessionId: string, username: string, tool: string, isOwner: boolean = false, browserId: string = '', clientHint: string = '', encrypted: boolean = false): void {
     if (this._isConnected) {
       throw new Error('Already connected');
     }
@@ -64,6 +72,7 @@ export class CollabClient {
     this._isOwner = isOwner;
     this._browserId = browserId;
     this._clientHint = clientHint;
+    this._encrypted = encrypted;
     this._isConnecting = true;
     this.explicitDisconnect = false;
     this.retryCount = 0;
@@ -141,6 +150,8 @@ export class CollabClient {
           isOwner: this._isOwner,
           browserId: this._browserId,
           clientHint: this._clientHint,
+          protocolVersion: 2,
+          encrypted: this._encrypted,
         },
       });
     }).catch(() => {
@@ -155,12 +166,23 @@ export class CollabClient {
 
     // Standard protobuf JSON: oneof fields appear at the top level
     // e.g. { "roomJoined": { "clientId": "c1", ... } }
+    if (data.error) {
+      // Graceful error from relay (e.g. ROOM_FULL, PROTOCOL_VERSION_TOO_OLD)
+      this.options.onErrorEvent?.(data.error.code || '', data.error.message || '');
+      this.explicitDisconnect = true; // Don't auto-reconnect on graceful rejection
+      this.grpc?.close();
+      this.resetState();
+      return;
+    }
+
     if (data.roomJoined) {
       this._clientId = data.roomJoined.clientId;
       // Capture relay-generated sessionId (may differ from what we sent)
       if (data.roomJoined.sessionId) {
         this._sessionId = data.roomJoined.sessionId;
       }
+      this._maxPeers = data.roomJoined.maxPeers || 0;
+      this._roomEncrypted = !!data.roomJoined.encrypted;
       this._isConnected = true;
       this._isConnecting = false;
       this.retryCount = 0;
@@ -194,6 +216,8 @@ export class CollabClient {
       const newOwnerId = data.ownerChanged.newOwnerClientId;
       this._isOwner = newOwnerId === this._clientId;
       this.options.onOwnerChanged?.(newOwnerId);
+    } else if (data.credentialsChanged) {
+      this.options.onCredentialsChanged?.(data.credentialsChanged.reason || '');
     }
   }
 

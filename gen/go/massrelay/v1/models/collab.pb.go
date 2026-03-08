@@ -7,12 +7,11 @@
 package models
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -37,6 +36,7 @@ type CollabAction struct {
 	//	*CollabAction_TextUpdate
 	//	*CollabAction_SceneInitRequest
 	//	*CollabAction_SceneInitResponse
+	//	*CollabAction_CredentialsChanged
 	Action        isCollabAction_Action `protobuf_oneof:"action"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -172,6 +172,15 @@ func (x *CollabAction) GetSceneInitResponse() *SceneInitResponse {
 	return nil
 }
 
+func (x *CollabAction) GetCredentialsChanged() *CredentialsChanged {
+	if x != nil {
+		if x, ok := x.Action.(*CollabAction_CredentialsChanged); ok {
+			return x.CredentialsChanged
+		}
+	}
+	return nil
+}
+
 type isCollabAction_Action interface {
 	isCollabAction_Action()
 }
@@ -209,6 +218,10 @@ type CollabAction_SceneInitResponse struct {
 	SceneInitResponse *SceneInitResponse `protobuf:"bytes,17,opt,name=scene_init_response,json=sceneInitResponse,proto3,oneof"`
 }
 
+type CollabAction_CredentialsChanged struct {
+	CredentialsChanged *CredentialsChanged `protobuf:"bytes,18,opt,name=credentials_changed,json=credentialsChanged,proto3,oneof"`
+}
+
 func (*CollabAction_Join) isCollabAction_Action() {}
 
 func (*CollabAction_Leave) isCollabAction_Action() {}
@@ -225,18 +238,22 @@ func (*CollabAction_SceneInitRequest) isCollabAction_Action() {}
 
 func (*CollabAction_SceneInitResponse) isCollabAction_Action() {}
 
+func (*CollabAction_CredentialsChanged) isCollabAction_Action() {}
+
 type JoinRoom struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // empty = relay generates one (owner creating new session)
-	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	Tool          string                 `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`                               // "excalidraw" | "mermaid"
-	ClientType    string                 `protobuf:"bytes,4,opt,name=client_type,json=clientType,proto3" json:"client_type,omitempty"` // "browser" | "api" | "cli"
-	AvatarUrl     string                 `protobuf:"bytes,5,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
-	IsOwner       bool                   `protobuf:"varint,6,opt,name=is_owner,json=isOwner,proto3" json:"is_owner,omitempty"`
-	BrowserId     string                 `protobuf:"bytes,7,opt,name=browser_id,json=browserId,proto3" json:"browser_id,omitempty"`    // localStorage UUID for ownership transfer
-	ClientHint    string                 `protobuf:"bytes,8,opt,name=client_hint,json=clientHint,proto3" json:"client_hint,omitempty"` // opaque hint (e.g. browserId:drawingId) for session reuse
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SessionId       string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // empty = relay generates one (owner creating new session)
+	Username        string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Tool            string                 `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`                               // "excalidraw" | "mermaid"
+	ClientType      string                 `protobuf:"bytes,4,opt,name=client_type,json=clientType,proto3" json:"client_type,omitempty"` // "browser" | "api" | "cli"
+	AvatarUrl       string                 `protobuf:"bytes,5,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
+	IsOwner         bool                   `protobuf:"varint,6,opt,name=is_owner,json=isOwner,proto3" json:"is_owner,omitempty"`
+	BrowserId       string                 `protobuf:"bytes,7,opt,name=browser_id,json=browserId,proto3" json:"browser_id,omitempty"`                    // localStorage UUID for ownership transfer
+	ClientHint      string                 `protobuf:"bytes,8,opt,name=client_hint,json=clientHint,proto3" json:"client_hint,omitempty"`                 // opaque hint (e.g. browserId:drawingId) for session reuse
+	ProtocolVersion int32                  `protobuf:"varint,9,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"` // client protocol version (current = 2, legacy implicit = 1)
+	Encrypted       bool                   `protobuf:"varint,10,opt,name=encrypted,proto3" json:"encrypted,omitempty"`                                   // owner declares room as encrypted (password-based E2EE)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *JoinRoom) Reset() {
@@ -323,6 +340,20 @@ func (x *JoinRoom) GetClientHint() string {
 		return x.ClientHint
 	}
 	return ""
+}
+
+func (x *JoinRoom) GetProtocolVersion() int32 {
+	if x != nil {
+		return x.ProtocolVersion
+	}
+	return 0
+}
+
+func (x *JoinRoom) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
 }
 
 type LeaveRoom struct {
@@ -780,6 +811,7 @@ type CollabEvent struct {
 	//	*CollabEvent_SceneInitRequest
 	//	*CollabEvent_SessionEnded
 	//	*CollabEvent_OwnerChanged
+	//	*CollabEvent_CredentialsChanged
 	Event         isCollabEvent_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -951,6 +983,15 @@ func (x *CollabEvent) GetOwnerChanged() *OwnerChanged {
 	return nil
 }
 
+func (x *CollabEvent) GetCredentialsChanged() *CredentialsChanged {
+	if x != nil {
+		if x, ok := x.Event.(*CollabEvent_CredentialsChanged); ok {
+			return x.CredentialsChanged
+		}
+	}
+	return nil
+}
+
 type isCollabEvent_Event interface {
 	isCollabEvent_Event()
 }
@@ -1004,6 +1045,10 @@ type CollabEvent_OwnerChanged struct {
 	OwnerChanged *OwnerChanged `protobuf:"bytes,21,opt,name=owner_changed,json=ownerChanged,proto3,oneof"`
 }
 
+type CollabEvent_CredentialsChanged struct {
+	CredentialsChanged *CredentialsChanged `protobuf:"bytes,22,opt,name=credentials_changed,json=credentialsChanged,proto3,oneof"`
+}
+
 func (*CollabEvent_RoomJoined) isCollabEvent_Event() {}
 
 func (*CollabEvent_PeerJoined) isCollabEvent_Event() {}
@@ -1028,14 +1073,19 @@ func (*CollabEvent_SessionEnded) isCollabEvent_Event() {}
 
 func (*CollabEvent_OwnerChanged) isCollabEvent_Event() {}
 
+func (*CollabEvent_CredentialsChanged) isCollabEvent_Event() {}
+
 type RoomJoined struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClientId      string                 `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Peers         []*PeerInfo            `protobuf:"bytes,3,rep,name=peers,proto3" json:"peers,omitempty"`
-	OwnerClientId string                 `protobuf:"bytes,4,opt,name=owner_client_id,json=ownerClientId,proto3" json:"owner_client_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClientId        string                 `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	SessionId       string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Peers           []*PeerInfo            `protobuf:"bytes,3,rep,name=peers,proto3" json:"peers,omitempty"`
+	OwnerClientId   string                 `protobuf:"bytes,4,opt,name=owner_client_id,json=ownerClientId,proto3" json:"owner_client_id,omitempty"`
+	MaxPeers        int32                  `protobuf:"varint,5,opt,name=max_peers,json=maxPeers,proto3" json:"max_peers,omitempty"`                      // relay's max-peers setting (informational for UI)
+	Encrypted       bool                   `protobuf:"varint,6,opt,name=encrypted,proto3" json:"encrypted,omitempty"`                                    // true if room owner set a password
+	ProtocolVersion int32                  `protobuf:"varint,7,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"` // relay protocol version
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RoomJoined) Reset() {
@@ -1094,6 +1144,27 @@ func (x *RoomJoined) GetOwnerClientId() string {
 		return x.OwnerClientId
 	}
 	return ""
+}
+
+func (x *RoomJoined) GetMaxPeers() int32 {
+	if x != nil {
+		return x.MaxPeers
+	}
+	return 0
+}
+
+func (x *RoomJoined) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
+}
+
+func (x *RoomJoined) GetProtocolVersion() int32 {
+	if x != nil {
+		return x.ProtocolVersion
+	}
+	return 0
 }
 
 type PeerInfo struct {
@@ -1424,6 +1495,50 @@ func (x *OwnerChanged) GetNewOwnerClientId() string {
 	return ""
 }
 
+type CredentialsChanged struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"` // "password_changed" | "password_removed" | "key_rotated"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CredentialsChanged) Reset() {
+	*x = CredentialsChanged{}
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CredentialsChanged) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CredentialsChanged) ProtoMessage() {}
+
+func (x *CredentialsChanged) ProtoReflect() protoreflect.Message {
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CredentialsChanged.ProtoReflect.Descriptor instead.
+func (*CredentialsChanged) Descriptor() ([]byte, []int) {
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *CredentialsChanged) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type GetRoomRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -1433,7 +1548,7 @@ type GetRoomRequest struct {
 
 func (x *GetRoomRequest) Reset() {
 	*x = GetRoomRequest{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[18]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1445,7 +1560,7 @@ func (x *GetRoomRequest) String() string {
 func (*GetRoomRequest) ProtoMessage() {}
 
 func (x *GetRoomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[18]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1458,7 +1573,7 @@ func (x *GetRoomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoomRequest.ProtoReflect.Descriptor instead.
 func (*GetRoomRequest) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{18}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetRoomRequest) GetSessionId() string {
@@ -1474,14 +1589,15 @@ type GetRoomResponse struct {
 	Peers         []*PeerInfo            `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
 	CreatedAt     int64                  `protobuf:"varint,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	OwnerClientId string                 `protobuf:"bytes,4,opt,name=owner_client_id,json=ownerClientId,proto3" json:"owner_client_id,omitempty"`
-	Tool          string                 `protobuf:"bytes,5,opt,name=tool,proto3" json:"tool,omitempty"` // "excalidraw" | "mermaid"
+	Tool          string                 `protobuf:"bytes,5,opt,name=tool,proto3" json:"tool,omitempty"`            // "excalidraw" | "mermaid"
+	Encrypted     bool                   `protobuf:"varint,6,opt,name=encrypted,proto3" json:"encrypted,omitempty"` // true if room has E2EE enabled
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetRoomResponse) Reset() {
 	*x = GetRoomResponse{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[19]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1493,7 +1609,7 @@ func (x *GetRoomResponse) String() string {
 func (*GetRoomResponse) ProtoMessage() {}
 
 func (x *GetRoomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[19]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1506,7 +1622,7 @@ func (x *GetRoomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoomResponse.ProtoReflect.Descriptor instead.
 func (*GetRoomResponse) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{19}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetRoomResponse) GetSessionId() string {
@@ -1544,6 +1660,13 @@ func (x *GetRoomResponse) GetTool() string {
 	return ""
 }
 
+func (x *GetRoomResponse) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
+}
+
 type ListRoomsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1552,7 +1675,7 @@ type ListRoomsRequest struct {
 
 func (x *ListRoomsRequest) Reset() {
 	*x = ListRoomsRequest{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1564,7 +1687,7 @@ func (x *ListRoomsRequest) String() string {
 func (*ListRoomsRequest) ProtoMessage() {}
 
 func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1577,7 +1700,7 @@ func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsRequest.ProtoReflect.Descriptor instead.
 func (*ListRoomsRequest) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{20}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{21}
 }
 
 type ListRoomsResponse struct {
@@ -1589,7 +1712,7 @@ type ListRoomsResponse struct {
 
 func (x *ListRoomsResponse) Reset() {
 	*x = ListRoomsResponse{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1601,7 +1724,7 @@ func (x *ListRoomsResponse) String() string {
 func (*ListRoomsResponse) ProtoMessage() {}
 
 func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1614,7 +1737,7 @@ func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsResponse.ProtoReflect.Descriptor instead.
 func (*ListRoomsResponse) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{21}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListRoomsResponse) GetRooms() []*RoomSummary {
@@ -1635,7 +1758,7 @@ type RoomSummary struct {
 
 func (x *RoomSummary) Reset() {
 	*x = RoomSummary{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1647,7 +1770,7 @@ func (x *RoomSummary) String() string {
 func (*RoomSummary) ProtoMessage() {}
 
 func (x *RoomSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1660,7 +1783,7 @@ func (x *RoomSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoomSummary.ProtoReflect.Descriptor instead.
 func (*RoomSummary) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{22}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RoomSummary) GetSessionId() string {
@@ -1688,7 +1811,7 @@ var File_massrelay_v1_models_collab_proto protoreflect.FileDescriptor
 
 const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\n" +
-	" massrelay/v1/models/collab.proto\x12\x13massrelay.v1.models\"\xa6\x05\n" +
+	" massrelay/v1/models/collab.proto\x12\x13massrelay.v1.models\"\x82\x06\n" +
 	"\fCollabAction\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\tR\bactionId\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1c\n" +
@@ -1702,8 +1825,9 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\vtext_update\x18\x0f \x01(\v2\x1f.massrelay.v1.models.TextUpdateH\x00R\n" +
 	"textUpdate\x12U\n" +
 	"\x12scene_init_request\x18\x10 \x01(\v2%.massrelay.v1.models.SceneInitRequestH\x00R\x10sceneInitRequest\x12X\n" +
-	"\x13scene_init_response\x18\x11 \x01(\v2&.massrelay.v1.models.SceneInitResponseH\x00R\x11sceneInitResponseB\b\n" +
-	"\x06action\"\xf4\x01\n" +
+	"\x13scene_init_response\x18\x11 \x01(\v2&.massrelay.v1.models.SceneInitResponseH\x00R\x11sceneInitResponse\x12Z\n" +
+	"\x13credentials_changed\x18\x12 \x01(\v2'.massrelay.v1.models.CredentialsChangedH\x00R\x12credentialsChangedB\b\n" +
+	"\x06action\"\xbd\x02\n" +
 	"\bJoinRoom\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1a\n" +
@@ -1717,7 +1841,10 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\n" +
 	"browser_id\x18\a \x01(\tR\tbrowserId\x12\x1f\n" +
 	"\vclient_hint\x18\b \x01(\tR\n" +
-	"clientHint\"#\n" +
+	"clientHint\x12)\n" +
+	"\x10protocol_version\x18\t \x01(\x05R\x0fprotocolVersion\x12\x1c\n" +
+	"\tencrypted\x18\n" +
+	" \x01(\bR\tencrypted\"#\n" +
 	"\tLeaveRoom\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"I\n" +
 	"\x0ePresenceUpdate\x12\x1b\n" +
@@ -1747,7 +1874,7 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x0fcursor_position\x18\x03 \x01(\x05R\x0ecursorPosition\"\x12\n" +
 	"\x10SceneInitRequest\"-\n" +
 	"\x11SceneInitResponse\x12\x18\n" +
-	"\apayload\x18\x01 \x01(\tR\apayload\"\xde\a\n" +
+	"\apayload\x18\x01 \x01(\tR\apayload\"\xba\b\n" +
 	"\vCollabEvent\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12$\n" +
 	"\x0efrom_client_id\x18\x02 \x01(\tR\ffromClientId\x12)\n" +
@@ -1767,15 +1894,19 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x05error\x18\x12 \x01(\v2\x1f.massrelay.v1.models.ErrorEventH\x00R\x05error\x12U\n" +
 	"\x12scene_init_request\x18\x13 \x01(\v2%.massrelay.v1.models.SceneInitRequestH\x00R\x10sceneInitRequest\x12H\n" +
 	"\rsession_ended\x18\x14 \x01(\v2!.massrelay.v1.models.SessionEndedH\x00R\fsessionEnded\x12H\n" +
-	"\rowner_changed\x18\x15 \x01(\v2!.massrelay.v1.models.OwnerChangedH\x00R\fownerChangedB\a\n" +
-	"\x05event\"\xa5\x01\n" +
+	"\rowner_changed\x18\x15 \x01(\v2!.massrelay.v1.models.OwnerChangedH\x00R\fownerChanged\x12Z\n" +
+	"\x13credentials_changed\x18\x16 \x01(\v2'.massrelay.v1.models.CredentialsChangedH\x00R\x12credentialsChangedB\a\n" +
+	"\x05event\"\x8b\x02\n" +
 	"\n" +
 	"RoomJoined\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x123\n" +
 	"\x05peers\x18\x03 \x03(\v2\x1d.massrelay.v1.models.PeerInfoR\x05peers\x12&\n" +
-	"\x0fowner_client_id\x18\x04 \x01(\tR\rownerClientId\"\xbb\x01\n" +
+	"\x0fowner_client_id\x18\x04 \x01(\tR\rownerClientId\x12\x1b\n" +
+	"\tmax_peers\x18\x05 \x01(\x05R\bmaxPeers\x12\x1c\n" +
+	"\tencrypted\x18\x06 \x01(\bR\tencrypted\x12)\n" +
+	"\x10protocol_version\x18\a \x01(\x05R\x0fprotocolVersion\"\xbb\x01\n" +
 	"\bPeerInfo\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1d\n" +
@@ -1800,10 +1931,12 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\fSessionEnded\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"=\n" +
 	"\fOwnerChanged\x12-\n" +
-	"\x13new_owner_client_id\x18\x01 \x01(\tR\x10newOwnerClientId\"/\n" +
+	"\x13new_owner_client_id\x18\x01 \x01(\tR\x10newOwnerClientId\",\n" +
+	"\x12CredentialsChanged\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"/\n" +
 	"\x0eGetRoomRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"\xc0\x01\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"\xde\x01\n" +
 	"\x0fGetRoomResponse\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x123\n" +
@@ -1811,7 +1944,8 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x03 \x01(\x03R\tcreatedAt\x12&\n" +
 	"\x0fowner_client_id\x18\x04 \x01(\tR\rownerClientId\x12\x12\n" +
-	"\x04tool\x18\x05 \x01(\tR\x04tool\"\x12\n" +
+	"\x04tool\x18\x05 \x01(\tR\x04tool\x12\x1c\n" +
+	"\tencrypted\x18\x06 \x01(\bR\tencrypted\"\x12\n" +
 	"\x10ListRoomsRequest\"K\n" +
 	"\x11ListRoomsResponse\x126\n" +
 	"\x05rooms\x18\x01 \x03(\v2 .massrelay.v1.models.RoomSummaryR\x05rooms\"j\n" +
@@ -1836,32 +1970,33 @@ func file_massrelay_v1_models_collab_proto_rawDescGZIP() []byte {
 	return file_massrelay_v1_models_collab_proto_rawDescData
 }
 
-var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_massrelay_v1_models_collab_proto_goTypes = []any{
-	(*CollabAction)(nil),      // 0: massrelay.v1.models.CollabAction
-	(*JoinRoom)(nil),          // 1: massrelay.v1.models.JoinRoom
-	(*LeaveRoom)(nil),         // 2: massrelay.v1.models.LeaveRoom
-	(*PresenceUpdate)(nil),    // 3: massrelay.v1.models.PresenceUpdate
-	(*SceneUpdate)(nil),       // 4: massrelay.v1.models.SceneUpdate
-	(*ElementUpdate)(nil),     // 5: massrelay.v1.models.ElementUpdate
-	(*CursorUpdate)(nil),      // 6: massrelay.v1.models.CursorUpdate
-	(*TextUpdate)(nil),        // 7: massrelay.v1.models.TextUpdate
-	(*SceneInitRequest)(nil),  // 8: massrelay.v1.models.SceneInitRequest
-	(*SceneInitResponse)(nil), // 9: massrelay.v1.models.SceneInitResponse
-	(*CollabEvent)(nil),       // 10: massrelay.v1.models.CollabEvent
-	(*RoomJoined)(nil),        // 11: massrelay.v1.models.RoomJoined
-	(*PeerInfo)(nil),          // 12: massrelay.v1.models.PeerInfo
-	(*PeerJoined)(nil),        // 13: massrelay.v1.models.PeerJoined
-	(*PeerLeft)(nil),          // 14: massrelay.v1.models.PeerLeft
-	(*ErrorEvent)(nil),        // 15: massrelay.v1.models.ErrorEvent
-	(*SessionEnded)(nil),      // 16: massrelay.v1.models.SessionEnded
-	(*OwnerChanged)(nil),      // 17: massrelay.v1.models.OwnerChanged
-	(*GetRoomRequest)(nil),    // 18: massrelay.v1.models.GetRoomRequest
-	(*GetRoomResponse)(nil),   // 19: massrelay.v1.models.GetRoomResponse
-	(*ListRoomsRequest)(nil),  // 20: massrelay.v1.models.ListRoomsRequest
-	(*ListRoomsResponse)(nil), // 21: massrelay.v1.models.ListRoomsResponse
-	(*RoomSummary)(nil),       // 22: massrelay.v1.models.RoomSummary
-	nil,                       // 23: massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
+	(*CollabAction)(nil),       // 0: massrelay.v1.models.CollabAction
+	(*JoinRoom)(nil),           // 1: massrelay.v1.models.JoinRoom
+	(*LeaveRoom)(nil),          // 2: massrelay.v1.models.LeaveRoom
+	(*PresenceUpdate)(nil),     // 3: massrelay.v1.models.PresenceUpdate
+	(*SceneUpdate)(nil),        // 4: massrelay.v1.models.SceneUpdate
+	(*ElementUpdate)(nil),      // 5: massrelay.v1.models.ElementUpdate
+	(*CursorUpdate)(nil),       // 6: massrelay.v1.models.CursorUpdate
+	(*TextUpdate)(nil),         // 7: massrelay.v1.models.TextUpdate
+	(*SceneInitRequest)(nil),   // 8: massrelay.v1.models.SceneInitRequest
+	(*SceneInitResponse)(nil),  // 9: massrelay.v1.models.SceneInitResponse
+	(*CollabEvent)(nil),        // 10: massrelay.v1.models.CollabEvent
+	(*RoomJoined)(nil),         // 11: massrelay.v1.models.RoomJoined
+	(*PeerInfo)(nil),           // 12: massrelay.v1.models.PeerInfo
+	(*PeerJoined)(nil),         // 13: massrelay.v1.models.PeerJoined
+	(*PeerLeft)(nil),           // 14: massrelay.v1.models.PeerLeft
+	(*ErrorEvent)(nil),         // 15: massrelay.v1.models.ErrorEvent
+	(*SessionEnded)(nil),       // 16: massrelay.v1.models.SessionEnded
+	(*OwnerChanged)(nil),       // 17: massrelay.v1.models.OwnerChanged
+	(*CredentialsChanged)(nil), // 18: massrelay.v1.models.CredentialsChanged
+	(*GetRoomRequest)(nil),     // 19: massrelay.v1.models.GetRoomRequest
+	(*GetRoomResponse)(nil),    // 20: massrelay.v1.models.GetRoomResponse
+	(*ListRoomsRequest)(nil),   // 21: massrelay.v1.models.ListRoomsRequest
+	(*ListRoomsResponse)(nil),  // 22: massrelay.v1.models.ListRoomsResponse
+	(*RoomSummary)(nil),        // 23: massrelay.v1.models.RoomSummary
+	nil,                        // 24: massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
 }
 var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	1,  // 0: massrelay.v1.models.CollabAction.join:type_name -> massrelay.v1.models.JoinRoom
@@ -1872,29 +2007,31 @@ var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	7,  // 5: massrelay.v1.models.CollabAction.text_update:type_name -> massrelay.v1.models.TextUpdate
 	8,  // 6: massrelay.v1.models.CollabAction.scene_init_request:type_name -> massrelay.v1.models.SceneInitRequest
 	9,  // 7: massrelay.v1.models.CollabAction.scene_init_response:type_name -> massrelay.v1.models.SceneInitResponse
-	5,  // 8: massrelay.v1.models.SceneUpdate.elements:type_name -> massrelay.v1.models.ElementUpdate
-	23, // 9: massrelay.v1.models.CursorUpdate.selected_element_ids:type_name -> massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
-	11, // 10: massrelay.v1.models.CollabEvent.room_joined:type_name -> massrelay.v1.models.RoomJoined
-	13, // 11: massrelay.v1.models.CollabEvent.peer_joined:type_name -> massrelay.v1.models.PeerJoined
-	14, // 12: massrelay.v1.models.CollabEvent.peer_left:type_name -> massrelay.v1.models.PeerLeft
-	3,  // 13: massrelay.v1.models.CollabEvent.presence:type_name -> massrelay.v1.models.PresenceUpdate
-	4,  // 14: massrelay.v1.models.CollabEvent.scene_update:type_name -> massrelay.v1.models.SceneUpdate
-	6,  // 15: massrelay.v1.models.CollabEvent.cursor_update:type_name -> massrelay.v1.models.CursorUpdate
-	7,  // 16: massrelay.v1.models.CollabEvent.text_update:type_name -> massrelay.v1.models.TextUpdate
-	9,  // 17: massrelay.v1.models.CollabEvent.scene_init_response:type_name -> massrelay.v1.models.SceneInitResponse
-	15, // 18: massrelay.v1.models.CollabEvent.error:type_name -> massrelay.v1.models.ErrorEvent
-	8,  // 19: massrelay.v1.models.CollabEvent.scene_init_request:type_name -> massrelay.v1.models.SceneInitRequest
-	16, // 20: massrelay.v1.models.CollabEvent.session_ended:type_name -> massrelay.v1.models.SessionEnded
-	17, // 21: massrelay.v1.models.CollabEvent.owner_changed:type_name -> massrelay.v1.models.OwnerChanged
-	12, // 22: massrelay.v1.models.RoomJoined.peers:type_name -> massrelay.v1.models.PeerInfo
-	12, // 23: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
-	12, // 24: massrelay.v1.models.GetRoomResponse.peers:type_name -> massrelay.v1.models.PeerInfo
-	22, // 25: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
-	26, // [26:26] is the sub-list for method output_type
-	26, // [26:26] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	18, // 8: massrelay.v1.models.CollabAction.credentials_changed:type_name -> massrelay.v1.models.CredentialsChanged
+	5,  // 9: massrelay.v1.models.SceneUpdate.elements:type_name -> massrelay.v1.models.ElementUpdate
+	24, // 10: massrelay.v1.models.CursorUpdate.selected_element_ids:type_name -> massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
+	11, // 11: massrelay.v1.models.CollabEvent.room_joined:type_name -> massrelay.v1.models.RoomJoined
+	13, // 12: massrelay.v1.models.CollabEvent.peer_joined:type_name -> massrelay.v1.models.PeerJoined
+	14, // 13: massrelay.v1.models.CollabEvent.peer_left:type_name -> massrelay.v1.models.PeerLeft
+	3,  // 14: massrelay.v1.models.CollabEvent.presence:type_name -> massrelay.v1.models.PresenceUpdate
+	4,  // 15: massrelay.v1.models.CollabEvent.scene_update:type_name -> massrelay.v1.models.SceneUpdate
+	6,  // 16: massrelay.v1.models.CollabEvent.cursor_update:type_name -> massrelay.v1.models.CursorUpdate
+	7,  // 17: massrelay.v1.models.CollabEvent.text_update:type_name -> massrelay.v1.models.TextUpdate
+	9,  // 18: massrelay.v1.models.CollabEvent.scene_init_response:type_name -> massrelay.v1.models.SceneInitResponse
+	15, // 19: massrelay.v1.models.CollabEvent.error:type_name -> massrelay.v1.models.ErrorEvent
+	8,  // 20: massrelay.v1.models.CollabEvent.scene_init_request:type_name -> massrelay.v1.models.SceneInitRequest
+	16, // 21: massrelay.v1.models.CollabEvent.session_ended:type_name -> massrelay.v1.models.SessionEnded
+	17, // 22: massrelay.v1.models.CollabEvent.owner_changed:type_name -> massrelay.v1.models.OwnerChanged
+	18, // 23: massrelay.v1.models.CollabEvent.credentials_changed:type_name -> massrelay.v1.models.CredentialsChanged
+	12, // 24: massrelay.v1.models.RoomJoined.peers:type_name -> massrelay.v1.models.PeerInfo
+	12, // 25: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
+	12, // 26: massrelay.v1.models.GetRoomResponse.peers:type_name -> massrelay.v1.models.PeerInfo
+	23, // 27: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_massrelay_v1_models_collab_proto_init() }
@@ -1911,6 +2048,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 		(*CollabAction_TextUpdate)(nil),
 		(*CollabAction_SceneInitRequest)(nil),
 		(*CollabAction_SceneInitResponse)(nil),
+		(*CollabAction_CredentialsChanged)(nil),
 	}
 	file_massrelay_v1_models_collab_proto_msgTypes[10].OneofWrappers = []any{
 		(*CollabEvent_RoomJoined)(nil),
@@ -1925,6 +2063,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 		(*CollabEvent_SceneInitRequest)(nil),
 		(*CollabEvent_SessionEnded)(nil),
 		(*CollabEvent_OwnerChanged)(nil),
+		(*CollabEvent_CredentialsChanged)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1932,7 +2071,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_massrelay_v1_models_collab_proto_rawDesc), len(file_massrelay_v1_models_collab_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
