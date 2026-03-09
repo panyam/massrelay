@@ -19,6 +19,7 @@ type CollabRoom struct {
 	OwnerClientId  string
 	OwnerBrowserId string
 	Tool           string // "excalidraw" | "mermaid" — set from first joiner
+	Title          string // drawing title — set from owner's JoinRoom
 	Encrypted      bool   // true if room owner declared E2EE
 	mu             sync.RWMutex
 }
@@ -145,7 +146,8 @@ func (s *CollabService) HandleAction(ctx context.Context, action *pb.CollabActio
 		*pb.CollabAction_TextUpdate,
 		*pb.CollabAction_SceneInitRequest,
 		*pb.CollabAction_SceneInitResponse,
-		*pb.CollabAction_CredentialsChanged:
+		*pb.CollabAction_CredentialsChanged,
+		*pb.CollabAction_TitleChanged:
 		return s.handleBroadcast(ctx, action)
 	default:
 		return nil, fmt.Errorf("unknown or empty action type")
@@ -170,6 +172,7 @@ func (s *CollabService) GetRoom(ctx context.Context, req *pb.GetRoomRequest) (*p
 		OwnerClientId: room.OwnerClientId,
 		Tool:          room.Tool,
 		Encrypted:     encrypted,
+		Title:         room.Title,
 	}, nil
 }
 
@@ -297,6 +300,9 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 	if room.Tool == "" {
 		room.Tool = join.GetTool()
 	}
+	if room.Title == "" {
+		room.Title = join.GetTitle()
+	}
 	room.mu.Unlock()
 
 	// Broadcast PeerJoined to existing clients
@@ -329,6 +335,7 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 				MaxPeers:        int32(s.MaxPeersPerRoom),
 				Encrypted:       roomEncrypted,
 				ProtocolVersion: s.ProtocolVersion,
+				Title:           room.Title,
 			},
 		},
 	}, nil
@@ -514,6 +521,12 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 			room.mu.Unlock()
 		}
 		event.Event = &pb.CollabEvent_CredentialsChanged{CredentialsChanged: a.CredentialsChanged}
+	case *pb.CollabAction_TitleChanged:
+		// Update room title
+		room.mu.Lock()
+		room.Title = a.TitleChanged.GetTitle()
+		room.mu.Unlock()
+		event.Event = &pb.CollabEvent_TitleChanged{TitleChanged: a.TitleChanged}
 	default:
 		return nil, fmt.Errorf("unsupported broadcast action type")
 	}

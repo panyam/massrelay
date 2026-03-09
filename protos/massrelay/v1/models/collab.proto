@@ -21,6 +21,7 @@ message CollabAction {
     SceneInitRequest scene_init_request = 16;
     SceneInitResponse scene_init_response = 17;
     CredentialsChanged credentials_changed = 18;
+    TitleChanged title_changed = 19;
   }
 }
 
@@ -35,6 +36,7 @@ message JoinRoom {
   string client_hint = 8;     // opaque hint (e.g. browserId:drawingId) for session reuse
   int32 protocol_version = 9; // client protocol version (current = 2, legacy implicit = 1)
   bool encrypted = 10;        // owner declares room as encrypted (password-based E2EE)
+  string title = 11;          // drawing title (owner sends, relay echoes to joiners)
 }
 
 message LeaveRoom {
@@ -104,6 +106,7 @@ message CollabEvent {
     SessionEnded session_ended = 20;
     OwnerChanged owner_changed = 21;
     CredentialsChanged credentials_changed = 22;
+    TitleChanged title_changed = 23;
   }
 }
 
@@ -115,6 +118,7 @@ message RoomJoined {
   int32 max_peers = 5;            // relay's max-peers setting (informational for UI)
   bool encrypted = 6;             // true if room owner set a password
   int32 protocol_version = 7;     // relay protocol version
+  string title = 8;               // drawing title (from owner)
 }
 
 message PeerInfo {
@@ -153,6 +157,10 @@ message CredentialsChanged {
   string reason = 1;           // "password_changed" | "password_removed" | "key_rotated"
 }
 
+message TitleChanged {
+  string title = 1;            // new drawing title
+}
+
 // ─── Dashboard / Info ───────────────────────────
 
 message GetRoomRequest {
@@ -166,6 +174,7 @@ message GetRoomResponse {
   string owner_client_id = 4;
   string tool = 5;              // "excalidraw" | "mermaid"
   bool encrypted = 6;           // true if room has E2EE enabled
+  string title = 7;              // drawing title (from owner)
 }
 
 message ListRoomsRequest {}

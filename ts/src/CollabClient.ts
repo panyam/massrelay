@@ -12,6 +12,7 @@ export interface CollabClientOptions {
   onSessionEnded?: (reason: string) => void;
   onOwnerChanged?: (newOwnerClientId: string) => void;
   onCredentialsChanged?: (reason: string) => void;
+  onTitleChanged?: (title: string) => void;
   /** Called when relay returns an ErrorEvent (e.g. ROOM_FULL). */
   onErrorEvent?: (code: string, message: string) => void;
   maxRetries?: number;
@@ -37,6 +38,7 @@ export class CollabClient {
   private _sessionId: string = '';
   private _username: string = '';
   private _tool: string = '';
+  private _title: string = '';
   private _encrypted: boolean = false;
   private _maxPeers: number = 0;
   private _roomEncrypted: boolean = false;
@@ -59,8 +61,9 @@ export class CollabClient {
   get isOwner(): boolean { return this._isOwner; }
   get maxPeers(): number { return this._maxPeers; }
   get roomEncrypted(): boolean { return this._roomEncrypted; }
+  get title(): string { return this._title; }
 
-  connect(relayUrl: string, sessionId: string, username: string, tool: string, isOwner: boolean = false, browserId: string = '', clientHint: string = '', encrypted: boolean = false): void {
+  connect(relayUrl: string, sessionId: string, username: string, tool: string, isOwner: boolean = false, browserId: string = '', clientHint: string = '', encrypted: boolean = false, title: string = ''): void {
     if (this._isConnected) {
       throw new Error('Already connected');
     }
@@ -69,6 +72,7 @@ export class CollabClient {
     this._sessionId = sessionId;
     this._username = username || ('Anon-' + Math.random().toString(36).slice(2, 6));
     this._tool = tool;
+    this._title = title;
     this._isOwner = isOwner;
     this._browserId = browserId;
     this._clientHint = clientHint;
@@ -162,6 +166,7 @@ export class CollabClient {
           clientHint: this._clientHint,
           protocolVersion: 2,
           encrypted: this._encrypted,
+          title: this._title,
         },
       });
     }).catch(() => {
@@ -193,6 +198,7 @@ export class CollabClient {
       }
       this._maxPeers = data.roomJoined.maxPeers || 0;
       this._roomEncrypted = !!data.roomJoined.encrypted;
+      this._title = data.roomJoined.title || '';
       this._isConnected = true;
       this._isConnecting = false;
       this.retryCount = 0;
@@ -228,6 +234,9 @@ export class CollabClient {
       this.options.onOwnerChanged?.(newOwnerId);
     } else if (data.credentialsChanged) {
       this.options.onCredentialsChanged?.(data.credentialsChanged.reason || '');
+    } else if (data.titleChanged) {
+      this._title = data.titleChanged.title || '';
+      this.options.onTitleChanged?.(this._title);
     }
   }
 
