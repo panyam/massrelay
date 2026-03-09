@@ -85,14 +85,15 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 	// Store session/client info after join and start forwarding broadcast events
 	if action.GetJoin() != nil && resp != nil {
 		if rj := resp.GetRoomJoined(); rj != nil {
+			sessionId := rj.GetRoom().GetSessionId()
 			s.mu.Lock()
-			s.sessionId = rj.GetSessionId()
+			s.sessionId = sessionId
 			s.clientId = rj.GetClientId()
 			s.mu.Unlock()
-			log.Printf("[STREAM] Client %s joined session %s, starting bridge goroutine", rj.GetClientId(), rj.GetSessionId())
+			log.Printf("[STREAM] Client %s joined session %s, starting bridge goroutine", rj.GetClientId(), sessionId)
 
 			// Bridge: forward events from the service client's SendCh to the stream's sendCh
-			if clientCh := s.service.GetClientSendCh(rj.GetSessionId(), rj.GetClientId()); clientCh != nil {
+			if clientCh := s.service.GetClientSendCh(sessionId, rj.GetClientId()); clientCh != nil {
 				go func() {
 					for {
 						select {
@@ -113,7 +114,7 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 					}
 				}()
 			} else {
-				log.Printf("[STREAM] WARNING: No client channel found for %s/%s", rj.GetSessionId(), rj.GetClientId())
+				log.Printf("[STREAM] WARNING: No client channel found for %s/%s", sessionId, rj.GetClientId())
 			}
 		}
 	}

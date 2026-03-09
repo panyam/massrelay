@@ -193,22 +193,24 @@ Returns information about an active room.
 **Response** `200 OK`:
 ```json
 {
-  "sessionId": "a1b2c3d4-e5f6-...",
-  "peers": [
-    {
-      "clientId": "peer-uuid",
-      "username": "Alice",
-      "avatarUrl": "",
-      "clientType": "browser",
-      "isActive": true,
-      "isOwner": true
-    }
-  ],
-  "createdAt": 1710000000,
-  "ownerClientId": "peer-uuid",
-  "metadata": { "tool": "whiteboard" },
-  "encrypted": false,
-  "title": "My Drawing"
+  "room": {
+    "sessionId": "a1b2c3d4-e5f6-...",
+    "peers": [
+      {
+        "clientId": "peer-uuid",
+        "username": "Alice",
+        "avatarUrl": "",
+        "clientType": "browser",
+        "isActive": true,
+        "isOwner": true
+      }
+    ],
+    "createdAt": 1710000000,
+    "ownerClientId": "peer-uuid",
+    "metadata": { "tool": "whiteboard" },
+    "encrypted": false,
+    "title": "My Drawing"
+  }
 }
 ```
 
@@ -370,12 +372,22 @@ Sent to the joining client as confirmation of a successful join.
 | Field | Type | Description |
 |-------|------|-------------|
 | `clientId` | string | Relay-assigned client ID (UUID) for this connection. |
+| `room` | Room | Nested room state (see Room below). |
+| `maxPeers` | int32 | Relay's participant limit (informational). |
+| `protocolVersion` | int32 | Relay protocol version (currently `2`). |
+
+#### Room
+
+Canonical room state, shared by `RoomJoined` and `GetRoomResponse`.
+
+| Field | Type | Description |
+|-------|------|-------------|
 | `sessionId` | string | Session ID (may differ from what was requested if relay generated one). |
 | `peers` | PeerInfo[] | **Existing peers only** — does NOT include the joining client itself. |
 | `ownerClientId` | string | Client ID of the session owner. |
-| `maxPeers` | int32 | Relay's participant limit (informational). |
+| `createdAt` | int64 | Room creation time (Unix seconds). |
+| `metadata` | map | Application-defined key-value pairs. |
 | `encrypted` | bool | `true` if the room has E2EE enabled. |
-| `protocolVersion` | int32 | Relay protocol version (currently `2`). |
 | `title` | string | Drawing title set by the owner. |
 
 #### PeerJoined
@@ -461,8 +473,8 @@ Client A                          Relay                          Client B
    │── CollabAction { join: {...} }──▶                               │
    │                                │                                │
    │◀── CollabEvent { roomJoined }──│                                │
-   │    (clientId, sessionId,       │                                │
-   │     peers: [B], ...)           │                                │
+   │    (clientId, room: {          │                                │
+   │      sessionId, peers, ...})   │                                │
    │                                │── CollabEvent { peerJoined }──▶│
    │                                │   (peer: {A's info})           │
 ```
@@ -999,7 +1011,7 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 
 // CollabEvent with RoomJoined
 {
-  "roomJoined": { "clientId": "uuid", "sessionId": "uuid", "peers": [...] },
+  "roomJoined": { "clientId": "uuid", "room": { "sessionId": "uuid", "peers": [...] } },
   "eventId": "uuid",
   "fromClientId": "uuid",
   "serverTimestamp": 1710000000

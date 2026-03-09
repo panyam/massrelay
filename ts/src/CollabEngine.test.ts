@@ -171,16 +171,18 @@ function makeMockClient(): CollabClient & {
       }
     }
 
-    // onEvent with roomJoined
+    // onEvent with roomJoined (Room fields nested under .room)
     client.options.onEvent?.({
       roomJoined: {
         clientId: data.clientId,
-        sessionId: data.sessionId || mock._sessionId,
-        ownerClientId: data.ownerClientId || '',
-        encrypted: data.encrypted ?? false,
         maxPeers: data.maxPeers ?? 0,
-        title: data.title ?? '',
-        peers: data.peers ?? [],
+        room: {
+          sessionId: data.sessionId || mock._sessionId,
+          ownerClientId: data.ownerClientId || '',
+          encrypted: data.encrypted ?? false,
+          title: data.title ?? '',
+          peers: data.peers ?? [],
+        },
       },
     });
   };
