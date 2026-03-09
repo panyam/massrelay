@@ -6,23 +6,23 @@ This guide covers deploying massrelay relay servers — from local development t
 
 ```
                     ┌─────────────────────┐
-                    │   relay-pool.json    │  (CDN / static file)
-                    │   [r01, r02, ...]    │
+                    │   relay-pool.json   │  (CDN / static file)
+                    │   [r01, r02, ...]   │
                     └────────┬────────────┘
                              │
               ┌──────────────┼──────────────┐
               ▼              ▼              ▼
          ┌─────────┐   ┌─────────┐   ┌─────────┐
-         │  VPS 1   │   │  VPS 2   │   │  VPS 3   │
-         │ Caddy    │   │ Caddy    │   │ Caddy    │
-         │ Relay    │   │ Relay    │   │ Relay    │
+         │  VPS 1  │   │  VPS 2  │   │  VPS 3  │
+         │ Caddy   │   │ Caddy   │   │ Caddy   │
+         │ Relay   │   │ Relay   │   │ Relay   │
          └─────────┘   └─────────┘   └─────────┘
               │              │              │
               └──────────────┼──────────────┘
                              ▼
-                     ┌──────────────┐
+                     ┌───────────────┐
                      │ Grafana Cloud │  (optional, OTLP)
-                     └──────────────┘
+                     └───────────────┘
 ```
 
 Each relay is a self-contained unit: **Caddy** (reverse proxy + auto-TLS) + **Relay** (Go WebSocket server). No coordination between relays. Clients pick a relay, the share code encodes the relay URL, followers connect directly.
@@ -211,30 +211,83 @@ Removing a relay:
 2. Wait for active sessions to end (or just stop it — clients will reconnect elsewhere)
 3. `docker compose down` and decommission the VPS
 
-### Bulk Operations
+### Automation Scripts
 
-For managing multiple relays, a simple SSH loop works:
+Two scripts handle the full lifecycle of relay hosts. Both read from `deploy/inventory.txt`.
+
+#### `setup-host.sh` — Bootstrap a new VPS
 
 ```bash
-# Update all relays
-for host in r01 r02 r03; do
-  ssh $host "cd massrelay/deploy/production && git pull && docker compose up -d --build"
-done
+# One command to go from bare VPS to running relay
+./deploy/scripts/setup-host.sh <ip> <domain> [service-name]
 
-# Health check all relays
-for host in r01 r02 r03; do
-  echo -n "$host: " && curl -s https://$host.yourdomain.com/health | jq -r '.status'
-done
+# Example
+./deploy/scripts/setup-host.sh 49.12.1.2 r01.relay.excaliframe.com massrelay-r01
 ```
 
-For larger pools (20+), consider Ansible:
+What it does:
+1. Verifies DNS A record points to the IP
+2. SSHs into the host and installs Docker
+3. Configures firewall (ufw or firewalld)
+4. Clones the massrelay repo to `/opt/massrelay`
+5. Writes `.env` with domain and service name
+6. Starts Caddy + relay via `docker compose up -d`
+
+Works on Ubuntu 20.04+, Debian 11+, CentOS/RHEL 8+, Fedora, Amazon Linux 2. Provider-agnostic — same script for IONOS, Hetzner, Oracle, Racknerd, etc.
+
+#### `update-pool.sh` — Manage the pool
+
+```bash
+# Rolling update all hosts in inventory.txt
+./deploy/scripts/update-pool.sh
+
+# Update specific hosts only
+./deploy/scripts/update-pool.sh r01.relay.excaliframe.com r02.relay.excaliframe.com
+
+# Health check all hosts
+./deploy/scripts/update-pool.sh --health
+# HOST                                     STATUS
+# ----                                     ------
+# r01.relay.excaliframe.com                ✓ up 86400s
+# r02.relay.excaliframe.com                ✓ up 43200s
+# r03.relay.excaliframe.com                ✗ unreachable
+
+# Pool status (rooms, peers, uptime)
+./deploy/scripts/update-pool.sh --status
+# HOST                                      ROOMS  PEERS     UPTIME STATUS
+# ----                                      -----  -----     ------ ------
+# r01.relay.excaliframe.com                     3      8     1d 0h ✓
+# r02.relay.excaliframe.com                     1      2     0d 12h ✓
+#
+# Total: 4 rooms, 10 peers
+```
+
+#### `inventory.txt` — Host registry
+
+```
+# Format: <domain>  <provider>  <region>  <ip>  <monthly-cost>
+r01.relay.excaliframe.com    hetzner     eu-central    49.12.x.x      €3.29
+r02.relay.excaliframe.com    ionos       us-east       85.215.x.x     $1.00
+r03.relay.excaliframe.com    oracle      ap-south      132.145.x.x    $0.00
+```
+
+Also serves as the source for generating `relay-pool.json`:
+
+```bash
+awk '/^r[0-9]/ {print "{\"url\":\"wss://"$1"\",\"region\":\""$3"\"}"}' deploy/inventory.txt \
+  | jq -s '{version: 1, relays: .}' > relay-pool.json
+```
+
+#### Scaling to 20+ hosts: Ansible
+
+When the pool grows beyond what shell scripts comfortably manage, the same operations translate directly to Ansible:
 
 ```yaml
-# ansible playbook sketch
+# ansible playbook sketch — same commands, parallel + idempotent
 - hosts: relays
   tasks:
     - name: Update relay
-      shell: cd massrelay/deploy/production && git pull && docker compose up -d --build
+      shell: cd /opt/massrelay/deploy/production && git pull && docker compose up -d --build
 ```
 
 ## DNS & Host Onboarding
@@ -382,11 +435,15 @@ For local/dev with `RELAY_DOMAIN=localhost`, Caddy serves a self-signed cert.
 
 ```
 deploy/
-├── DEPLOY_GUIDE.md          ← this file
+├── DEPLOY_GUIDE.md              ← this file
+├── inventory.txt                ← host registry (domain, provider, region, IP, cost)
+├── scripts/
+│   ├── setup-host.sh            ← bootstrap a new VPS (one-time)
+│   └── update-pool.sh           ← rolling update, health check, pool status
 ├── local/
-│   └── docker-compose.yml   ← local dev: relay + Grafana LGTM
+│   └── docker-compose.yml       ← local dev: relay + Grafana LGTM
 └── production/
-    ├── docker-compose.yml   ← production: Caddy + relay
-    ├── Caddyfile             ← Caddy reverse proxy config
-    └── .env.example          ← configuration template
+    ├── docker-compose.yml       ← production: Caddy + relay
+    ├── Caddyfile                ← Caddy reverse proxy config
+    └── .env.example             ← configuration template
 ```
