@@ -253,15 +253,16 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
     client.options.onEvent = (event: any) => {
       // Extract room info from RoomJoined
       if (event.roomJoined) {
-        const ownerClientId = event.roomJoined.ownerClientId || '';
-        const returnedSessionId = event.roomJoined.sessionId || params.sessionId;
+        const room = event.roomJoined.room || {};
+        const ownerClientId = room.ownerClientId || '';
+        const returnedSessionId = room.sessionId || params.sessionId;
         this._updateState({
           sessionId: returnedSessionId,
           ownerClientId,
           isOwner: this._state.clientId === ownerClientId || (params.isOwner ?? false),
-          roomEncrypted: !!event.roomJoined.encrypted,
+          roomEncrypted: !!room.encrypted,
           maxPeers: event.roomJoined.maxPeers || 0,
-          roomTitle: event.roomJoined.title || '',
+          roomTitle: room.title || '',
         });
       }
 

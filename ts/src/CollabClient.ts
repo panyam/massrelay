@@ -194,14 +194,15 @@ export class CollabClient {
     }
 
     if (data.roomJoined) {
+      const room = data.roomJoined.room || {};
       this._clientId = data.roomJoined.clientId;
       // Capture relay-generated sessionId (may differ from what we sent)
-      if (data.roomJoined.sessionId) {
-        this._sessionId = data.roomJoined.sessionId;
+      if (room.sessionId) {
+        this._sessionId = room.sessionId;
       }
       this._maxPeers = data.roomJoined.maxPeers || 0;
-      this._roomEncrypted = !!data.roomJoined.encrypted;
-      this._title = data.roomJoined.title || '';
+      this._roomEncrypted = !!room.encrypted;
+      this._title = room.title || '';
       this._isConnected = true;
       this._isConnecting = false;
       this.retryCount = 0;
@@ -217,8 +218,8 @@ export class CollabClient {
       } as PeerInfo);
 
       // Add existing peers already in the room
-      if (data.roomJoined.peers) {
-        for (const peer of data.roomJoined.peers) {
+      if (room.peers) {
+        for (const peer of room.peers) {
           this.options.onPeerJoined?.(peer);
         }
       }

@@ -79,6 +79,33 @@ func (r *CollabRoom) GetPeerInfo() []*pb.PeerInfo {
 	return peers
 }
 
+// ToProto returns a protobuf Room snapshot of this room's current state.
+// The returned Room is safe to use outside the room's lock.
+func (r *CollabRoom) ToProto() *pb.Room {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	peers := make([]*pb.PeerInfo, 0, len(r.Clients))
+	for _, c := range r.Clients {
+		peers = append(peers, &pb.PeerInfo{
+			ClientId:   c.ClientId,
+			Username:   c.Username,
+			AvatarUrl:  c.AvatarUrl,
+			ClientType: c.ClientType,
+			IsActive:   c.IsActive,
+			IsOwner:    c.IsOwner,
+		})
+	}
+	return &pb.Room{
+		SessionId:     r.SessionId,
+		Peers:         peers,
+		OwnerClientId: r.OwnerClientId,
+		CreatedAt:     r.Created.Unix(),
+		Metadata:      r.Metadata,
+		Encrypted:     r.Encrypted,
+		Title:         r.Title,
+	}
+}
+
 // IsEmpty returns true if the room has no clients.
 func (r *CollabRoom) IsEmpty() bool {
 	r.mu.RLock()

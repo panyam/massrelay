@@ -209,17 +209,8 @@ func (s *CollabService) GetRoom(ctx context.Context, req *pb.GetRoomRequest) (*p
 	if !ok {
 		return nil, fmt.Errorf("room not found: %s", req.GetSessionId())
 	}
-	room.mu.RLock()
-	encrypted := room.Encrypted
-	room.mu.RUnlock()
 	return &pb.GetRoomResponse{
-		SessionId:     room.SessionId,
-		Peers:         room.GetPeerInfo(),
-		CreatedAt:     room.Created.Unix(),
-		OwnerClientId: room.OwnerClientId,
-		Metadata:      room.Metadata,
-		Encrypted:     encrypted,
-		Title:         room.Title,
+		Room: room.ToProto(),
 	}, nil
 }
 
@@ -384,14 +375,18 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 		EventId: uuid.New().String(),
 		Event: &pb.CollabEvent_RoomJoined{
 			RoomJoined: &pb.RoomJoined{
-				ClientId:        clientId,
-				SessionId:       sessionId,
-				Peers:           existingPeers,
-				OwnerClientId:   room.OwnerClientId,
+				ClientId: clientId,
+				Room: &pb.Room{
+					SessionId:     sessionId,
+					Peers:         existingPeers,
+					OwnerClientId: room.OwnerClientId,
+					Encrypted:     roomEncrypted,
+					Title:         room.Title,
+					CreatedAt:     room.Created.Unix(),
+					Metadata:      room.Metadata,
+				},
 				MaxPeers:        int32(s.MaxPeersPerRoom),
-				Encrypted:       roomEncrypted,
 				ProtocolVersion: s.ProtocolVersion,
-				Title:           room.Title,
 			},
 		},
 	}, nil
