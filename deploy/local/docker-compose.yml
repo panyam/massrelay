@@ -1,0 +1,20 @@
+## Local observability stack for massrelay development.
+##
+## Usage:
+##   docker compose up -d          # start Grafana LGTM stack
+##   make run-otel                  # start relay with OTEL enabled (from repo root)
+##
+## Dashboards: http://localhost:3000 (no login required)
+## OTLP endpoint: http://localhost:4318 (HTTP) / localhost:4317 (gRPC)
+
+services:
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "9090:9090"   # Prometheus (Mimir)
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
