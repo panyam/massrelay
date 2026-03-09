@@ -1,6 +1,6 @@
 {
   "name": "@panyam/massrelay",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "type": "module",
   "main": "dist/gen/massrelay/v1/models/collab_pb.js",
   "types": "dist/gen/massrelay/v1/models/collab_pb.d.ts",
