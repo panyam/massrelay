@@ -4,6 +4,7 @@ import type { CollabEngineState, TimerProvider } from './CollabEngine.js';
 import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate, CursorData, PeerCursor } from './SyncAdapter.js';
 import { deriveKey, encryptPayload, decryptPayload } from './crypto.js';
+import type { CollabEventJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 
 /**
  * COLLAB TEST COVERAGE MATRIX
@@ -95,9 +96,9 @@ function makeMockClient(): CollabClient & {
   _connect: ReturnType<typeof vi.fn>;
   _disconnect: ReturnType<typeof vi.fn>;
   simulateRoomJoined(data: Record<string, any>): void;
-  simulatePeerJoined(peer: Record<string, any>): void;
+  simulatePeerJoined(peer: PeerInfoJson): void;
   simulatePeerLeft(clientId: string): void;
-  simulateEvent(event: any): void;
+  simulateEvent(event: CollabEventJson): void;
   simulateDisconnect(): void;
   simulateSessionEnded(reason?: string): void;
   simulateOwnerChanged(newOwnerClientId: string): void;
@@ -156,13 +157,15 @@ function makeMockClient(): CollabClient & {
     client.options.onConnect?.(data.clientId);
 
     // Self as peer
-    client.options.onPeerJoined?.({
+    const selfPeer: PeerInfoJson = {
       clientId: data.clientId,
       username: mock._username,
       avatarUrl: '',
       clientType: 'browser',
       isActive: true,
-    } as any);
+      metadata: mock._metadata || {},
+    };
+    client.options.onPeerJoined?.(selfPeer);
 
     // Existing peers
     if (data.peers) {
@@ -172,6 +175,11 @@ function makeMockClient(): CollabClient & {
     }
 
     // onEvent with roomJoined (Room fields nested under .room)
+    // peers is now a map keyed by clientId (matching proto wire format)
+    const peersMap: { [key: string]: PeerInfoJson } = {};
+    for (const p of data.peers ?? []) {
+      peersMap[p.clientId] = p;
+    }
     client.options.onEvent?.({
       roomJoined: {
         clientId: data.clientId,
@@ -181,14 +189,14 @@ function makeMockClient(): CollabClient & {
           ownerClientId: data.ownerClientId || '',
           encrypted: data.encrypted ?? false,
           title: data.title ?? '',
-          peers: data.peers ?? [],
+          peers: peersMap,
         },
       },
     });
   };
 
-  mock.simulatePeerJoined = (peer: Record<string, any>) => {
-    client.options.onPeerJoined?.(peer as any);
+  mock.simulatePeerJoined = (peer: PeerInfoJson) => {
+    client.options.onPeerJoined?.(peer);
   };
 
   mock.simulatePeerLeft = (clientId: string) => {
@@ -197,7 +205,7 @@ function makeMockClient(): CollabClient & {
     client.options.onEvent?.({ peerLeft: { clientId } });
   };
 
-  mock.simulateEvent = (event: any) => {
+  mock.simulateEvent = (event: CollabEventJson) => {
     client.options.onEvent?.(event);
   };
 
@@ -699,7 +707,7 @@ describe('CollabEngine', () => {
 
       const joinedPeers: string[] = [];
       const leftPeers: string[] = [];
-      engine.on('peerJoined', (p) => joinedPeers.push(p.clientId));
+      engine.on('peerJoined', (p) => joinedPeers.push(p.clientId || ''));
       engine.on('peerLeft', (id) => leftPeers.push(id));
 
       engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Alice', metadata: { tool: 'excalidraw' } });
@@ -882,6 +890,35 @@ describe('CollabEngine', () => {
       expect(engine.state.maxPeers).toBe(10);
       expect(engine.state.roomTitle).toBe('My Drawing');
       expect(engine.state.isOwner).toBe(true);
+    });
+
+    it('self-peer carries metadata from connect params', () => {
+      const client = makeMockClient();
+      const engine = new CollabEngine({ client, timers });
+
+      engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Alice', metadata: { tool: 'excalidraw', docType: 'design' } });
+      client.simulateRoomJoined({ clientId: 'c1', sessionId: 'sess1', ownerClientId: 'c1' });
+
+      const selfPeer = engine.state.peers.get('c1');
+      expect(selfPeer).toBeDefined();
+      expect(selfPeer!.metadata).toEqual({ tool: 'excalidraw', docType: 'design' });
+    });
+
+    it('existing peers carry metadata from server', () => {
+      const client = makeMockClient();
+      const engine = new CollabEngine({ client, timers });
+
+      engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Bob', metadata: { tool: 'excalidraw' } });
+      client.simulateRoomJoined({
+        clientId: 'c2',
+        sessionId: 'sess1',
+        ownerClientId: 'c1',
+        peers: [{ clientId: 'c1', username: 'Alice', metadata: { tool: 'excalidraw', role: 'owner' } }],
+      });
+
+      const remotePeer = engine.state.peers.get('c1');
+      expect(remotePeer).toBeDefined();
+      expect(remotePeer!.metadata).toEqual({ tool: 'excalidraw', role: 'owner' });
     });
   });
 

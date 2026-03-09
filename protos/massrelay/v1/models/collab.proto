@@ -1,6 +1,8 @@
 syntax = "proto3";
 package massrelay.v1.models;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/panyam/massrelay/gen/go/massrelay/v1/models";
 
 // ─── Client → Server ────────────────────────────
@@ -113,9 +115,9 @@ message CollabEvent {
 // Composed into RoomJoined and GetRoomResponse to avoid field duplication.
 message Room {
   string session_id = 1;
-  repeated PeerInfo peers = 2;
+  map<string, PeerInfo> peers = 2;  // keyed by client_id
   string owner_client_id = 3;
-  int64 created_at = 4;
+  google.protobuf.Timestamp created_at = 4;  // room creation time
   map<string, string> metadata = 5;
   bool encrypted = 6;
   string title = 7;
@@ -135,6 +137,7 @@ message PeerInfo {
   string client_type = 4;
   bool is_active = 5;
   bool is_owner = 6;
+  map<string, string> metadata = 7;  // application-defined key-value pairs (from JoinRoom)
 }
 
 message PeerJoined {
@@ -187,5 +190,5 @@ message ListRoomsResponse {
 message RoomSummary {
   string session_id = 1;
   int32 peer_count = 2;
-  int64 created_at = 3;
+  google.protobuf.Timestamp created_at = 3;
 }

@@ -1,10 +1,38 @@
 package services
 
 import (
+	"sync"
 	"time"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// CollabRoom holds the state for a single collaboration session.
+// Each room is identified by a unique SessionId and contains zero or more
+// connected peers (CollabClient). The room tracks ownership for lifecycle
+// management — when the owner disconnects, ownership transfers to a
+// same-browser tab or the session ends.
+//
+// Room state fields (SessionId, OwnerClientId, Metadata, Encrypted, Title)
+// overlap with pb.Room. Now that pb.Room uses map<string,PeerInfo> for peers
+// and google.protobuf.Timestamp for created_at, embedding is more viable but
+// deferred — the Clients map holds *CollabClient (which wraps *PeerInfo plus
+// server-only fields like SendCh), while pb.Room.Peers holds *PeerInfo only.
+// Use ToProto() to produce a pb.Room snapshot when needed.
+//
+// All exported methods are thread-safe (guarded by an internal RWMutex).
+type CollabRoom struct {
+	SessionId      string
+	Clients        map[string]*CollabClient
+	Created        time.Time
+	OwnerClientId  string
+	OwnerBrowserId string            // server-only: ownership transfer
+	Metadata       map[string]string // app-defined key-value pairs
+	Title          string
+	Encrypted      bool
+	mu             sync.RWMutex
+}
 
 // NewCollabRoom creates a new room with the given session ID.
 func NewCollabRoom(sessionId string) *CollabRoom {
@@ -61,20 +89,14 @@ func (r *CollabRoom) RemoveClient(clientId string) *CollabClient {
 }
 
 // GetPeerInfo returns a snapshot of PeerInfo for all connected clients.
-// The returned slice is safe to use outside the room's lock.
-func (r *CollabRoom) GetPeerInfo() []*pb.PeerInfo {
+// Each entry is the embedded PeerInfo from the CollabClient, keyed by client ID.
+// The returned map is safe to use outside the room's lock.
+func (r *CollabRoom) GetPeerInfo() map[string]*pb.PeerInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	peers := make([]*pb.PeerInfo, 0, len(r.Clients))
-	for _, c := range r.Clients {
-		peers = append(peers, &pb.PeerInfo{
-			ClientId:   c.ClientId,
-			Username:   c.Username,
-			AvatarUrl:  c.AvatarUrl,
-			ClientType: c.ClientType,
-			IsActive:   c.IsActive,
-			IsOwner:    c.IsOwner,
-		})
+	peers := make(map[string]*pb.PeerInfo, len(r.Clients))
+	for id, c := range r.Clients {
+		peers[id] = c.PeerInfo
 	}
 	return peers
 }
@@ -82,24 +104,11 @@ func (r *CollabRoom) GetPeerInfo() []*pb.PeerInfo {
 // ToProto returns a protobuf Room snapshot of this room's current state.
 // The returned Room is safe to use outside the room's lock.
 func (r *CollabRoom) ToProto() *pb.Room {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	peers := make([]*pb.PeerInfo, 0, len(r.Clients))
-	for _, c := range r.Clients {
-		peers = append(peers, &pb.PeerInfo{
-			ClientId:   c.ClientId,
-			Username:   c.Username,
-			AvatarUrl:  c.AvatarUrl,
-			ClientType: c.ClientType,
-			IsActive:   c.IsActive,
-			IsOwner:    c.IsOwner,
-		})
-	}
 	return &pb.Room{
 		SessionId:     r.SessionId,
-		Peers:         peers,
+		Peers:         r.GetPeerInfo(),
 		OwnerClientId: r.OwnerClientId,
-		CreatedAt:     r.Created.Unix(),
+		CreatedAt:     timestamppb.New(r.Created),
 		Metadata:      r.Metadata,
 		Encrypted:     r.Encrypted,
 		Title:         r.Title,
