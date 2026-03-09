@@ -2,7 +2,7 @@ import { TypedEmitter } from './EventEmitter.js';
 import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate } from './SyncAdapter.js';
 import { encryptPayload, decryptPayload } from './crypto.js';
-import type { PeerInfoJsonJson, CollabEventJson } from './gen/massrelay/v1/models/collab_pb.js';
+import type { PeerInfoJson, CollabEventJson } from './gen/massrelay/v1/models/collab_pb.js';
 
 // ─── Types ───
 
@@ -311,8 +311,8 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
       adapter.applyRemoteCursor({
         clientId: event.fromClientId,
         username: peer?.username || event.fromClientId.slice(0, 6),
-        x: event.cursorUpdate.x,
-        y: event.cursorUpdate.y,
+        x: Number(event.cursorUpdate.x ?? 0),
+        y: Number(event.cursorUpdate.y ?? 0),
         tool: event.cursorUpdate.tool,
         button: event.cursorUpdate.button,
         selectedElementIds: event.cursorUpdate.selectedElementIds,

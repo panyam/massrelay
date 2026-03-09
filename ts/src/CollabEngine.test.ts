@@ -707,7 +707,7 @@ describe('CollabEngine', () => {
 
       const joinedPeers: string[] = [];
       const leftPeers: string[] = [];
-      engine.on('peerJoined', (p) => joinedPeers.push(p.clientId));
+      engine.on('peerJoined', (p) => joinedPeers.push(p.clientId || ''));
       engine.on('peerLeft', (id) => leftPeers.push(id));
 
       engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Alice', metadata: { tool: 'excalidraw' } });
