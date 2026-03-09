@@ -1284,6 +1284,7 @@ type PeerInfo struct {
 	ClientType    string                 `protobuf:"bytes,4,opt,name=client_type,json=clientType,proto3" json:"client_type,omitempty"`
 	IsActive      bool                   `protobuf:"varint,5,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`
 	IsOwner       bool                   `protobuf:"varint,6,opt,name=is_owner,json=isOwner,proto3" json:"is_owner,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,7,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // application-defined key-value pairs (from JoinRoom)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1358,6 +1359,13 @@ func (x *PeerInfo) GetIsOwner() bool {
 		return x.IsOwner
 	}
 	return false
+}
+
+func (x *PeerInfo) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
 }
 
 type PeerJoined struct {
@@ -2034,7 +2042,7 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12-\n" +
 	"\x04room\x18\x02 \x01(\v2\x19.massrelay.v1.models.RoomR\x04room\x12\x1b\n" +
 	"\tmax_peers\x18\x05 \x01(\x05R\bmaxPeers\x12)\n" +
-	"\x10protocol_version\x18\a \x01(\x05R\x0fprotocolVersion\"\xbb\x01\n" +
+	"\x10protocol_version\x18\a \x01(\x05R\x0fprotocolVersion\"\xc1\x02\n" +
 	"\bPeerInfo\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1d\n" +
@@ -2043,7 +2051,11 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\vclient_type\x18\x04 \x01(\tR\n" +
 	"clientType\x12\x1b\n" +
 	"\tis_active\x18\x05 \x01(\bR\bisActive\x12\x19\n" +
-	"\bis_owner\x18\x06 \x01(\bR\aisOwner\"?\n" +
+	"\bis_owner\x18\x06 \x01(\bR\aisOwner\x12G\n" +
+	"\bmetadata\x18\a \x03(\v2+.massrelay.v1.models.PeerInfo.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"?\n" +
 	"\n" +
 	"PeerJoined\x121\n" +
 	"\x04peer\x18\x01 \x01(\v2\x1d.massrelay.v1.models.PeerInfoR\x04peer\"^\n" +
@@ -2093,7 +2105,7 @@ func file_massrelay_v1_models_collab_proto_rawDescGZIP() []byte {
 	return file_massrelay_v1_models_collab_proto_rawDescData
 }
 
-var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_massrelay_v1_models_collab_proto_goTypes = []any{
 	(*CollabAction)(nil),       // 0: massrelay.v1.models.CollabAction
 	(*JoinRoom)(nil),           // 1: massrelay.v1.models.JoinRoom
@@ -2124,6 +2136,7 @@ var file_massrelay_v1_models_collab_proto_goTypes = []any{
 	nil,                        // 26: massrelay.v1.models.JoinRoom.MetadataEntry
 	nil,                        // 27: massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
 	nil,                        // 28: massrelay.v1.models.Room.MetadataEntry
+	nil,                        // 29: massrelay.v1.models.PeerInfo.MetadataEntry
 }
 var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	1,  // 0: massrelay.v1.models.CollabAction.join:type_name -> massrelay.v1.models.JoinRoom
@@ -2156,14 +2169,15 @@ var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	13, // 27: massrelay.v1.models.Room.peers:type_name -> massrelay.v1.models.PeerInfo
 	28, // 28: massrelay.v1.models.Room.metadata:type_name -> massrelay.v1.models.Room.MetadataEntry
 	11, // 29: massrelay.v1.models.RoomJoined.room:type_name -> massrelay.v1.models.Room
-	13, // 30: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
-	11, // 31: massrelay.v1.models.GetRoomResponse.room:type_name -> massrelay.v1.models.Room
-	25, // 32: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	29, // 30: massrelay.v1.models.PeerInfo.metadata:type_name -> massrelay.v1.models.PeerInfo.MetadataEntry
+	13, // 31: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
+	11, // 32: massrelay.v1.models.GetRoomResponse.room:type_name -> massrelay.v1.models.Room
+	25, // 33: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
+	34, // [34:34] is the sub-list for method output_type
+	34, // [34:34] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_massrelay_v1_models_collab_proto_init() }
@@ -2205,7 +2219,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_massrelay_v1_models_collab_proto_rawDesc), len(file_massrelay_v1_models_collab_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -134,6 +134,97 @@ func TestListRooms(t *testing.T) {
 	}
 }
 
+func TestCollabClientEmbedsPeerInfo(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+
+	event, err := svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:  "sess-embed",
+				Username:   "Alice",
+				Metadata:   map[string]string{"tool": "whiteboard", "role": "designer"},
+				ClientType: "browser",
+				AvatarUrl:  "https://example.com/alice.png",
+				IsOwner:    true,
+				BrowserId:  "browser-1",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientId := event.GetRoomJoined().GetClientId()
+
+	room := svc.GetOrCreateRoom("sess-embed")
+	client := room.Clients[clientId]
+
+	// Verify PeerInfo is embedded and fields are promoted
+	if client.PeerInfo == nil {
+		t.Fatal("expected embedded PeerInfo to be non-nil")
+	}
+	if client.ClientId != clientId {
+		t.Fatalf("expected promoted ClientId %s, got %s", clientId, client.ClientId)
+	}
+	if client.Username != "Alice" {
+		t.Fatalf("expected promoted Username Alice, got %s", client.Username)
+	}
+	if client.AvatarUrl != "https://example.com/alice.png" {
+		t.Fatalf("expected promoted AvatarUrl, got %s", client.AvatarUrl)
+	}
+	if client.ClientType != "browser" {
+		t.Fatalf("expected promoted ClientType browser, got %s", client.ClientType)
+	}
+	if !client.IsActive {
+		t.Fatal("expected promoted IsActive=true")
+	}
+	if !client.IsOwner {
+		t.Fatal("expected promoted IsOwner=true")
+	}
+	// Metadata is now on PeerInfo
+	if client.Metadata["tool"] != "whiteboard" {
+		t.Fatalf("expected metadata tool=whiteboard, got %v", client.Metadata)
+	}
+	if client.Metadata["role"] != "designer" {
+		t.Fatalf("expected metadata role=designer, got %v", client.Metadata)
+	}
+	// Server-only fields remain on CollabClient
+	if client.SessionId != "sess-embed" {
+		t.Fatalf("expected SessionId sess-embed, got %s", client.SessionId)
+	}
+	if client.BrowserId != "browser-1" {
+		t.Fatalf("expected BrowserId browser-1, got %s", client.BrowserId)
+	}
+}
+
+func TestGetPeerInfo_ReturnsEmbeddedPeerInfo(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+
+	svc.HandleAction(ctx, &pb.CollabAction{
+		Action: &pb.CollabAction_Join{
+			Join: &pb.JoinRoom{
+				SessionId:  "sess-pi",
+				Username:   "Alice",
+				Metadata:   map[string]string{"tool": "whiteboard"},
+				ClientType: "browser",
+			},
+		},
+	})
+
+	room := svc.GetOrCreateRoom("sess-pi")
+	peers := room.GetPeerInfo()
+	if len(peers) != 1 {
+		t.Fatalf("expected 1 peer, got %d", len(peers))
+	}
+	if peers[0].Username != "Alice" {
+		t.Fatalf("expected username Alice, got %s", peers[0].Username)
+	}
+	if peers[0].Metadata["tool"] != "whiteboard" {
+		t.Fatalf("expected peer metadata tool=whiteboard, got %v", peers[0].Metadata)
+	}
+}
+
 func TestRoomToProto(t *testing.T) {
 	svc := NewCollabService()
 	ctx := context.Background()

@@ -460,6 +460,7 @@ Describes a connected peer.
 | `clientType` | string | `"browser"`, `"cli"`, `"api"`. |
 | `isActive` | bool | Online status. |
 | `isOwner` | bool | `true` if this peer owns the session. |
+| `metadata` | map | Application-defined key-value pairs (from JoinRoom). |
 
 ---
 

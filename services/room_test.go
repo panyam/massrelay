@@ -8,12 +8,14 @@ import (
 
 func newTestClient(id, username string) *CollabClient {
 	return &CollabClient{
-		ClientId:   id,
-		Username:   username,
-		Metadata:   map[string]string{"tool": "whiteboard"},
-		ClientType: "browser",
-		IsActive:   true,
-		SendCh:     make(chan *pb.CollabEvent, 10),
+		PeerInfo: &pb.PeerInfo{
+			ClientId:   id,
+			Username:   username,
+			Metadata:   map[string]string{"tool": "whiteboard"},
+			ClientType: "browser",
+			IsActive:   true,
+		},
+		SendCh: make(chan *pb.CollabEvent, 10),
 	}
 }
 
@@ -213,9 +215,11 @@ func TestRoom_BroadcastToAll_FullChannel(t *testing.T) {
 	room := NewCollabRoom("sess1")
 	// Create client with tiny buffer (1)
 	c := &CollabClient{
-		ClientId: "c1",
-		Username: "Alice",
-		SendCh:   make(chan *pb.CollabEvent, 1),
+		PeerInfo: &pb.PeerInfo{
+			ClientId: "c1",
+			Username: "Alice",
+		},
+		SendCh: make(chan *pb.CollabEvent, 1),
 	}
 	room.AddClient(c)
 

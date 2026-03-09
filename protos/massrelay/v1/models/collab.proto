@@ -135,6 +135,7 @@ message PeerInfo {
   string client_type = 4;
   bool is_active = 5;
   bool is_owner = 6;
+  map<string, string> metadata = 7;  // application-defined key-value pairs (from JoinRoom)
 }
 
 message PeerJoined {
