@@ -41,13 +41,20 @@ func main() {
 		mux.Handle("/metrics", promHandler)
 	}
 
-	// Wrap with request logging (skip /health to reduce noise from probes)
-	handler := middleware.RequestLogger("/health")(mux)
+	// Middleware chain: recovery → request logging → mux
+	handler := middleware.Recovery(middleware.RequestLogger("/health")(mux))
 
 	addr := fmt.Sprintf(":%d", *port)
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: handler,
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,  // time to read request headers (slowloris defense)
+		IdleTimeout:       120 * time.Second, // keep-alive idle timeout
+		MaxHeaderBytes:    1 << 16,           // 64KB max header size
+		// Note: ReadTimeout and WriteTimeout are NOT set because WebSocket
+		// connections are long-lived. Setting these would kill active WS sessions.
+		// The ReadHeaderTimeout protects the initial handshake; once upgraded,
+		// the WS connection manages its own deadlines.
 	}
 
 	// Graceful shutdown on SIGTERM/SIGINT
