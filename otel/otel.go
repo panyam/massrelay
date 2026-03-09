@@ -24,7 +24,7 @@ package otel
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -75,7 +75,7 @@ func Setup(ctx context.Context) (promHandler http.Handler, shutdown func(context
 		),
 	)
 	if err != nil {
-		log.Printf("[OTEL] Failed to create resource: %v", err)
+		slog.Error("Failed to create OTEL resource", "error", err)
 		return nil, func(context.Context) error { return nil }
 	}
 
@@ -86,12 +86,12 @@ func Setup(ctx context.Context) (promHandler http.Handler, shutdown func(context
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
 		exporter, err := otlpmetrichttp.New(ctx)
 		if err != nil {
-			log.Printf("[OTEL] Failed to create OTLP exporter: %v", err)
+			slog.Error("Failed to create OTLP exporter", "error", err)
 		} else {
 			opts = append(opts, sdkmetric.WithReader(
 				sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(15*time.Second)),
 			))
-			log.Printf("[OTEL] OTLP metrics exporter enabled → %s", os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+			slog.Info("OTLP metrics exporter enabled", "endpoint", os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 		}
 	}
 
@@ -99,17 +99,17 @@ func Setup(ctx context.Context) (promHandler http.Handler, shutdown func(context
 	if os.Getenv("OTEL_METRICS_PROMETHEUS") == "true" {
 		promExp, err := promexporter.New()
 		if err != nil {
-			log.Printf("[OTEL] Failed to create Prometheus exporter: %v", err)
+			slog.Error("Failed to create Prometheus exporter", "error", err)
 		} else {
 			opts = append(opts, sdkmetric.WithReader(promExp))
 			promHandler = promhttp.Handler()
-			log.Println("[OTEL] Prometheus metrics enabled at /metrics")
+			slog.Info("Prometheus metrics enabled", "path", "/metrics")
 		}
 	}
 
 	// If no exporters configured, OTEL is a no-op (global meter provider is already no-op)
 	if len(opts) <= 1 { // only resource, no readers
-		log.Println("[OTEL] No exporters configured, metrics disabled")
+		slog.Info("No OTEL exporters configured, metrics disabled")
 		return nil, func(context.Context) error { return nil }
 	}
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +20,9 @@ func main() {
 	port := flag.Int("port", 8787, "Port to listen on")
 	flag.Parse()
 
+	// Structured logging via slog (JSON to stdout, Loki ingests via Docker log driver)
+	relaytelem.SetupLogging()
+
 	// Initialize OpenTelemetry (configured via env vars, no-op if unconfigured)
 	ctx := context.Background()
 	promHandler, otelShutdown := relaytelem.Setup(ctx)
@@ -27,7 +30,8 @@ func main() {
 
 	app := server.NewRelayApp()
 	if err := app.Init(); err != nil {
-		log.Fatalf("Failed to initialize relay: %v", err)
+		slog.Error("Failed to initialize relay", "error", err)
+		os.Exit(1)
 	}
 
 	// Build handler chain
@@ -51,21 +55,22 @@ func main() {
 	signal.Notify(done, syscall.SIGTERM, syscall.SIGINT)
 
 	go func() {
-		log.Printf("Relay server listening on %s", addr)
+		slog.Info("Relay server listening", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			slog.Error("Server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-done
-	log.Println("Shutting down gracefully...")
+	slog.Info("Shutting down gracefully")
 
 	// Give active connections 10 seconds to finish
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Shutdown error: %v", err)
+		slog.Error("Shutdown error", "error", err)
 	}
-	log.Println("Server stopped")
+	slog.Info("Server stopped")
 }

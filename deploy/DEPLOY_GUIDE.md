@@ -40,9 +40,9 @@ Run the relay + Grafana observability stack locally:
 
 ```bash
 # From the massrelay repo root
-make local-up        # builds relay image, starts relay + Grafana LGTM
-make local-logs      # tail relay logs
-make local-down      # stop everything
+make dev-up          # builds relay image, starts relay + Grafana LGTM
+make dev-logs        # tail relay logs
+make dev-down        # stop everything
 ```
 
 | Service | URL | Description |
@@ -54,7 +54,7 @@ make local-down      # stop everything
 To rebuild after code changes:
 
 ```bash
-make local-rebuild   # rebuild relay image only, restart
+make dev-rebuild     # rebuild relay image only, restart
 ```
 
 ### Native relay + Docker Grafana
@@ -62,8 +62,8 @@ make local-rebuild   # rebuild relay image only, restart
 If you prefer running the relay natively (faster iteration, debugger support):
 
 ```bash
-make local-up        # start just the Grafana stack
-make run-otel        # run relay natively with OTEL → local Grafana
+make dev-up          # start just the Grafana stack
+make run-otel        # run relay natively with OTEL → dev Grafana
 ```
 
 ## Production Deployment
@@ -440,8 +440,8 @@ deploy/
 ├── scripts/
 │   ├── setup-host.sh            ← bootstrap a new VPS (one-time)
 │   └── update-pool.sh           ← rolling update, health check, pool status
-├── local/
-│   └── docker-compose.yml       ← local dev: relay + Grafana LGTM
+├── dev/
+│   └── docker-compose.yml       ← dev stack: relay + Grafana LGTM
 └── production/
     ├── docker-compose.yml       ← production: Caddy + relay
     ├── Caddyfile                ← Caddy reverse proxy config

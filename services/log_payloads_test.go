@@ -27,8 +27,8 @@ func TestLogPayloads_DisabledByDefault(t *testing.T) {
 		})
 	})
 
-	if strings.Contains(output, "[DATA-PEEK]") {
-		t.Fatalf("expected no DATA-PEEK log when LogPayloads=0, got: %s", output)
+	if strings.Contains(output, "SceneUpdate element") {
+		t.Fatalf("expected no payload log when LogPayloads=0, got: %s", output)
 	}
 }
 
@@ -52,10 +52,10 @@ func TestLogPayloads_SceneUpdate(t *testing.T) {
 		})
 	})
 
-	if !strings.Contains(output, "[DATA-PEEK] SceneUpdate") {
-		t.Fatalf("expected DATA-PEEK SceneUpdate log, got: %s", output)
+	if !strings.Contains(output, "SceneUpdate element") {
+		t.Fatalf("expected SceneUpdate element log, got: %s", output)
 	}
-	if !strings.Contains(output, "id=e1") {
+	if !strings.Contains(output, "e1") {
 		t.Fatalf("expected element id in log, got: %s", output)
 	}
 	// Data should be truncated to 20 chars
@@ -80,8 +80,8 @@ func TestLogPayloads_TextUpdate(t *testing.T) {
 		})
 	})
 
-	if !strings.Contains(output, "[DATA-PEEK] TextUpdate") {
-		t.Fatalf("expected DATA-PEEK TextUpdate log, got: %s", output)
+	if !strings.Contains(output, "TextUpdate") {
+		t.Fatalf("expected TextUpdate log, got: %s", output)
 	}
 	// Text should be truncated to 15 chars
 	if strings.Contains(output, longText) {
@@ -105,8 +105,8 @@ func TestLogPayloads_SceneInitResponse(t *testing.T) {
 		})
 	})
 
-	if !strings.Contains(output, "[DATA-PEEK] SceneInitResponse") {
-		t.Fatalf("expected DATA-PEEK SceneInitResponse log, got: %s", output)
+	if !strings.Contains(output, "SceneInitResponse") {
+		t.Fatalf("expected SceneInitResponse log, got: %s", output)
 	}
 	if strings.Contains(output, longPayload) {
 		t.Fatalf("expected payload to be truncated, but found full payload in log")

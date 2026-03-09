@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -37,8 +37,9 @@ func RequestLogger(skipPaths ...string) func(http.Handler) http.Handler {
 			next.ServeHTTP(rec, r)
 			duration := time.Since(start)
 
-			log.Printf("[HTTP] %s %s %d %s ip=%s",
-				r.Method, r.URL.Path, rec.status, duration.Round(time.Millisecond), ClientIP(r))
+			slog.Info("HTTP request", "component", "http",
+				"method", r.Method, "path", r.URL.Path, "status", rec.status,
+				"duration", duration.Round(time.Millisecond).String(), "ip", ClientIP(r))
 		})
 	}
 }

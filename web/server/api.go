@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime"
 	"time"
@@ -47,7 +47,7 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 
 	// Guard wraps: origin check → rate limit → connection limit → handler
 	mux.Handle("/ws/v1/{session_id}/sync", h.app.Guard.Wrap(wsHandlerFunc))
-	log.Println("Registered Collab WebSocket handler at /ws/v1/{session_id}/sync")
+	slog.Info("Registered WebSocket handler", "path", "/ws/v1/{session_id}/sync")
 }
 
 // startTime is set when the API handler is created, for uptime reporting.

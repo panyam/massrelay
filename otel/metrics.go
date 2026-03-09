@@ -1,7 +1,7 @@
 package otel
 
 import (
-	"log"
+	"log/slog"
 
 	"go.opentelemetry.io/otel/metric"
 )
@@ -82,6 +82,6 @@ func NewMetrics(provider metric.MeterProvider) *Metrics {
 
 func logErr(name string, err error) {
 	if err != nil {
-		log.Printf("[OTEL] Failed to create metric %s: %v", name, err)
+		slog.Error("Failed to create metric", "metric", name, "error", err)
 	}
 }

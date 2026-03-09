@@ -1,9 +1,9 @@
-## Local dev stack: relay server + Grafana LGTM observability.
+## Dev stack: relay server + Grafana LGTM observability.
 ##
 ## Usage:
-##   make local-up       # build & start everything
-##   make local-down     # stop everything
-##   make local-logs     # tail relay logs
+##   make dev-up         # build & start everything
+##   make dev-down       # stop everything
+##   make dev-logs       # tail relay logs
 ##
 ## Relay:     http://localhost:8787  (health, WebSocket, /metrics)
 ## Grafana:   http://localhost:3000  (no login required)
@@ -16,7 +16,7 @@ services:
     ports:
       - "8787:8787"
     environment:
-      - OTEL_SERVICE_NAME=massrelay-local
+      - OTEL_SERVICE_NAME=massrelay-dev
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318
       - OTEL_METRICS_PROMETHEUS=true
       - RELAY_LOG_PAYLOADS=${RELAY_LOG_PAYLOADS:-0}
@@ -33,3 +33,6 @@ services:
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards

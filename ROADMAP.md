@@ -46,12 +46,35 @@
 
 ## Recently Completed
 
-### OpenTelemetry Instrumentation
+### OpenTelemetry Instrumentation (PR #10)
 - [x] OTEL metrics setup (`otel/` package) with OTLP + Prometheus exporters
 - [x] Relay metrics: rooms, peers, connections, messages, rate limits, dropped messages
 - [x] Enriched `/health` endpoint (uptime, rooms, peers, goroutines)
 - [x] Service callbacks for metric instrumentation (decoupled from core service)
 - [x] Zero-config: no-op when OTEL env vars not set
+
+### Security Hardening (PR #10)
+- [x] Origin allowlist for WebSocket connections (`web/middleware/origin.go`)
+- [x] Connection limiter (`web/middleware/connlimit.go`)
+- [x] Rate limiter: global + per-IP (`web/middleware/ratelimit.go`)
+- [x] Guard pattern composing all middleware (`web/middleware/guard.go`)
+- [x] Middleware package has zero app-specific imports (ready for servicekit lift)
+
+### Production Infrastructure (PR #10)
+- [x] Docker multi-stage build (~35MB image)
+- [x] Dev stack: relay + Grafana LGTM with pre-provisioned dashboards
+- [x] Production stack: Caddy (auto-TLS) + relay
+- [x] VPS bootstrap script (`setup-host.sh`)
+- [x] Pool management script (`update-pool.sh` — rolling updates, health checks, status)
+- [x] Comprehensive deploy guide
+
+### Structured Logging (PR #10)
+- [x] Migrated from `log.Printf` to `log/slog` with JSON output
+- [x] Component-based filtering (`component` key: relay, stream, http, etc.)
+- [x] Grafana LGTM ingests logs via Docker log driver
+- [x] Graceful shutdown (SIGTERM/SIGINT, 10s drain)
+- [x] Request logging middleware (skip /health for probe noise)
+- [x] Injectable OTEL providers for embedded usage
 
 ## Future
 

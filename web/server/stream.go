@@ -2,8 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"sync"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
@@ -71,7 +72,7 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 			// Always allow control messages
 		default:
 			if !s.messageLimiter.Allow() {
-				log.Printf("[STREAM] Rate limited message from client %s", action.GetClientId())
+				slog.Warn("Rate limited message", "component", "stream", "client", action.GetClientId())
 				return nil // silently drop
 			}
 		}
@@ -90,7 +91,7 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 			s.sessionId = sessionId
 			s.clientId = rj.GetClientId()
 			s.mu.Unlock()
-			log.Printf("[STREAM] Client %s joined session %s, starting bridge goroutine", rj.GetClientId(), sessionId)
+			slog.Info("Client joined, starting bridge", "component", "stream", "client", rj.GetClientId(), "session", sessionId)
 
 			// Bridge: forward events from the service client's SendCh to the stream's sendCh
 			if clientCh := s.service.GetClientSendCh(sessionId, rj.GetClientId()); clientCh != nil {
@@ -99,10 +100,10 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 						select {
 						case event, ok := <-clientCh:
 							if !ok {
-								log.Printf("[STREAM] Bridge channel closed for client %s", rj.GetClientId())
+								slog.Debug("Bridge channel closed", "component", "stream", "client", rj.GetClientId())
 								return
 							}
-							log.Printf("[STREAM] Forwarding event %T to client %s", event.Event, rj.GetClientId())
+							slog.Debug("Forwarding event", "component", "stream", "type", fmt.Sprintf("%T", event.Event), "client", rj.GetClientId())
 							select {
 							case s.sendCh <- event:
 							case <-s.ctx.Done():
@@ -114,7 +115,7 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 					}
 				}()
 			} else {
-				log.Printf("[STREAM] WARNING: No client channel found for %s/%s", sessionId, rj.GetClientId())
+				slog.Warn("No client channel found", "component", "stream", "session", sessionId, "client", rj.GetClientId())
 			}
 		}
 	}
@@ -154,7 +155,7 @@ func (s *CollabBidiStream) leaveAndCleanup(reason string) {
 	s.mu.Unlock()
 
 	if sessionId != "" && clientId != "" {
-		log.Printf("[STREAM] Cleanup: leaving session %s for client %s reason=%s", sessionId, clientId, reason)
+		slog.Info("Cleanup: leaving session", "component", "stream", "session", sessionId, "client", clientId, "reason", reason)
 		// Use Background context — the original ctx may already be cancelled
 		s.service.HandleAction(context.Background(), &pb.CollabAction{
 			ClientId: clientId,

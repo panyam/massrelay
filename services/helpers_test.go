@@ -3,7 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
-	"log"
+	"log/slog"
 	"testing"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
@@ -87,17 +87,14 @@ func setupTwoClients(t *testing.T, svc *CollabService, sessionId string, metadat
 	return c1, c2
 }
 
-// captureLog redirects log output to a buffer for the duration of fn.
+// captureLog redirects slog output to a buffer for the duration of fn.
 func captureLog(fn func()) string {
 	var buf bytes.Buffer
-	orig := log.Writer()
-	origFlags := log.Flags()
-	log.SetOutput(&buf)
-	log.SetFlags(0) // no timestamp prefix
-	defer func() {
-		log.SetOutput(orig)
-		log.SetFlags(origFlags)
-	}()
+	orig := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+	defer slog.SetDefault(orig)
 	fn()
 	return buf.String()
 }

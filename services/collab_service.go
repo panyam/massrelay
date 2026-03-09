@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/google/uuid"
@@ -159,7 +159,7 @@ func (s *CollabService) HandleAction(ctx context.Context, action *pb.CollabActio
 	if action == nil {
 		return nil, fmt.Errorf("nil action")
 	}
-	log.Printf("[RELAY] HandleAction from client=%s type=%T", action.GetClientId(), action.Action)
+	slog.Debug("HandleAction", "component", "relay", "client", action.GetClientId(), "type", fmt.Sprintf("%T", action.Action))
 	switch action.Action.(type) {
 	case *pb.CollabAction_Join:
 		return s.handleJoin(ctx, action)
@@ -542,7 +542,7 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 				if len(data) > s.LogPayloads {
 					data = data[:s.LogPayloads]
 				}
-				log.Printf("[DATA-PEEK] SceneUpdate element[%d] id=%s data=%q", i, el.GetId(), data)
+				slog.Debug("SceneUpdate element", "index", i, "id", el.GetId(), "data", data)
 				if i >= 2 {
 					break
 				}
@@ -557,7 +557,7 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 			if len(text) > s.LogPayloads {
 				text = text[:s.LogPayloads]
 			}
-			log.Printf("[DATA-PEEK] TextUpdate text=%q", text)
+			slog.Debug("TextUpdate", "text", text)
 		}
 	case *pb.CollabAction_SceneInitRequest:
 		event.Event = &pb.CollabEvent_SceneInitRequest{SceneInitRequest: a.SceneInitRequest}
@@ -568,7 +568,7 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 			if len(payload) > s.LogPayloads {
 				payload = payload[:s.LogPayloads]
 			}
-			log.Printf("[DATA-PEEK] SceneInitResponse payload=%q", payload)
+			slog.Debug("SceneInitResponse", "payload", payload)
 		}
 	case *pb.CollabAction_CredentialsChanged:
 		// Update room encrypted state based on reason
@@ -589,7 +589,7 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 	}
 
 	targetCount := room.ClientCount() - 1
-	log.Printf("[RELAY] Broadcasting %T from client=%s to %d peers in room=%s", event.Event, clientId, targetCount, room.SessionId)
+	slog.Debug("Broadcasting", "component", "relay", "type", fmt.Sprintf("%T", event.Event), "client", clientId, "peers", targetCount, "room", room.SessionId)
 	room.BroadcastExcept(event, clientId)
 
 	if s.OnMessageRelay != nil {

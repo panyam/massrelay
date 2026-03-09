@@ -3,7 +3,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -114,7 +114,7 @@ func (c *OriginChecker) Middleware(next http.Handler) http.Handler {
 		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 			origin := r.Header.Get("Origin")
 			if !c.Check(origin) {
-				log.Printf("[ORIGIN] Rejected WebSocket from origin=%q ip=%s path=%s", origin, clientIPFromRequest(r), r.URL.Path)
+				slog.Warn("Rejected WebSocket origin", "component", "origin", "origin", origin, "ip", clientIPFromRequest(r), "path", r.URL.Path)
 				http.Error(w, `{"error":"origin not allowed"}`, http.StatusForbidden)
 				return
 			}

@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -57,7 +57,7 @@ func NewRelayApp() *RelayApp {
 	if v := os.Getenv("RELAY_ALLOWED_ORIGINS"); v != "" {
 		origins := strings.Split(v, ",")
 		originChecker = middleware.NewOriginChecker(origins)
-		log.Printf("[RELAY] Origin allowlist: %v", origins)
+		slog.Info("Origin allowlist configured", "origins", origins)
 	}
 
 	// Max concurrent connections
@@ -69,7 +69,7 @@ func NewRelayApp() *RelayApp {
 	}
 	connLimiter := middleware.NewConnLimiter(maxConns)
 	if connLimiter != nil {
-		log.Printf("[RELAY] Max concurrent connections: %d", maxConns)
+		slog.Info("Max concurrent connections", "limit", maxConns)
 	}
 
 	// Rate limiting
