@@ -3,7 +3,6 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -123,24 +122,3 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// ClientIP extracts the client IP from the request.
-// Checks X-Forwarded-For for reverse proxy setups.
-func ClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i > 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
-	}
-	// Handle IPv6 [::1]:port
-	addr := r.RemoteAddr
-	if strings.HasPrefix(addr, "[") {
-		if i := strings.LastIndex(addr, "]"); i >= 0 {
-			return addr[1:i]
-		}
-	}
-	if i := strings.LastIndexByte(addr, ':'); i >= 0 {
-		return addr[:i]
-	}
-	return addr
-}

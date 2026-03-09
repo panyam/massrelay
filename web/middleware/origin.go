@@ -114,16 +114,11 @@ func (c *OriginChecker) Middleware(next http.Handler) http.Handler {
 		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 			origin := r.Header.Get("Origin")
 			if !c.Check(origin) {
-				slog.Warn("Rejected WebSocket origin", "component", "origin", "origin", origin, "ip", clientIPFromRequest(r), "path", r.URL.Path)
+				slog.Warn("Rejected WebSocket origin", "component", "origin", "origin", origin, "ip", ClientIP(r), "path", r.URL.Path)
 				http.Error(w, `{"error":"origin not allowed"}`, http.StatusForbidden)
 				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// clientIPFromRequest delegates to the shared ClientIP helper.
-func clientIPFromRequest(r *http.Request) string {
-	return ClientIP(r)
 }

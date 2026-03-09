@@ -43,7 +43,7 @@ func (c *ConnLimiter) Middleware(next http.Handler) http.Handler {
 		current := c.active.Add(1)
 		if current > c.max {
 			c.active.Add(-1)
-			slog.Warn("Rejected connection", "component", "connlimit", "active", current-1, "max", c.max, "ip", clientIPFromRequest(r))
+			slog.Warn("Rejected connection", "component", "connlimit", "active", current-1, "max", c.max, "ip", ClientIP(r))
 			http.Error(w, `{"error":"too many connections"}`, http.StatusServiceUnavailable)
 			return
 		}

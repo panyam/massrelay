@@ -25,10 +25,12 @@ import (
 //	// Embedded in another mux
 //	mux.Handle("/relay/", http.StripPrefix("/relay", relayApp))
 type RelayApp struct {
-	Service *services.CollabService
-	Metrics *relaytelem.Metrics
-	Guard   *middleware.Guard
-	mux     *http.ServeMux
+	Service       *services.CollabService
+	Metrics       *relaytelem.Metrics
+	Guard         *middleware.Guard
+	OriginChecker *middleware.OriginChecker
+	mux           *http.ServeMux
+	handler       http.Handler // mux wrapped with CORS
 }
 
 // NewRelayApp creates a new RelayApp.
@@ -36,9 +38,12 @@ type RelayApp struct {
 // Environment variables:
 //
 //	RELAY_LOG_PAYLOADS=N        — log first N chars of content payloads for debugging
-//	RELAY_ALLOWED_ORIGINS=...   — comma-separated origin allowlist for WebSocket connections
+//	RELAY_ALLOWED_ORIGINS=...   — comma-separated origin allowlist for WebSocket and CORS
 //	                              (e.g. "excaliframe.com,*.excaliframe.com,localhost")
 //	                              Empty = allow all origins.
+//	RELAY_TRUSTED_PROXIES=...   — comma-separated CIDR ranges of trusted reverse proxies
+//	                              (e.g. "127.0.0.1,172.17.0.0/16,::1")
+//	                              Empty = trust all (backwards-compatible, suitable behind proxy)
 //	RELAY_MAX_CONNECTIONS=N     — max concurrent WebSocket connections (0 = unlimited, default 500)
 //	RELAY_GLOBAL_RATE=N         — max WebSocket connections/sec globally (default 100)
 //	RELAY_PER_IP_RATE=N         — max WebSocket connections/sec per IP (default 5)
@@ -52,7 +57,14 @@ func NewRelayApp() *RelayApp {
 		}
 	}
 
-	// Origin allowlist
+	// Trusted proxies (for X-Forwarded-For)
+	if v := os.Getenv("RELAY_TRUSTED_PROXIES"); v != "" {
+		cidrs := strings.Split(v, ",")
+		middleware.SetTrustedProxies(cidrs)
+		slog.Info("Trusted proxies configured", "cidrs", cidrs)
+	}
+
+	// Origin allowlist (shared between WebSocket guard and CORS)
 	var originChecker *middleware.OriginChecker
 	if v := os.Getenv("RELAY_ALLOWED_ORIGINS"); v != "" {
 		origins := strings.Split(v, ",")
@@ -103,10 +115,11 @@ func NewRelayApp() *RelayApp {
 	}
 
 	app := &RelayApp{
-		Service: svc,
-		Metrics: metrics,
-		Guard:   guard,
-		mux:     http.NewServeMux(),
+		Service:       svc,
+		Metrics:       metrics,
+		Guard:         guard,
+		OriginChecker: originChecker,
+		mux:           http.NewServeMux(),
 	}
 
 	// Wire service callbacks to OTEL metrics
@@ -128,24 +141,16 @@ func NewRelayApp() *RelayApp {
 	return app
 }
 
-// Init sets up routes.
+// Init sets up routes and wraps with CORS.
 func (a *RelayApp) Init() error {
 	h := NewApiHandler(a)
 	h.SetupRoutes(a.mux)
+	// Wrap mux with CORS middleware (uses same origin checker as WebSocket guard)
+	a.handler = middleware.CORS(a.OriginChecker)(a.mux)
 	return nil
 }
 
 // ServeHTTP implements http.Handler.
 func (a *RelayApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// CORS headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	a.mux.ServeHTTP(w, r)
+	a.handler.ServeHTTP(w, r)
 }
