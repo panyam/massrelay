@@ -37,27 +37,16 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 		},
 		func() *pb.CollabAction { return &pb.CollabAction{} },
 	)
-	// Wrap with rate limiting
+	// WebSocket handler with metrics, wrapped by Guard (origin + rate limit + conn limit)
 	rawWSHandler := gohttp.WSServe(wsHandler, nil)
 	metrics := h.app.Metrics
-	mux.HandleFunc("/ws/v1/{session_id}/sync", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		// Global connection rate limit
-		if !h.app.globalLimiter.Allow() {
-			metrics.RateLimited.Add(ctx, 1)
-			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
-			return
-		}
-		// Per-IP connection rate limit
-		ip := clientIP(r)
-		if !h.app.getIPLimiter(ip).Allow() {
-			metrics.RateLimited.Add(ctx, 1)
-			http.Error(w, `{"error":"per-IP rate limit exceeded"}`, http.StatusTooManyRequests)
-			return
-		}
-		metrics.ConnectionsTotal.Add(ctx, 1)
+	wsHandlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		metrics.ConnectionsTotal.Add(r.Context(), 1)
 		rawWSHandler(w, r)
 	})
+
+	// Guard wraps: origin check → rate limit → connection limit → handler
+	mux.Handle("/ws/v1/{session_id}/sync", h.app.Guard.Wrap(wsHandlerFunc))
 	log.Println("Registered Collab WebSocket handler at /ws/v1/{session_id}/sync")
 }
 
