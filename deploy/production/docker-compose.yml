@@ -1,0 +1,23 @@
+## Production relay server deployment.
+##
+## Usage:
+##   docker compose up -d                    # start relay
+##   docker compose pull && docker compose up -d  # update to latest
+##   docker compose logs -f relay            # tail logs
+##
+## Required: set OTEL_EXPORTER_OTLP_ENDPOINT in .env or environment
+## if you want metrics shipped to a remote collector (e.g. Grafana Cloud).
+
+services:
+  relay:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    environment:
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-massrelay}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_METRICS_PROMETHEUS=${OTEL_METRICS_PROMETHEUS:-true}
+      - RELAY_LOG_PAYLOADS=${RELAY_LOG_PAYLOADS:-0}
+    command: ["-port", "${RELAY_PORT:-8787}"]

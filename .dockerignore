@@ -1,0 +1,8 @@
+node_modules
+ts/node_modules
+ts/dist
+deploy
+docs
+protos
+.git
+*.md
