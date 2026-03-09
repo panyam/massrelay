@@ -7,11 +7,13 @@
 package models
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -1119,9 +1121,9 @@ func (*CollabEvent_TitleChanged) isCollabEvent_Event() {}
 type Room struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Peers         []*PeerInfo            `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
+	Peers         map[string]*PeerInfo   `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	OwnerClientId string                 `protobuf:"bytes,3,opt,name=owner_client_id,json=ownerClientId,proto3" json:"owner_client_id,omitempty"`
-	CreatedAt     int64                  `protobuf:"varint,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	Metadata      map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Encrypted     bool                   `protobuf:"varint,6,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
 	Title         string                 `protobuf:"bytes,7,opt,name=title,proto3" json:"title,omitempty"`
@@ -1166,7 +1168,7 @@ func (x *Room) GetSessionId() string {
 	return ""
 }
 
-func (x *Room) GetPeers() []*PeerInfo {
+func (x *Room) GetPeers() map[string]*PeerInfo {
 	if x != nil {
 		return x.Peers
 	}
@@ -1180,11 +1182,11 @@ func (x *Room) GetOwnerClientId() string {
 	return ""
 }
 
-func (x *Room) GetCreatedAt() int64 {
+func (x *Room) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return 0
+	return nil
 }
 
 func (x *Room) GetMetadata() map[string]string {
@@ -1872,7 +1874,7 @@ type RoomSummary struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	PeerCount     int32                  `protobuf:"varint,2,opt,name=peer_count,json=peerCount,proto3" json:"peer_count,omitempty"`
-	CreatedAt     int64                  `protobuf:"varint,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1921,18 +1923,18 @@ func (x *RoomSummary) GetPeerCount() int32 {
 	return 0
 }
 
-func (x *RoomSummary) GetCreatedAt() int64 {
+func (x *RoomSummary) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return 0
+	return nil
 }
 
 var File_massrelay_v1_models_collab_proto protoreflect.FileDescriptor
 
 const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\n" +
-	" massrelay/v1/models/collab.proto\x12\x13massrelay.v1.models\"\xcc\x06\n" +
+	" massrelay/v1/models/collab.proto\x12\x13massrelay.v1.models\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcc\x06\n" +
 	"\fCollabAction\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\tR\bactionId\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1c\n" +
@@ -2023,17 +2025,21 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\rowner_changed\x18\x15 \x01(\v2!.massrelay.v1.models.OwnerChangedH\x00R\fownerChanged\x12Z\n" +
 	"\x13credentials_changed\x18\x16 \x01(\v2'.massrelay.v1.models.CredentialsChangedH\x00R\x12credentialsChanged\x12H\n" +
 	"\rtitle_changed\x18\x17 \x01(\v2!.massrelay.v1.models.TitleChangedH\x00R\ftitleChangedB\a\n" +
-	"\x05event\"\xd7\x02\n" +
+	"\x05event\"\xd3\x03\n" +
 	"\x04Room\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\x123\n" +
-	"\x05peers\x18\x02 \x03(\v2\x1d.massrelay.v1.models.PeerInfoR\x05peers\x12&\n" +
-	"\x0fowner_client_id\x18\x03 \x01(\tR\rownerClientId\x12\x1d\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12:\n" +
+	"\x05peers\x18\x02 \x03(\v2$.massrelay.v1.models.Room.PeersEntryR\x05peers\x12&\n" +
+	"\x0fowner_client_id\x18\x03 \x01(\tR\rownerClientId\x129\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\x03R\tcreatedAt\x12C\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12C\n" +
 	"\bmetadata\x18\x05 \x03(\v2'.massrelay.v1.models.Room.MetadataEntryR\bmetadata\x12\x1c\n" +
 	"\tencrypted\x18\x06 \x01(\bR\tencrypted\x12\x14\n" +
-	"\x05title\x18\a \x01(\tR\x05title\x1a;\n" +
+	"\x05title\x18\a \x01(\tR\x05title\x1aW\n" +
+	"\n" +
+	"PeersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
+	"\x05value\x18\x02 \x01(\v2\x1d.massrelay.v1.models.PeerInfoR\x05value:\x028\x01\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa0\x01\n" +
@@ -2083,14 +2089,14 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x04room\x18\x01 \x01(\v2\x19.massrelay.v1.models.RoomR\x04room\"\x12\n" +
 	"\x10ListRoomsRequest\"K\n" +
 	"\x11ListRoomsResponse\x126\n" +
-	"\x05rooms\x18\x01 \x03(\v2 .massrelay.v1.models.RoomSummaryR\x05rooms\"j\n" +
+	"\x05rooms\x18\x01 \x03(\v2 .massrelay.v1.models.RoomSummaryR\x05rooms\"\x86\x01\n" +
 	"\vRoomSummary\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
 	"\n" +
-	"peer_count\x18\x02 \x01(\x05R\tpeerCount\x12\x1d\n" +
+	"peer_count\x18\x02 \x01(\x05R\tpeerCount\x129\n" +
 	"\n" +
-	"created_at\x18\x03 \x01(\x03R\tcreatedAtB\xcc\x01\n" +
+	"created_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\xcc\x01\n" +
 	"\x17com.massrelay.v1.modelsB\vCollabProtoP\x01Z6github.com/panyam/massrelay/gen/go/massrelay/v1/models\xa2\x02\x03MVM\xaa\x02\x13Massrelay.V1.Models\xca\x02\x13Massrelay\\V1\\Models\xe2\x02\x1fMassrelay\\V1\\Models\\GPBMetadata\xea\x02\x15Massrelay::V1::Modelsb\x06proto3"
 
 var (
@@ -2105,38 +2111,40 @@ func file_massrelay_v1_models_collab_proto_rawDescGZIP() []byte {
 	return file_massrelay_v1_models_collab_proto_rawDescData
 }
 
-var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_massrelay_v1_models_collab_proto_goTypes = []any{
-	(*CollabAction)(nil),       // 0: massrelay.v1.models.CollabAction
-	(*JoinRoom)(nil),           // 1: massrelay.v1.models.JoinRoom
-	(*LeaveRoom)(nil),          // 2: massrelay.v1.models.LeaveRoom
-	(*PresenceUpdate)(nil),     // 3: massrelay.v1.models.PresenceUpdate
-	(*SceneUpdate)(nil),        // 4: massrelay.v1.models.SceneUpdate
-	(*ElementUpdate)(nil),      // 5: massrelay.v1.models.ElementUpdate
-	(*CursorUpdate)(nil),       // 6: massrelay.v1.models.CursorUpdate
-	(*TextUpdate)(nil),         // 7: massrelay.v1.models.TextUpdate
-	(*SceneInitRequest)(nil),   // 8: massrelay.v1.models.SceneInitRequest
-	(*SceneInitResponse)(nil),  // 9: massrelay.v1.models.SceneInitResponse
-	(*CollabEvent)(nil),        // 10: massrelay.v1.models.CollabEvent
-	(*Room)(nil),               // 11: massrelay.v1.models.Room
-	(*RoomJoined)(nil),         // 12: massrelay.v1.models.RoomJoined
-	(*PeerInfo)(nil),           // 13: massrelay.v1.models.PeerInfo
-	(*PeerJoined)(nil),         // 14: massrelay.v1.models.PeerJoined
-	(*PeerLeft)(nil),           // 15: massrelay.v1.models.PeerLeft
-	(*ErrorEvent)(nil),         // 16: massrelay.v1.models.ErrorEvent
-	(*SessionEnded)(nil),       // 17: massrelay.v1.models.SessionEnded
-	(*OwnerChanged)(nil),       // 18: massrelay.v1.models.OwnerChanged
-	(*CredentialsChanged)(nil), // 19: massrelay.v1.models.CredentialsChanged
-	(*TitleChanged)(nil),       // 20: massrelay.v1.models.TitleChanged
-	(*GetRoomRequest)(nil),     // 21: massrelay.v1.models.GetRoomRequest
-	(*GetRoomResponse)(nil),    // 22: massrelay.v1.models.GetRoomResponse
-	(*ListRoomsRequest)(nil),   // 23: massrelay.v1.models.ListRoomsRequest
-	(*ListRoomsResponse)(nil),  // 24: massrelay.v1.models.ListRoomsResponse
-	(*RoomSummary)(nil),        // 25: massrelay.v1.models.RoomSummary
-	nil,                        // 26: massrelay.v1.models.JoinRoom.MetadataEntry
-	nil,                        // 27: massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
-	nil,                        // 28: massrelay.v1.models.Room.MetadataEntry
-	nil,                        // 29: massrelay.v1.models.PeerInfo.MetadataEntry
+	(*CollabAction)(nil),          // 0: massrelay.v1.models.CollabAction
+	(*JoinRoom)(nil),              // 1: massrelay.v1.models.JoinRoom
+	(*LeaveRoom)(nil),             // 2: massrelay.v1.models.LeaveRoom
+	(*PresenceUpdate)(nil),        // 3: massrelay.v1.models.PresenceUpdate
+	(*SceneUpdate)(nil),           // 4: massrelay.v1.models.SceneUpdate
+	(*ElementUpdate)(nil),         // 5: massrelay.v1.models.ElementUpdate
+	(*CursorUpdate)(nil),          // 6: massrelay.v1.models.CursorUpdate
+	(*TextUpdate)(nil),            // 7: massrelay.v1.models.TextUpdate
+	(*SceneInitRequest)(nil),      // 8: massrelay.v1.models.SceneInitRequest
+	(*SceneInitResponse)(nil),     // 9: massrelay.v1.models.SceneInitResponse
+	(*CollabEvent)(nil),           // 10: massrelay.v1.models.CollabEvent
+	(*Room)(nil),                  // 11: massrelay.v1.models.Room
+	(*RoomJoined)(nil),            // 12: massrelay.v1.models.RoomJoined
+	(*PeerInfo)(nil),              // 13: massrelay.v1.models.PeerInfo
+	(*PeerJoined)(nil),            // 14: massrelay.v1.models.PeerJoined
+	(*PeerLeft)(nil),              // 15: massrelay.v1.models.PeerLeft
+	(*ErrorEvent)(nil),            // 16: massrelay.v1.models.ErrorEvent
+	(*SessionEnded)(nil),          // 17: massrelay.v1.models.SessionEnded
+	(*OwnerChanged)(nil),          // 18: massrelay.v1.models.OwnerChanged
+	(*CredentialsChanged)(nil),    // 19: massrelay.v1.models.CredentialsChanged
+	(*TitleChanged)(nil),          // 20: massrelay.v1.models.TitleChanged
+	(*GetRoomRequest)(nil),        // 21: massrelay.v1.models.GetRoomRequest
+	(*GetRoomResponse)(nil),       // 22: massrelay.v1.models.GetRoomResponse
+	(*ListRoomsRequest)(nil),      // 23: massrelay.v1.models.ListRoomsRequest
+	(*ListRoomsResponse)(nil),     // 24: massrelay.v1.models.ListRoomsResponse
+	(*RoomSummary)(nil),           // 25: massrelay.v1.models.RoomSummary
+	nil,                           // 26: massrelay.v1.models.JoinRoom.MetadataEntry
+	nil,                           // 27: massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
+	nil,                           // 28: massrelay.v1.models.Room.PeersEntry
+	nil,                           // 29: massrelay.v1.models.Room.MetadataEntry
+	nil,                           // 30: massrelay.v1.models.PeerInfo.MetadataEntry
+	(*timestamppb.Timestamp)(nil), // 31: google.protobuf.Timestamp
 }
 var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	1,  // 0: massrelay.v1.models.CollabAction.join:type_name -> massrelay.v1.models.JoinRoom
@@ -2166,18 +2174,21 @@ var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	18, // 24: massrelay.v1.models.CollabEvent.owner_changed:type_name -> massrelay.v1.models.OwnerChanged
 	19, // 25: massrelay.v1.models.CollabEvent.credentials_changed:type_name -> massrelay.v1.models.CredentialsChanged
 	20, // 26: massrelay.v1.models.CollabEvent.title_changed:type_name -> massrelay.v1.models.TitleChanged
-	13, // 27: massrelay.v1.models.Room.peers:type_name -> massrelay.v1.models.PeerInfo
-	28, // 28: massrelay.v1.models.Room.metadata:type_name -> massrelay.v1.models.Room.MetadataEntry
-	11, // 29: massrelay.v1.models.RoomJoined.room:type_name -> massrelay.v1.models.Room
-	29, // 30: massrelay.v1.models.PeerInfo.metadata:type_name -> massrelay.v1.models.PeerInfo.MetadataEntry
-	13, // 31: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
-	11, // 32: massrelay.v1.models.GetRoomResponse.room:type_name -> massrelay.v1.models.Room
-	25, // 33: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
-	34, // [34:34] is the sub-list for method output_type
-	34, // [34:34] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	28, // 27: massrelay.v1.models.Room.peers:type_name -> massrelay.v1.models.Room.PeersEntry
+	31, // 28: massrelay.v1.models.Room.created_at:type_name -> google.protobuf.Timestamp
+	29, // 29: massrelay.v1.models.Room.metadata:type_name -> massrelay.v1.models.Room.MetadataEntry
+	11, // 30: massrelay.v1.models.RoomJoined.room:type_name -> massrelay.v1.models.Room
+	30, // 31: massrelay.v1.models.PeerInfo.metadata:type_name -> massrelay.v1.models.PeerInfo.MetadataEntry
+	13, // 32: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
+	11, // 33: massrelay.v1.models.GetRoomResponse.room:type_name -> massrelay.v1.models.Room
+	25, // 34: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
+	31, // 35: massrelay.v1.models.RoomSummary.created_at:type_name -> google.protobuf.Timestamp
+	13, // 36: massrelay.v1.models.Room.PeersEntry.value:type_name -> massrelay.v1.models.PeerInfo
+	37, // [37:37] is the sub-list for method output_type
+	37, // [37:37] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_massrelay_v1_models_collab_proto_init() }
@@ -2219,7 +2230,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_massrelay_v1_models_collab_proto_rawDesc), len(file_massrelay_v1_models_collab_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

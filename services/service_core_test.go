@@ -143,11 +143,12 @@ func TestJoinRoom_SecondClient(t *testing.T) {
 	if len(peers) != 1 {
 		t.Fatalf("expected 1 existing peer, got %d", len(peers))
 	}
-	if peers[0].ClientId != clientId1 {
-		t.Fatalf("expected peer to be client1 (%s), got %s", clientId1, peers[0].ClientId)
+	peer, ok := peers[clientId1]
+	if !ok {
+		t.Fatalf("expected peer with client_id %s in map", clientId1)
 	}
-	if peers[0].Username != "Alice" {
-		t.Fatalf("expected peer username Alice, got %s", peers[0].Username)
+	if peer.Username != "Alice" {
+		t.Fatalf("expected peer username Alice, got %s", peer.Username)
 	}
 }
 

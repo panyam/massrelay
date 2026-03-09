@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // CollabClient represents a connected peer in a room. Each WebSocket
@@ -187,7 +188,7 @@ func (s *CollabService) ListRooms(ctx context.Context, req *pb.ListRoomsRequest)
 		rooms = append(rooms, &pb.RoomSummary{
 			SessionId: room.SessionId,
 			PeerCount: int32(room.ClientCount()),
-			CreatedAt: room.Created.Unix(),
+			CreatedAt: timestamppb.New(room.Created),
 		})
 	}
 	return &pb.ListRoomsResponse{Rooms: rooms}, nil
@@ -338,7 +339,7 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 					OwnerClientId: room.OwnerClientId,
 					Encrypted:     roomEncrypted,
 					Title:         room.Title,
-					CreatedAt:     room.Created.Unix(),
+					CreatedAt:     timestamppb.New(room.Created),
 					Metadata:      room.Metadata,
 				},
 				MaxPeers:        int32(s.MaxPeersPerRoom),

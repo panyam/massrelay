@@ -218,9 +218,9 @@ export class CollabClient {
         metadata: this._metadata,
       } as PeerInfo);
 
-      // Add existing peers already in the room
+      // Add existing peers already in the room (map keyed by clientId)
       if (room.peers) {
-        for (const peer of room.peers) {
+        for (const peer of Object.values(room.peers)) {
           this.options.onPeerJoined?.(peer);
         }
       }

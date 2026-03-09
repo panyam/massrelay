@@ -195,17 +195,18 @@ Returns information about an active room.
 {
   "room": {
     "sessionId": "a1b2c3d4-e5f6-...",
-    "peers": [
-      {
+    "peers": {
+      "peer-uuid": {
         "clientId": "peer-uuid",
         "username": "Alice",
         "avatarUrl": "",
         "clientType": "browser",
         "isActive": true,
-        "isOwner": true
+        "isOwner": true,
+        "metadata": { "tool": "whiteboard" }
       }
-    ],
-    "createdAt": 1710000000,
+    },
+    "createdAt": "2024-03-10T00:00:00Z",
     "ownerClientId": "peer-uuid",
     "metadata": { "tool": "whiteboard" },
     "encrypted": false,
@@ -383,9 +384,9 @@ Canonical room state, shared by `RoomJoined` and `GetRoomResponse`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `sessionId` | string | Session ID (may differ from what was requested if relay generated one). |
-| `peers` | PeerInfo[] | **Existing peers only** — does NOT include the joining client itself. |
+| `peers` | map\<string, PeerInfo\> | **Existing peers only** — keyed by client ID. Does NOT include the joining client itself. |
 | `ownerClientId` | string | Client ID of the session owner. |
-| `createdAt` | int64 | Room creation time (Unix seconds). |
+| `createdAt` | Timestamp | Room creation time (RFC 3339 / `google.protobuf.Timestamp`). |
 | `metadata` | map | Application-defined key-value pairs. |
 | `encrypted` | bool | `true` if the room has E2EE enabled. |
 | `title` | string | Drawing title set by the owner. |
@@ -951,7 +952,7 @@ type CollabRoom struct {
 |--------|-------------|
 | `AddClient(client)` | Add a peer. |
 | `RemoveClient(clientId) *CollabClient` | Remove a peer, return it (or nil). |
-| `GetPeerInfo() []*PeerInfo` | Snapshot of all peers. |
+| `GetPeerInfo() map[string]*PeerInfo` | Snapshot of all peers, keyed by client ID. |
 | `ClientCount() int` | Number of connected peers. |
 | `IsEmpty() bool` | True if no clients. |
 | `BroadcastToAll(event)` | Non-blocking send to all. Drops if channel full. |
@@ -1012,7 +1013,7 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 
 // CollabEvent with RoomJoined
 {
-  "roomJoined": { "clientId": "uuid", "room": { "sessionId": "uuid", "peers": [...] } },
+  "roomJoined": { "clientId": "uuid", "room": { "sessionId": "uuid", "peers": {"peer-uuid": {...}} } },
   "eventId": "uuid",
   "fromClientId": "uuid",
   "serverTimestamp": 1710000000

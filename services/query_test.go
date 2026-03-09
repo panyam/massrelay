@@ -29,8 +29,10 @@ func TestGetRoom(t *testing.T) {
 	if len(room.GetPeers()) != 1 {
 		t.Fatalf("expected 1 peer, got %d", len(room.GetPeers()))
 	}
-	if room.GetPeers()[0].Username != "Alice" {
-		t.Fatalf("expected username Alice, got %s", room.GetPeers()[0].Username)
+	for _, p := range room.GetPeers() {
+		if p.Username != "Alice" {
+			t.Fatalf("expected username Alice, got %s", p.Username)
+		}
 	}
 }
 
@@ -217,11 +219,13 @@ func TestGetPeerInfo_ReturnsEmbeddedPeerInfo(t *testing.T) {
 	if len(peers) != 1 {
 		t.Fatalf("expected 1 peer, got %d", len(peers))
 	}
-	if peers[0].Username != "Alice" {
-		t.Fatalf("expected username Alice, got %s", peers[0].Username)
-	}
-	if peers[0].Metadata["tool"] != "whiteboard" {
-		t.Fatalf("expected peer metadata tool=whiteboard, got %v", peers[0].Metadata)
+	for _, p := range peers {
+		if p.Username != "Alice" {
+			t.Fatalf("expected username Alice, got %s", p.Username)
+		}
+		if p.Metadata["tool"] != "whiteboard" {
+			t.Fatalf("expected peer metadata tool=whiteboard, got %v", p.Metadata)
+		}
 	}
 }
 
@@ -250,8 +254,8 @@ func TestRoomToProto(t *testing.T) {
 	if proto.OwnerClientId == "" {
 		t.Fatal("expected non-empty owner_client_id")
 	}
-	if proto.CreatedAt == 0 {
-		t.Fatal("expected non-zero created_at")
+	if proto.CreatedAt == nil {
+		t.Fatal("expected non-nil created_at")
 	}
 	if proto.Metadata["tool"] != "whiteboard" {
 		t.Fatalf("expected metadata tool=whiteboard, got %v", proto.Metadata)

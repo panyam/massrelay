@@ -5,6 +5,7 @@ import (
 	"time"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // CollabRoom holds the state for a single collaboration session.
@@ -14,9 +15,10 @@ import (
 // same-browser tab or the session ends.
 //
 // Room state fields (SessionId, OwnerClientId, Metadata, Encrypted, Title)
-// overlap with pb.Room but are NOT embedded because pb.Room also contains
-// Peers (derived dynamically from the Clients map) and CreatedAt (int64 vs
-// time.Time). Embedding would leave a confusing always-nil Peers field.
+// overlap with pb.Room. Now that pb.Room uses map<string,PeerInfo> for peers
+// and google.protobuf.Timestamp for created_at, embedding is more viable but
+// deferred — the Clients map holds *CollabClient (which wraps *PeerInfo plus
+// server-only fields like SendCh), while pb.Room.Peers holds *PeerInfo only.
 // Use ToProto() to produce a pb.Room snapshot when needed.
 //
 // All exported methods are thread-safe (guarded by an internal RWMutex).
@@ -87,14 +89,14 @@ func (r *CollabRoom) RemoveClient(clientId string) *CollabClient {
 }
 
 // GetPeerInfo returns a snapshot of PeerInfo for all connected clients.
-// Each entry is the embedded PeerInfo from the CollabClient.
-// The returned slice is safe to use outside the room's lock.
-func (r *CollabRoom) GetPeerInfo() []*pb.PeerInfo {
+// Each entry is the embedded PeerInfo from the CollabClient, keyed by client ID.
+// The returned map is safe to use outside the room's lock.
+func (r *CollabRoom) GetPeerInfo() map[string]*pb.PeerInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	peers := make([]*pb.PeerInfo, 0, len(r.Clients))
-	for _, c := range r.Clients {
-		peers = append(peers, c.PeerInfo)
+	peers := make(map[string]*pb.PeerInfo, len(r.Clients))
+	for id, c := range r.Clients {
+		peers[id] = c.PeerInfo
 	}
 	return peers
 }
@@ -106,7 +108,7 @@ func (r *CollabRoom) ToProto() *pb.Room {
 		SessionId:     r.SessionId,
 		Peers:         r.GetPeerInfo(),
 		OwnerClientId: r.OwnerClientId,
-		CreatedAt:     r.Created.Unix(),
+		CreatedAt:     timestamppb.New(r.Created),
 		Metadata:      r.Metadata,
 		Encrypted:     r.Encrypted,
 		Title:         r.Title,

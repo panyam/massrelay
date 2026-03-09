@@ -173,6 +173,11 @@ function makeMockClient(): CollabClient & {
     }
 
     // onEvent with roomJoined (Room fields nested under .room)
+    // peers is now a map keyed by clientId (matching proto wire format)
+    const peersMap: Record<string, any> = {};
+    for (const p of data.peers ?? []) {
+      peersMap[p.clientId] = p;
+    }
     client.options.onEvent?.({
       roomJoined: {
         clientId: data.clientId,
@@ -182,7 +187,7 @@ function makeMockClient(): CollabClient & {
           ownerClientId: data.ownerClientId || '',
           encrypted: data.encrypted ?? false,
           title: data.title ?? '',
-          peers: data.peers ?? [],
+          peers: peersMap,
         },
       },
     });
