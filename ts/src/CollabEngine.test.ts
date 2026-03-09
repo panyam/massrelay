@@ -162,6 +162,7 @@ function makeMockClient(): CollabClient & {
       avatarUrl: '',
       clientType: 'browser',
       isActive: true,
+      metadata: mock._metadata || {},
     } as any);
 
     // Existing peers
@@ -882,6 +883,35 @@ describe('CollabEngine', () => {
       expect(engine.state.maxPeers).toBe(10);
       expect(engine.state.roomTitle).toBe('My Drawing');
       expect(engine.state.isOwner).toBe(true);
+    });
+
+    it('self-peer carries metadata from connect params', () => {
+      const client = makeMockClient();
+      const engine = new CollabEngine({ client, timers });
+
+      engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Alice', metadata: { tool: 'excalidraw', docType: 'design' } });
+      client.simulateRoomJoined({ clientId: 'c1', sessionId: 'sess1', ownerClientId: 'c1' });
+
+      const selfPeer = engine.state.peers.get('c1');
+      expect(selfPeer).toBeDefined();
+      expect(selfPeer!.metadata).toEqual({ tool: 'excalidraw', docType: 'design' });
+    });
+
+    it('existing peers carry metadata from server', () => {
+      const client = makeMockClient();
+      const engine = new CollabEngine({ client, timers });
+
+      engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Bob', metadata: { tool: 'excalidraw' } });
+      client.simulateRoomJoined({
+        clientId: 'c2',
+        sessionId: 'sess1',
+        ownerClientId: 'c1',
+        peers: [{ clientId: 'c1', username: 'Alice', metadata: { tool: 'excalidraw', role: 'owner' } }],
+      });
+
+      const remotePeer = engine.state.peers.get('c1');
+      expect(remotePeer).toBeDefined();
+      expect(remotePeer!.metadata).toEqual({ tool: 'excalidraw', role: 'owner' });
     });
   });
 

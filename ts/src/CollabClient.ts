@@ -215,6 +215,7 @@ export class CollabClient {
         avatarUrl: '',
         clientType: 'browser',
         isActive: true,
+        metadata: this._metadata,
       } as PeerInfo);
 
       // Add existing peers already in the room
