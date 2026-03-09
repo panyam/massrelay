@@ -6,8 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	relaytelem "github.com/panyam/massrelay/otel"
+	"github.com/panyam/massrelay/web/middleware"
 	"github.com/panyam/massrelay/web/server"
 )
 
@@ -25,16 +30,42 @@ func main() {
 		log.Fatalf("Failed to initialize relay: %v", err)
 	}
 
-	// If Prometheus is enabled, serve /metrics on the same port
+	// Build handler chain
 	mux := http.NewServeMux()
 	mux.Handle("/", app)
 	if promHandler != nil {
 		mux.Handle("/metrics", promHandler)
 	}
 
+	// Wrap with request logging (skip /health to reduce noise from probes)
+	handler := middleware.RequestLogger("/health")(mux)
+
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Relay server listening on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("Server error: %v", err)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: handler,
 	}
+
+	// Graceful shutdown on SIGTERM/SIGINT
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		log.Printf("Relay server listening on %s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
+
+	<-done
+	log.Println("Shutting down gracefully...")
+
+	// Give active connections 10 seconds to finish
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Shutdown error: %v", err)
+	}
+	log.Println("Server stopped")
 }

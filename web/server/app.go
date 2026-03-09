@@ -93,7 +93,7 @@ func NewRelayApp() *RelayApp {
 		RateLimit: rateLimiter,
 	}
 
-	metrics := relaytelem.NewMetrics()
+	metrics := relaytelem.NewMetrics(nil) // nil = use global provider
 
 	// Wire rate limit rejections to metrics
 	if rateLimiter != nil {

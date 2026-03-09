@@ -24,10 +24,11 @@ type Metrics struct {
 	MessageSize metric.Int64Histogram
 }
 
-// NewMetrics creates all metric instruments. Safe to call even when OTEL is
-// no-op — instruments will simply not record.
-func NewMetrics() *Metrics {
-	m := Meter()
+// NewMetrics creates all metric instruments using the given provider.
+// Pass nil to use the global provider (set by Setup or by the host app).
+// Safe to call even when OTEL is no-op — instruments will simply not record.
+func NewMetrics(provider metric.MeterProvider) *Metrics {
+	m := MeterFrom(provider)
 	var metrics Metrics
 	var err error
 
