@@ -1121,9 +1121,9 @@ func (*CollabEvent_TitleChanged) isCollabEvent_Event() {}
 type Room struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Peers         map[string]*PeerInfo   `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Peers         map[string]*PeerInfo   `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // keyed by client_id
 	OwnerClientId string                 `protobuf:"bytes,3,opt,name=owner_client_id,json=ownerClientId,proto3" json:"owner_client_id,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // room creation time
 	Metadata      map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Encrypted     bool                   `protobuf:"varint,6,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
 	Title         string                 `protobuf:"bytes,7,opt,name=title,proto3" json:"title,omitempty"`

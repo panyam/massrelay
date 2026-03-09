@@ -6,3 +6,4 @@ test-go:
 
 test-ts:
 	cd ts && npm test
+	npx vitest run
