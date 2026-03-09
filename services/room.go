@@ -60,7 +60,8 @@ func (r *CollabRoom) RemoveClient(clientId string) *CollabClient {
 	return c
 }
 
-// GetPeerInfo returns PeerInfo for all connected clients.
+// GetPeerInfo returns a snapshot of PeerInfo for all connected clients.
+// The returned slice is safe to use outside the room's lock.
 func (r *CollabRoom) GetPeerInfo() []*pb.PeerInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -105,7 +106,8 @@ func (r *CollabRoom) BroadcastToAll(event *pb.CollabEvent) {
 	}
 }
 
-// BroadcastExcept sends an event to all clients except the specified one.
+// BroadcastExcept sends an event to all clients except exceptClientId.
+// Non-blocking: if a client's send channel is full, the event is silently dropped.
 func (r *CollabRoom) BroadcastExcept(event *pb.CollabEvent, exceptClientId string) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

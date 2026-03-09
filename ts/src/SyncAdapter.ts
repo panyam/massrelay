@@ -4,7 +4,7 @@
  *  without knowing anything about the tool's data model. */
 
 export interface SyncAdapter {
-  readonly tool: string;
+  readonly metadata: Record<string, string>;
 
   /** Compute diff of local changes since last sync. Return null if nothing changed. */
   computeOutgoing(): OutgoingUpdate | null;

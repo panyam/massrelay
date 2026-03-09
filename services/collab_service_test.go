@@ -73,7 +73,7 @@ func TestJoinRoom_FirstClient(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:  "sess1",
 				Username:   "Alice",
-				Tool:       "excalidraw",
+				Metadata:   map[string]string{"tool": "whiteboard"},
 				ClientType: "browser",
 			},
 		},
@@ -112,7 +112,7 @@ func TestJoinRoom_SecondClient(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:  "sess1",
 				Username:   "Alice",
-				Tool:       "excalidraw",
+				Metadata:   map[string]string{"tool": "whiteboard"},
 				ClientType: "browser",
 			},
 		},
@@ -129,7 +129,7 @@ func TestJoinRoom_SecondClient(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:  "sess1",
 				Username:   "Bob",
-				Tool:       "excalidraw",
+				Metadata:   map[string]string{"tool": "whiteboard"},
 				ClientType: "browser",
 			},
 		},
@@ -164,7 +164,7 @@ func TestJoinRoom_BroadcastsPeerJoined(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId: "sess1",
 				Username:  "Alice",
-				Tool:      "excalidraw",
+				Metadata:  map[string]string{"tool": "whiteboard"},
 			},
 		},
 	}
@@ -181,7 +181,7 @@ func TestJoinRoom_BroadcastsPeerJoined(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId: "sess1",
 				Username:  "Bob",
-				Tool:      "excalidraw",
+				Metadata:  map[string]string{"tool": "whiteboard"},
 			},
 		},
 	}
@@ -211,7 +211,7 @@ func TestJoinRoom_EmptyUsernameDefaultsToAnonymous(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId: "sess1",
 				Username:  "",
-				Tool:      "excalidraw",
+				Metadata:  map[string]string{"tool": "whiteboard"},
 			},
 		},
 	}
@@ -239,7 +239,7 @@ func TestLeaveRoom(t *testing.T) {
 	joinAction := func(name string) string {
 		action := &pb.CollabAction{
 			Action: &pb.CollabAction_Join{
-				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Tool: "excalidraw"},
+				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Metadata: map[string]string{"tool": "whiteboard"}},
 			},
 		}
 		event, _ := svc.HandleAction(ctx, action)
@@ -288,7 +288,7 @@ func TestLeaveRoom_LastClientCleansUp(t *testing.T) {
 
 	action := &pb.CollabAction{
 		Action: &pb.CollabAction_Join{
-			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Tool: "excalidraw"},
+			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Metadata: map[string]string{"tool": "whiteboard"}},
 		},
 	}
 	event, _ := svc.HandleAction(ctx, action)
@@ -319,7 +319,7 @@ func TestLeaveRoom_NonexistentClient(t *testing.T) {
 	// Create room with one client
 	action := &pb.CollabAction{
 		Action: &pb.CollabAction_Join{
-			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Tool: "excalidraw"},
+			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Metadata: map[string]string{"tool": "whiteboard"}},
 		},
 	}
 	svc.HandleAction(ctx, action)
@@ -344,7 +344,7 @@ func TestPresenceUpdate(t *testing.T) {
 	joinAction := func(name string) string {
 		action := &pb.CollabAction{
 			Action: &pb.CollabAction_Join{
-				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Tool: "excalidraw"},
+				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Metadata: map[string]string{"tool": "whiteboard"}},
 			},
 		}
 		event, _ := svc.HandleAction(ctx, action)
@@ -391,7 +391,7 @@ func TestGetRoom(t *testing.T) {
 	// Join a room
 	action := &pb.CollabAction{
 		Action: &pb.CollabAction_Join{
-			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Tool: "excalidraw"},
+			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Metadata: map[string]string{"tool": "whiteboard"}},
 		},
 	}
 	svc.HandleAction(ctx, action)
@@ -429,7 +429,7 @@ func TestListRooms(t *testing.T) {
 	for _, sess := range []string{"sess1", "sess2"} {
 		action := &pb.CollabAction{
 			Action: &pb.CollabAction_Join{
-				Join: &pb.JoinRoom{SessionId: sess, Username: "User", Tool: "excalidraw"},
+				Join: &pb.JoinRoom{SessionId: sess, Username: "User", Metadata: map[string]string{"tool": "whiteboard"}},
 			},
 		}
 		svc.HandleAction(ctx, action)
@@ -480,7 +480,7 @@ func TestBroadcastSceneUpdate(t *testing.T) {
 	joinAction := func(name string) string {
 		action := &pb.CollabAction{
 			Action: &pb.CollabAction_Join{
-				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Tool: "excalidraw"},
+				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Metadata: map[string]string{"tool": "whiteboard"}},
 			},
 		}
 		event, _ := svc.HandleAction(ctx, action)
@@ -549,7 +549,7 @@ func TestBroadcastTextUpdate(t *testing.T) {
 	joinAction := func(name string) string {
 		action := &pb.CollabAction{
 			Action: &pb.CollabAction_Join{
-				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Tool: "mermaid"},
+				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Metadata: map[string]string{"tool": "text-editor"}},
 			},
 		}
 		event, _ := svc.HandleAction(ctx, action)
@@ -593,7 +593,7 @@ func TestBroadcastSceneInitRequest(t *testing.T) {
 	joinAction := func(name string) string {
 		action := &pb.CollabAction{
 			Action: &pb.CollabAction_Join{
-				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Tool: "excalidraw"},
+				Join: &pb.JoinRoom{SessionId: "sess1", Username: name, Metadata: map[string]string{"tool": "whiteboard"}},
 			},
 		}
 		event, _ := svc.HandleAction(ctx, action)
@@ -633,7 +633,7 @@ func TestBroadcast_NonexistentClient(t *testing.T) {
 	// Join so room exists
 	svc.HandleAction(ctx, &pb.CollabAction{
 		Action: &pb.CollabAction_Join{
-			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Tool: "excalidraw"},
+			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Metadata: map[string]string{"tool": "whiteboard"}},
 		},
 	})
 
@@ -656,7 +656,7 @@ func TestFindRoomForClient(t *testing.T) {
 
 	event, _ := svc.HandleAction(ctx, &pb.CollabAction{
 		Action: &pb.CollabAction_Join{
-			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Tool: "excalidraw"},
+			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Alice", Metadata: map[string]string{"tool": "whiteboard"}},
 		},
 	})
 	clientId := event.GetRoomJoined().GetClientId()
@@ -683,7 +683,6 @@ func joinAsOwner(svc *CollabService, ctx context.Context, sessionId, username, b
 			Join: &pb.JoinRoom{
 				SessionId: sessionId,
 				Username:  username,
-				Tool:      "excalidraw",
 				IsOwner:   true,
 				BrowserId: browserId,
 			},
@@ -702,7 +701,6 @@ func joinAsFollower(svc *CollabService, ctx context.Context, sessionId, username
 			Join: &pb.JoinRoom{
 				SessionId: sessionId,
 				Username:  username,
-				Tool:      "excalidraw",
 				IsOwner:   false,
 				BrowserId: browserId,
 			},
@@ -752,7 +750,7 @@ func TestOwnerJoin_RoomJoinedIncludesOwnerClientId(t *testing.T) {
 	// Second client joins — RoomJoined should include owner_client_id
 	event, err := svc.HandleAction(ctx, &pb.CollabAction{
 		Action: &pb.CollabAction_Join{
-			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Bob", Tool: "excalidraw"},
+			Join: &pb.JoinRoom{SessionId: "sess1", Username: "Bob", Metadata: map[string]string{"tool": "whiteboard"}},
 		},
 	})
 	if err != nil {
@@ -967,7 +965,7 @@ func TestJoinRoom_RoomFull(t *testing.T) {
 				Join: &pb.JoinRoom{
 					SessionId: "sess-full",
 					Username:  "User",
-					Tool:      "excalidraw",
+					Metadata:  map[string]string{"tool": "whiteboard"},
 				},
 			},
 		}
@@ -986,7 +984,7 @@ func TestJoinRoom_RoomFull(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId: "sess-full",
 				Username:  "Overflow",
-				Tool:      "excalidraw",
+				Metadata:  map[string]string{"tool": "whiteboard"},
 			},
 		},
 	}
@@ -1016,7 +1014,7 @@ func TestRoomJoined_IncludesMaxPeers(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId: "sess-info",
 				Username:  "Alice",
-				Tool:      "excalidraw",
+				Metadata:  map[string]string{"tool": "whiteboard"},
 			},
 		},
 	})
@@ -1047,7 +1045,7 @@ func TestJoinRoom_EncryptedRoom(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:       "sess-enc",
 				Username:        "Owner",
-				Tool:            "excalidraw",
+				Metadata:        map[string]string{"tool": "whiteboard"},
 				IsOwner:         true,
 				Encrypted:       true,
 				ProtocolVersion: 2,
@@ -1071,7 +1069,7 @@ func TestJoinRoom_EncryptedRoom(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:       "sess-enc",
 				Username:        "ModernClient",
-				Tool:            "excalidraw",
+				Metadata:        map[string]string{"tool": "whiteboard"},
 				ProtocolVersion: 2,
 			},
 		},
@@ -1094,7 +1092,7 @@ func TestJoinRoom_OldProtocolRejected(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:       "sess-enc2",
 				Username:        "Owner",
-				Tool:            "excalidraw",
+				Metadata:        map[string]string{"tool": "whiteboard"},
 				IsOwner:         true,
 				Encrypted:       true,
 				ProtocolVersion: 2,
@@ -1108,7 +1106,7 @@ func TestJoinRoom_OldProtocolRejected(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId: "sess-enc2",
 				Username:  "OldClient",
-				Tool:      "excalidraw",
+				Metadata:  map[string]string{"tool": "whiteboard"},
 				// ProtocolVersion intentionally omitted (defaults to 0)
 			},
 		},
@@ -1135,7 +1133,7 @@ func TestCredentialsChanged_Broadcast(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:       "sess-cred",
 				Username:        "Owner",
-				Tool:            "excalidraw",
+				Metadata:        map[string]string{"tool": "whiteboard"},
 				IsOwner:         true,
 				Encrypted:       true,
 				ProtocolVersion: 2,
@@ -1149,7 +1147,7 @@ func TestCredentialsChanged_Broadcast(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:       "sess-cred",
 				Username:        "Peer",
-				Tool:            "excalidraw",
+				Metadata:        map[string]string{"tool": "whiteboard"},
 				ProtocolVersion: 2,
 			},
 		},
@@ -1207,13 +1205,13 @@ func captureLog(fn func()) string {
 }
 
 // setupTwoClients creates a room with two clients and drains PeerJoined.
-func setupTwoClients(t *testing.T, svc *CollabService, sessionId, tool string) (string, string) {
+func setupTwoClients(t *testing.T, svc *CollabService, sessionId string, metadata map[string]string) (string, string) {
 	t.Helper()
 	ctx := context.Background()
 	join := func(name string) string {
 		event, err := svc.HandleAction(ctx, &pb.CollabAction{
 			Action: &pb.CollabAction_Join{
-				Join: &pb.JoinRoom{SessionId: sessionId, Username: name, Tool: tool},
+				Join: &pb.JoinRoom{SessionId: sessionId, Username: name, Metadata: metadata},
 			},
 		})
 		if err != nil {
@@ -1230,7 +1228,7 @@ func setupTwoClients(t *testing.T, svc *CollabService, sessionId, tool string) (
 func TestLogPayloads_DisabledByDefault(t *testing.T) {
 	svc := NewCollabService()
 	// LogPayloads defaults to 0 (disabled)
-	_, c2 := setupTwoClients(t, svc, "log-off", "excalidraw")
+	_, c2 := setupTwoClients(t, svc, "log-off", map[string]string{"tool": "whiteboard"})
 	ctx := context.Background()
 
 	output := captureLog(func() {
@@ -1254,7 +1252,7 @@ func TestLogPayloads_DisabledByDefault(t *testing.T) {
 func TestLogPayloads_SceneUpdate(t *testing.T) {
 	svc := NewCollabService()
 	svc.LogPayloads = 20
-	_, c2 := setupTwoClients(t, svc, "log-scene", "excalidraw")
+	_, c2 := setupTwoClients(t, svc, "log-scene", map[string]string{"tool": "whiteboard"})
 	ctx := context.Background()
 
 	longData := `{"type":"rectangle","x":100,"y":200,"width":300}`
@@ -1286,7 +1284,7 @@ func TestLogPayloads_SceneUpdate(t *testing.T) {
 func TestLogPayloads_TextUpdate(t *testing.T) {
 	svc := NewCollabService()
 	svc.LogPayloads = 15
-	_, c2 := setupTwoClients(t, svc, "log-text", "mermaid")
+	_, c2 := setupTwoClients(t, svc, "log-text", map[string]string{"tool": "text-editor"})
 	ctx := context.Background()
 
 	longText := "flowchart TD\n  A --> B --> C --> D"
@@ -1311,7 +1309,7 @@ func TestLogPayloads_TextUpdate(t *testing.T) {
 func TestLogPayloads_SceneInitResponse(t *testing.T) {
 	svc := NewCollabService()
 	svc.LogPayloads = 10
-	_, c2 := setupTwoClients(t, svc, "log-init", "excalidraw")
+	_, c2 := setupTwoClients(t, svc, "log-init", map[string]string{"tool": "whiteboard"})
 	ctx := context.Background()
 
 	longPayload := `{"elements":[{"id":"1","type":"rect"}],"appState":{}}`
@@ -1342,7 +1340,7 @@ func TestGetRoom_IncludesEncrypted(t *testing.T) {
 			Join: &pb.JoinRoom{
 				SessionId:       "sess-enc-rest",
 				Username:        "Owner",
-				Tool:            "excalidraw",
+				Metadata:        map[string]string{"tool": "whiteboard"},
 				IsOwner:         true,
 				Encrypted:       true,
 				ProtocolVersion: 2,

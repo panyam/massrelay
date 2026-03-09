@@ -10,7 +10,7 @@ func newTestClient(id, username string) *CollabClient {
 	return &CollabClient{
 		ClientId:   id,
 		Username:   username,
-		Tool:       "excalidraw",
+		Metadata:   map[string]string{"tool": "whiteboard"},
 		ClientType: "browser",
 		IsActive:   true,
 		SendCh:     make(chan *pb.CollabEvent, 10),

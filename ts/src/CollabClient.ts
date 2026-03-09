@@ -37,12 +37,13 @@ export class CollabClient {
   private _relayUrl: string = '';
   private _sessionId: string = '';
   private _username: string = '';
-  private _tool: string = '';
+  private _metadata: Record<string, string> = {};
   private _title: string = '';
   private _encrypted: boolean = false;
   private _maxPeers: number = 0;
   private _roomEncrypted: boolean = false;
-  private options: CollabClientOptions;
+  /** Callback options — public so CollabEngine can wire callbacks after construction. */
+  options: CollabClientOptions;
   private retryCount: number = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private explicitDisconnect: boolean = false;
@@ -63,7 +64,7 @@ export class CollabClient {
   get roomEncrypted(): boolean { return this._roomEncrypted; }
   get title(): string { return this._title; }
 
-  connect(relayUrl: string, sessionId: string, username: string, tool: string, isOwner: boolean = false, browserId: string = '', clientHint: string = '', encrypted: boolean = false, title: string = ''): void {
+  connect(relayUrl: string, sessionId: string, username: string, metadata: Record<string, string>, isOwner: boolean = false, browserId: string = '', clientHint: string = '', encrypted: boolean = false, title: string = ''): void {
     if (this._isConnected) {
       throw new Error('Already connected');
     }
@@ -71,7 +72,7 @@ export class CollabClient {
     this._relayUrl = relayUrl;
     this._sessionId = sessionId;
     this._username = username || ('Anon-' + Math.random().toString(36).slice(2, 6));
-    this._tool = tool;
+    this._metadata = metadata;
     this._title = title;
     this._isOwner = isOwner;
     this._browserId = browserId;
@@ -82,15 +83,17 @@ export class CollabClient {
     this.retryCount = 0;
 
     // Ensure cleanup on page unload (refresh, tab close, navigation)
-    this.boundBeforeUnload = () => this.disconnect();
-    window.addEventListener('beforeunload', this.boundBeforeUnload);
+    if (typeof window !== 'undefined') {
+      this.boundBeforeUnload = () => this.disconnect();
+      window.addEventListener('beforeunload', this.boundBeforeUnload);
+    }
 
     this.openWebSocket();
   }
 
   disconnect(): void {
     this.explicitDisconnect = true;
-    if (this.boundBeforeUnload) {
+    if (this.boundBeforeUnload && typeof window !== 'undefined') {
       window.removeEventListener('beforeunload', this.boundBeforeUnload);
       this.boundBeforeUnload = null;
     }
@@ -159,7 +162,7 @@ export class CollabClient {
         join: {
           sessionId: this._sessionId,
           username: this._username,
-          tool: this._tool,
+          metadata: this._metadata,
           clientType: 'browser',
           isOwner: this._isOwner,
           browserId: this._browserId,

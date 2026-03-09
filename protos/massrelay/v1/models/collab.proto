@@ -28,15 +28,15 @@ message CollabAction {
 message JoinRoom {
   string session_id = 1;      // empty = relay generates one (owner creating new session)
   string username = 2;
-  string tool = 3;            // "excalidraw" | "mermaid"
+  map<string, string> metadata = 3;  // application-defined key-value pairs (e.g. {"tool": "whiteboard", "docType": "design"})
   string client_type = 4;     // "browser" | "api" | "cli"
   string avatar_url = 5;
   bool is_owner = 6;
   string browser_id = 7;      // localStorage UUID for ownership transfer
-  string client_hint = 8;     // opaque hint (e.g. browserId:drawingId) for session reuse
+  string client_hint = 8;     // opaque hint for session reuse (e.g. "userId:documentId")
   int32 protocol_version = 9; // client protocol version (current = 2, legacy implicit = 1)
   bool encrypted = 10;        // owner declares room as encrypted (password-based E2EE)
-  string title = 11;          // drawing title (owner sends, relay echoes to joiners)
+  string title = 11;          // document/session title (owner sends, relay echoes to joiners)
 }
 
 message LeaveRoom {
@@ -78,8 +78,7 @@ message TextUpdate {
 message SceneInitRequest {}
 
 // Tool-agnostic response to SceneInitRequest. Payload is a JSON blob
-// whose schema is owned by each tool's SyncAdapter (Excalidraw elements,
-// Mermaid text, etc.).
+// whose schema is owned by the application's SyncAdapter implementation.
 message SceneInitResponse {
   string payload = 1;
 }
@@ -118,7 +117,7 @@ message RoomJoined {
   int32 max_peers = 5;            // relay's max-peers setting (informational for UI)
   bool encrypted = 6;             // true if room owner set a password
   int32 protocol_version = 7;     // relay protocol version
-  string title = 8;               // drawing title (from owner)
+  string title = 8;               // document/session title (from owner)
 }
 
 message PeerInfo {
@@ -158,7 +157,7 @@ message CredentialsChanged {
 }
 
 message TitleChanged {
-  string title = 1;            // new drawing title
+  string title = 1;            // new document/session title
 }
 
 // ─── Dashboard / Info ───────────────────────────
@@ -172,9 +171,9 @@ message GetRoomResponse {
   repeated PeerInfo peers = 2;
   int64 created_at = 3;
   string owner_client_id = 4;
-  string tool = 5;              // "excalidraw" | "mermaid"
+  map<string, string> metadata = 5;  // application-defined key-value pairs (echoed from JoinRoom)
   bool encrypted = 6;           // true if room has E2EE enabled
-  string title = 7;              // drawing title (from owner)
+  string title = 7;              // document/session title (from owner)
 }
 
 message ListRoomsRequest {}

@@ -1,6 +1,6 @@
 {
   "name": "@panyam/massrelay",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "type": "module",
   "main": "dist/gen/massrelay/v1/models/collab_pb.js",
   "types": "dist/gen/massrelay/v1/models/collab_pb.d.ts",
@@ -24,10 +24,28 @@
     "./url": {
       "types": "./dist/url-params.d.ts",
       "default": "./dist/url-params.js"
+    },
+    "./crypto": {
+      "types": "./dist/crypto.d.ts",
+      "default": "./dist/crypto.js"
+    },
+    "./peers": {
+      "types": "./dist/peerColors.d.ts",
+      "default": "./dist/peerColors.js"
+    },
+    "./engine": {
+      "types": "./dist/CollabEngine.d.ts",
+      "default": "./dist/CollabEngine.js"
+    },
+    "./emitter": {
+      "types": "./dist/EventEmitter.d.ts",
+      "default": "./dist/EventEmitter.js"
     }
   },
   "scripts": {
     "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -40,6 +58,7 @@
   "devDependencies": {
     "@bufbuild/protobuf": "^2.11.0",
     "@panyam/servicekit-client": "^0.0.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }
