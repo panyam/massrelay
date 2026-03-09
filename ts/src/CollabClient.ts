@@ -1,10 +1,10 @@
 import { GRPCWSClient } from '@panyam/servicekit-client';
-import type { PeerInfo } from './gen/massrelay/v1/models/collab_pb.js';
+import type { CollabEventJson, CollabActionJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 import { resolveRelayUrl } from './url-params.js';
 
 export interface CollabClientOptions {
-  onEvent?: (event: any) => void;
-  onPeerJoined?: (peer: PeerInfo) => void;
+  onEvent?: (event: CollabEventJson) => void;
+  onPeerJoined?: (peer: PeerInfoJson) => void;
   onPeerLeft?: (clientId: string) => void;
   onError?: (error: Error) => void;
   onConnect?: (clientId: string) => void;
@@ -108,7 +108,8 @@ export class CollabClient {
 
     // Send LeaveRoom before closing
     if (wasConnected) {
-      grpc.send({ leave: { reason: 'user disconnected' } });
+      const leaveAction: CollabActionJson = { leave: { reason: 'user disconnected' } };
+      grpc.send(leaveAction);
     }
 
     // Reset state BEFORE close so that handleConnectionClosed (triggered by
@@ -122,14 +123,14 @@ export class CollabClient {
     }
   }
 
-  send(action: Record<string, unknown>): void {
+  send(action: CollabActionJson): void {
     if (!this._isConnected || !this.grpc) {
       throw new Error('Not connected');
     }
     this.grpc.send({
       ...action,
       clientId: this._clientId,
-      timestamp: Date.now(),
+      timestamp: String(Date.now()),
     });
   }
 
@@ -141,8 +142,8 @@ export class CollabClient {
 
     // GRPCWSClient.onMessage receives data already unwrapped from the
     // servicekit envelope ({type:"data", data:...} → just the data).
-    this.grpc.onMessage = (data: any) => {
-      this.handleEvent(data);
+    this.grpc.onMessage = (data: unknown) => {
+      this.handleEvent(data as CollabEventJson);
     };
 
     this.grpc.onClose = () => {
@@ -158,7 +159,7 @@ export class CollabClient {
     // for oneof, camelCase for field names) so the Go relay can parse them
     // with protojson.Unmarshal.
     this.grpc.connect(url).then(() => {
-      this.grpc?.send({
+      const joinAction: CollabActionJson = {
         join: {
           sessionId: this._sessionId,
           username: this._username,
@@ -171,13 +172,14 @@ export class CollabClient {
           encrypted: this._encrypted,
           title: this._title,
         },
-      });
+      };
+      this.grpc?.send(joinAction);
     }).catch(() => {
       // Error already dispatched via grpc.onError
     });
   }
 
-  private handleEvent(data: any): void {
+  private handleEvent(data: CollabEventJson): void {
     const eventKeys = Object.keys(data).filter(k => k !== 'eventId' && k !== 'fromClientId' && k !== 'serverTimestamp');
     console.log('[COLLAB] Received event:', eventKeys.join(','), 'from:', data.fromClientId);
     this.options.onEvent?.(data);
@@ -194,15 +196,15 @@ export class CollabClient {
     }
 
     if (data.roomJoined) {
-      const room = data.roomJoined.room || {};
-      this._clientId = data.roomJoined.clientId;
+      const room = data.roomJoined.room;
+      this._clientId = data.roomJoined.clientId || '';
       // Capture relay-generated sessionId (may differ from what we sent)
-      if (room.sessionId) {
+      if (room?.sessionId) {
         this._sessionId = room.sessionId;
       }
       this._maxPeers = data.roomJoined.maxPeers || 0;
-      this._roomEncrypted = !!room.encrypted;
-      this._title = room.title || '';
+      this._roomEncrypted = !!room?.encrypted;
+      this._title = room?.title || '';
       this._isConnected = true;
       this._isConnecting = false;
       this.retryCount = 0;
@@ -216,25 +218,25 @@ export class CollabClient {
         clientType: 'browser',
         isActive: true,
         metadata: this._metadata,
-      } as PeerInfo);
+      });
 
       // Add existing peers already in the room (map keyed by clientId)
-      if (room.peers) {
+      if (room?.peers) {
         for (const peer of Object.values(room.peers)) {
           this.options.onPeerJoined?.(peer);
         }
       }
     } else if (data.peerJoined) {
-      this.options.onPeerJoined?.(data.peerJoined.peer);
+      this.options.onPeerJoined?.(data.peerJoined.peer || {});
     } else if (data.peerLeft) {
-      this.options.onPeerLeft?.(data.peerLeft.clientId);
+      this.options.onPeerLeft?.(data.peerLeft.clientId || '');
     } else if (data.sessionEnded) {
       this.options.onSessionEnded?.(data.sessionEnded.reason || '');
       this.explicitDisconnect = true; // Don't reconnect
       this.grpc?.close();
       this.resetState();
     } else if (data.ownerChanged) {
-      const newOwnerId = data.ownerChanged.newOwnerClientId;
+      const newOwnerId = data.ownerChanged.newOwnerClientId || '';
       this._isOwner = newOwnerId === this._clientId;
       this.options.onOwnerChanged?.(newOwnerId);
     } else if (data.credentialsChanged) {

@@ -2,7 +2,7 @@ import { TypedEmitter } from './EventEmitter.js';
 import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate } from './SyncAdapter.js';
 import { encryptPayload, decryptPayload } from './crypto.js';
-import type { PeerInfo } from './gen/massrelay/v1/models/collab_pb.js';
+import type { PeerInfoJsonJson, CollabEventJson } from './gen/massrelay/v1/models/collab_pb.js';
 
 // ─── Types ───
 
@@ -26,7 +26,7 @@ export interface CollabEngineState {
   sessionId: string;
   isOwner: boolean;
   ownerClientId: string;
-  peers: ReadonlyMap<string, PeerInfo>;
+  peers: ReadonlyMap<string, PeerInfoJson>;
   error: string | null;
   roomEncrypted: boolean;
   maxPeers: number;
@@ -49,7 +49,7 @@ export type CollabEngineEvents = {
   [K in string]: (...args: any[]) => void;
 } & {
   stateChange: (state: CollabEngineState) => void;
-  peerJoined: (peer: PeerInfo) => void;
+  peerJoined: (peer: PeerInfoJson) => void;
   peerLeft: (clientId: string) => void;
   sessionEnded: (reason: string) => void;
   credentialsChanged: (reason: string) => void;
@@ -194,9 +194,11 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
       this._updateState({ phase: 'connected', clientId, error: null });
     };
 
-    client.options.onPeerJoined = (peer: PeerInfo) => {
+    client.options.onPeerJoined = (peer: PeerInfoJson) => {
+      const id = peer.clientId || '';
+      if (!id) return;
       const peers = new Map(this._state.peers);
-      peers.set(peer.clientId, peer);
+      peers.set(id, peer);
       this._updateState({ peers });
       this.emit('peerJoined', peer);
     };
@@ -250,7 +252,7 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
       this.emit('ownerChanged', newOwnerClientId);
     };
 
-    client.options.onEvent = (event: any) => {
+    client.options.onEvent = (event: CollabEventJson) => {
       // Extract room info from RoomJoined
       if (event.roomJoined) {
         const room = event.roomJoined.room || {};
@@ -276,7 +278,7 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
     };
   }
 
-  private async _handleSyncEvent(event: any): Promise<void> {
+  private async _handleSyncEvent(event: CollabEventJson): Promise<void> {
     const adapter = this._adapter;
 
     if (event.sceneUpdate) {
@@ -305,7 +307,7 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
       adapter.applyRemote(event.fromClientId ?? '', event.textUpdate);
     } else if (event.cursorUpdate && event.fromClientId) {
       if (!adapter) return;
-      const peer = this._state.peers.get(event.fromClientId) as { username?: string } | undefined;
+      const peer = this._state.peers.get(event.fromClientId);
       adapter.applyRemoteCursor({
         clientId: event.fromClientId,
         username: peer?.username || event.fromClientId.slice(0, 6),

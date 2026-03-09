@@ -4,6 +4,7 @@ import type { CollabEngineState, TimerProvider } from './CollabEngine.js';
 import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate, CursorData, PeerCursor } from './SyncAdapter.js';
 import { deriveKey, encryptPayload, decryptPayload } from './crypto.js';
+import type { CollabEventJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 
 /**
  * COLLAB TEST COVERAGE MATRIX
@@ -95,9 +96,9 @@ function makeMockClient(): CollabClient & {
   _connect: ReturnType<typeof vi.fn>;
   _disconnect: ReturnType<typeof vi.fn>;
   simulateRoomJoined(data: Record<string, any>): void;
-  simulatePeerJoined(peer: Record<string, any>): void;
+  simulatePeerJoined(peer: PeerInfoJson): void;
   simulatePeerLeft(clientId: string): void;
-  simulateEvent(event: any): void;
+  simulateEvent(event: CollabEventJson): void;
   simulateDisconnect(): void;
   simulateSessionEnded(reason?: string): void;
   simulateOwnerChanged(newOwnerClientId: string): void;
@@ -156,14 +157,15 @@ function makeMockClient(): CollabClient & {
     client.options.onConnect?.(data.clientId);
 
     // Self as peer
-    client.options.onPeerJoined?.({
+    const selfPeer: PeerInfoJson = {
       clientId: data.clientId,
       username: mock._username,
       avatarUrl: '',
       clientType: 'browser',
       isActive: true,
       metadata: mock._metadata || {},
-    } as any);
+    };
+    client.options.onPeerJoined?.(selfPeer);
 
     // Existing peers
     if (data.peers) {
@@ -174,7 +176,7 @@ function makeMockClient(): CollabClient & {
 
     // onEvent with roomJoined (Room fields nested under .room)
     // peers is now a map keyed by clientId (matching proto wire format)
-    const peersMap: Record<string, any> = {};
+    const peersMap: { [key: string]: PeerInfoJson } = {};
     for (const p of data.peers ?? []) {
       peersMap[p.clientId] = p;
     }
@@ -193,8 +195,8 @@ function makeMockClient(): CollabClient & {
     });
   };
 
-  mock.simulatePeerJoined = (peer: Record<string, any>) => {
-    client.options.onPeerJoined?.(peer as any);
+  mock.simulatePeerJoined = (peer: PeerInfoJson) => {
+    client.options.onPeerJoined?.(peer);
   };
 
   mock.simulatePeerLeft = (clientId: string) => {
@@ -203,7 +205,7 @@ function makeMockClient(): CollabClient & {
     client.options.onEvent?.({ peerLeft: { clientId } });
   };
 
-  mock.simulateEvent = (event: any) => {
+  mock.simulateEvent = (event: CollabEventJson) => {
     client.options.onEvent?.(event);
   };
 
