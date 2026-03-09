@@ -48,6 +48,11 @@ Guard                  ← composes all security middleware into single Wrap(han
   ├── OriginChecker    ← WebSocket origin allowlist (exact, wildcard, localhost)
   ├── ConnLimiter      ← atomic counter, max concurrent connections (503 when full)
   └── RateLimiter      ← global + per-IP rate limiting with OnRejected callback
+
+CORS                   ← origin-aware CORS (reuses OriginChecker, reflects allowed origins)
+Recovery               ← panic recovery (logs stack trace, returns 500)
+RequestLogger          ← structured HTTP request logging (skip configurable paths)
+ClientIP / TrustedProxy ← trusted proxy-aware IP extraction (anti-spoofing)
 ```
 
 Zero app-specific imports — designed for future lift to servicekit.
@@ -58,9 +63,14 @@ Zero app-specific imports — designed for future lift to servicekit.
 - Optional E2EE — relay never sees plaintext; encryption is client-side
 - `BrowserId` is server-only (not in `PeerInfo`) — used for ownership transfer, not exposed to peers
 - `SessionId` is on `Room`, not `PeerInfo` — redundant per-peer
-- Origin allowlist for WebSocket connections (`RELAY_ALLOWED_ORIGINS`)
-- Connection limits (`RELAY_MAX_CONNECTIONS`, default 500)
-- Rate limiting: global (`RELAY_GLOBAL_RATE`, default 100/s), per-IP (`RELAY_PER_IP_RATE`, default 5/s), per-client messages (30/s)
+- **Origin allowlist** for WebSocket and CORS (`RELAY_ALLOWED_ORIGINS`)
+- **CORS**: reflects allowed origins instead of `Access-Control-Allow-Origin: *`; disallowed origins get no CORS headers
+- **Connection limits** (`RELAY_MAX_CONNECTIONS`, default 500)
+- **Rate limiting**: global (`RELAY_GLOBAL_RATE`, default 100/s), per-IP (`RELAY_PER_IP_RATE`, default 5/s), per-client messages (30/s)
+- **Trusted proxy**: `RELAY_TRUSTED_PROXIES` controls which proxies can set `X-Forwarded-For`; prevents IP spoofing to bypass rate limits
+- **Panic recovery**: catches handler panics, logs stack trace, returns 500 (keeps server alive)
+- **Server timeouts**: `ReadHeaderTimeout` (10s, slowloris defense), `IdleTimeout` (120s), `MaxHeaderBytes` (64KB)
+- **WebSocket keepalive**: servicekit provides 30s ping / 5min pong timeout (detects dead connections)
 
 ## Observability (OpenTelemetry)
 

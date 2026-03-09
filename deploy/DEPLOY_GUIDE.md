@@ -113,6 +113,13 @@ OTEL_SERVICE_NAME=massrelay-r01
 
 # Optional: ship metrics to Grafana Cloud or your own collector
 OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-us-east-0.grafana.net/otlp
+
+# Security (optional but recommended for production)
+RELAY_ALLOWED_ORIGINS=excaliframe.com,*.excaliframe.com,localhost
+RELAY_TRUSTED_PROXIES=172.17.0.0/16,127.0.0.1,::1
+RELAY_MAX_CONNECTIONS=500
+RELAY_GLOBAL_RATE=100
+RELAY_PER_IP_RATE=5
 ```
 
 ### 4. Start
@@ -412,7 +419,45 @@ For local/dev with `RELAY_DOMAIN=localhost`, Caddy serves a self-signed cert.
 - Relay servers are **dumb encrypted pipes** — with E2EE enabled, they never see plaintext
 - No authentication on the relay — session IDs are the only access control
 - `/metrics` is currently unauthenticated — consider firewall rules or Caddy basic auth for production
-- Rate limiting is built in: 100 connections/sec global, 5/sec per IP, 30 msgs/sec per client
+
+### Built-in Protections
+
+| Protection | Config | Default |
+|------------|--------|---------|
+| Global rate limit | `RELAY_GLOBAL_RATE` | 100 conn/sec |
+| Per-IP rate limit | `RELAY_PER_IP_RATE` | 5 conn/sec |
+| Per-client messages | hardcoded | 30 msg/sec |
+| Max connections | `RELAY_MAX_CONNECTIONS` | 500 |
+| Max peers per room | `MaxPeersPerRoom` | 10 |
+| Max message size | hardcoded | 1 MB |
+| Origin allowlist | `RELAY_ALLOWED_ORIGINS` | allow all |
+| Trusted proxies | `RELAY_TRUSTED_PROXIES` | trust all |
+| Panic recovery | always on | catches handler panics, returns 500 |
+| Read header timeout | hardcoded | 10s (slowloris defense) |
+| Idle timeout | hardcoded | 120s |
+| Max header size | hardcoded | 64 KB |
+| WebSocket keepalive | servicekit | 30s ping, 5min pong timeout |
+
+### Origin Allowlist
+
+Set `RELAY_ALLOWED_ORIGINS` to restrict which origins can connect via WebSocket and receive CORS headers:
+
+```bash
+RELAY_ALLOWED_ORIGINS=excaliframe.com,*.excaliframe.com,localhost
+```
+
+Supports exact domains, wildcard subdomains, and `localhost` (any port). When not set, all origins are allowed (development mode).
+
+### Trusted Proxies
+
+Set `RELAY_TRUSTED_PROXIES` to prevent IP spoofing via `X-Forwarded-For`:
+
+```bash
+# Trust Caddy on Docker bridge + localhost
+RELAY_TRUSTED_PROXIES=172.17.0.0/16,127.0.0.1,::1
+```
+
+Only requests from trusted CIDRs have their `X-Forwarded-For` / `X-Real-IP` headers honored. Direct clients that send forged headers are rate-limited by their real IP. When not set, all proxies are trusted (backwards-compatible for single-proxy setups).
 
 ## Troubleshooting
 
@@ -429,7 +474,7 @@ For local/dev with `RELAY_DOMAIN=localhost`, Caddy serves a self-signed cert.
 **High memory usage:**
 - Each room uses ~1-2KB of state. 1000 rooms ≈ 2MB.
 - If memory grows unexpectedly, check for zombie clients: rooms with many peers but no activity
-- Relay logs zombie cleanup: `[STREAM] Cleanup: leaving session ...`
+- Relay logs zombie cleanup: look for `component=stream` in JSON logs
 
 ## File Reference
 
@@ -441,7 +486,13 @@ deploy/
 │   ├── setup-host.sh            ← bootstrap a new VPS (one-time)
 │   └── update-pool.sh           ← rolling update, health check, pool status
 ├── dev/
-│   └── docker-compose.yml       ← dev stack: relay + Grafana LGTM
+│   ├── docker-compose.yml       ← dev stack: relay + Grafana LGTM
+│   └── grafana/
+│       ├── dashboards/
+│       │   └── relay.json       ← pre-provisioned relay metrics dashboard
+│       └── provisioning/
+│           └── dashboards/
+│               └── dashboards.yml  ← Grafana auto-provisioning config
 └── production/
     ├── docker-compose.yml       ← production: Caddy + relay
     ├── Caddyfile                ← Caddy reverse proxy config
