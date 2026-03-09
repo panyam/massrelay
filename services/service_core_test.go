@@ -23,7 +23,7 @@ func TestNewCollabService(t *testing.T) {
 
 func TestGetOrCreateRoom(t *testing.T) {
 	svc := NewCollabService()
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	if room == nil {
 		t.Fatal("expected non-nil room")
 	}
@@ -32,7 +32,7 @@ func TestGetOrCreateRoom(t *testing.T) {
 	}
 
 	// Second call returns same room
-	room2 := svc.GetOrCreateRoom("sess1")
+	room2, _ := svc.GetOrCreateRoom("sess1")
 	if room2 != room {
 		t.Fatal("expected same room instance on second call")
 	}
@@ -48,7 +48,7 @@ func TestGetOrCreateRoom_Concurrent(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			rooms[idx] = svc.GetOrCreateRoom("sess1")
+			rooms[idx], _ = svc.GetOrCreateRoom("sess1")
 		}(i)
 	}
 	wg.Wait()
@@ -170,7 +170,7 @@ func TestJoinRoom_BroadcastsPeerJoined(t *testing.T) {
 	clientId1 := event1.GetRoomJoined().GetClientId()
 
 	// Get client1's send channel to watch for broadcasts
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	client1 := room.Clients[clientId1]
 
 	// Second client joins
@@ -222,7 +222,7 @@ func TestJoinRoom_EmptyUsernameDefaultsToAnonymous(t *testing.T) {
 		t.Fatal("expected RoomJoined event")
 	}
 	// Verify the client was stored with "Anonymous" username
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	client := room.Clients[rj.ClientId]
 	if client.Username != "Anonymous" {
 		t.Fatalf("expected username 'Anonymous', got %s", client.Username)
@@ -247,7 +247,7 @@ func TestLeaveRoom(t *testing.T) {
 	clientId2 := joinAction("Bob")
 
 	// Drain PeerJoined from client1's channel
-	<-svc.GetOrCreateRoom("sess1").Clients[clientId1].SendCh
+	<-svc.GetRoomByID("sess1").Clients[clientId1].SendCh
 
 	// Client2 leaves
 	leaveAction := &pb.CollabAction{
@@ -262,7 +262,7 @@ func TestLeaveRoom(t *testing.T) {
 	}
 
 	// Client1 should receive PeerLeft
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	select {
 	case evt := <-room.Clients[clientId1].SendCh:
 		pl := evt.GetPeerLeft()
@@ -351,7 +351,7 @@ func TestPresenceUpdate(t *testing.T) {
 	clientId2 := joinAction("Bob")
 
 	// Drain PeerJoined from client1
-	<-svc.GetOrCreateRoom("sess1").Clients[clientId1].SendCh
+	<-svc.GetRoomByID("sess1").Clients[clientId1].SendCh
 
 	// Client2 sends presence update
 	presAction := &pb.CollabAction{
@@ -366,7 +366,7 @@ func TestPresenceUpdate(t *testing.T) {
 	}
 
 	// Client1 should receive presence broadcast
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	select {
 	case evt := <-room.Clients[clientId1].SendCh:
 		p := evt.GetPresence()

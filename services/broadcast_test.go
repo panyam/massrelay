@@ -25,7 +25,7 @@ func TestBroadcastSceneUpdate(t *testing.T) {
 	clientId2 := joinAction("Bob")
 
 	// Drain PeerJoined from client1
-	<-svc.GetOrCreateRoom("sess1").Clients[clientId1].SendCh
+	<-svc.GetRoomByID("sess1").Clients[clientId1].SendCh
 
 	// Client2 sends SceneUpdate
 	sceneAction := &pb.CollabAction{
@@ -48,7 +48,7 @@ func TestBroadcastSceneUpdate(t *testing.T) {
 	}
 
 	// Client1 should receive the SceneUpdate event
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	select {
 	case evt := <-room.Clients[clientId1].SendCh:
 		su := evt.GetSceneUpdate()
@@ -93,7 +93,7 @@ func TestBroadcastTextUpdate(t *testing.T) {
 	clientId1 := joinAction("Alice")
 	clientId2 := joinAction("Bob")
 
-	<-svc.GetOrCreateRoom("sess1").Clients[clientId1].SendCh
+	<-svc.GetRoomByID("sess1").Clients[clientId1].SendCh
 
 	textAction := &pb.CollabAction{
 		ClientId: clientId2,
@@ -106,7 +106,7 @@ func TestBroadcastTextUpdate(t *testing.T) {
 		t.Fatalf("broadcast error: %v", err)
 	}
 
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	select {
 	case evt := <-room.Clients[clientId1].SendCh:
 		tu := evt.GetTextUpdate()
@@ -137,7 +137,7 @@ func TestBroadcastSceneInitRequest(t *testing.T) {
 	clientId1 := joinAction("Alice")
 	clientId2 := joinAction("Bob")
 
-	<-svc.GetOrCreateRoom("sess1").Clients[clientId1].SendCh
+	<-svc.GetRoomByID("sess1").Clients[clientId1].SendCh
 
 	initReqAction := &pb.CollabAction{
 		ClientId: clientId2,
@@ -150,7 +150,7 @@ func TestBroadcastSceneInitRequest(t *testing.T) {
 		t.Fatalf("broadcast error: %v", err)
 	}
 
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	select {
 	case evt := <-room.Clients[clientId1].SendCh:
 		if evt.GetSceneInitRequest() == nil {

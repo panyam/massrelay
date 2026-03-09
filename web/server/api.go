@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"runtime"
+	"time"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 
@@ -37,27 +39,44 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 	)
 	// Wrap with rate limiting
 	rawWSHandler := gohttp.WSServe(wsHandler, nil)
+	metrics := h.app.Metrics
 	mux.HandleFunc("/ws/v1/{session_id}/sync", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		// Global connection rate limit
 		if !h.app.globalLimiter.Allow() {
+			metrics.RateLimited.Add(ctx, 1)
 			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
 			return
 		}
 		// Per-IP connection rate limit
 		ip := clientIP(r)
 		if !h.app.getIPLimiter(ip).Allow() {
+			metrics.RateLimited.Add(ctx, 1)
 			http.Error(w, `{"error":"per-IP rate limit exceeded"}`, http.StatusTooManyRequests)
 			return
 		}
+		metrics.ConnectionsTotal.Add(ctx, 1)
 		rawWSHandler(w, r)
 	})
 	log.Println("Registered Collab WebSocket handler at /ws/v1/{session_id}/sync")
 }
 
-// HandleHealth returns a simple health check response.
+// startTime is set when the API handler is created, for uptime reporting.
+var startTime = time.Now()
+
+// HandleHealth returns a health check response with relay stats.
 func (h *ApiHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	svc := h.app.Service
+	rooms, peers := svc.RoomAndPeerCount()
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":         "ok",
+		"uptime_seconds": int(time.Since(startTime).Seconds()),
+		"rooms":          rooms,
+		"peers":          peers,
+		"goroutines":     runtime.NumGoroutine(),
+	})
 }
 
 // HandleListRooms returns all active rooms.

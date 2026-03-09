@@ -83,7 +83,7 @@ func setupTwoClients(t *testing.T, svc *CollabService, sessionId string, metadat
 	}
 	c1 := join("Alice")
 	c2 := join("Bob")
-	drainCh(svc.GetOrCreateRoom(sessionId).Clients[c1].SendCh)
+	drainCh(svc.GetRoomByID(sessionId).Clients[c1].SendCh)
 	return c1, c2
 }
 

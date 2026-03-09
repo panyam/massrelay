@@ -45,6 +45,12 @@ type CollabService struct {
 	// Useful for verifying E2EE — encrypted data appears as base64, plaintext as JSON.
 	// 0 = disabled (default), >0 = number of chars to log.
 	LogPayloads int
+	// Metrics callbacks (set by server layer, nil-safe)
+	OnRoomCreated  func()
+	OnRoomRemoved  func()
+	OnPeerJoined   func()
+	OnPeerLeft     func()
+	OnMessageRelay func(actionType string)
 }
 
 // NewCollabService creates a new CollabService.
@@ -58,15 +64,25 @@ func NewCollabService() *CollabService {
 }
 
 // GetOrCreateRoom returns the room for sessionId, creating it if needed.
-func (s *CollabService) GetOrCreateRoom(sessionId string) *CollabRoom {
+// The second return value indicates whether the room was newly created.
+func (s *CollabService) GetOrCreateRoom(sessionId string) (*CollabRoom, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	room, ok := s.rooms[sessionId]
 	if !ok {
 		room = NewCollabRoom(sessionId)
 		s.rooms[sessionId] = room
+		return room, true
 	}
-	return room
+	return room, false
+}
+
+// GetRoom returns the room for sessionId without creating.
+// Returns nil if the room does not exist.
+func (s *CollabService) GetRoomByID(sessionId string) *CollabRoom {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.rooms[sessionId]
 }
 
 // removeRoom removes an empty room and cleans up hint index. Caller must NOT hold s.mu.
@@ -80,6 +96,9 @@ func (s *CollabService) removeRoom(sessionId string) {
 			if sid == sessionId {
 				delete(s.hintIndex, hint)
 			}
+		}
+		if s.OnRoomRemoved != nil {
+			s.OnRoomRemoved()
 		}
 	}
 }
@@ -161,6 +180,17 @@ func (s *CollabService) HandleAction(ctx context.Context, action *pb.CollabActio
 	}
 }
 
+// RoomAndPeerCount returns the number of active rooms and total connected peers.
+func (s *CollabService) RoomAndPeerCount() (rooms, peers int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rooms = len(s.rooms)
+	for _, r := range s.rooms {
+		peers += r.ClientCount()
+	}
+	return
+}
+
 // GetRoom returns information about a room identified by req.SessionId.
 // Returns a GetRoomResponse with peers, owner, metadata, encryption status, and title.
 // Returns an error if the room does not exist.
@@ -236,7 +266,10 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 		s.mu.Unlock()
 	}
 
-	room := s.GetOrCreateRoom(sessionId)
+	room, isNew := s.GetOrCreateRoom(sessionId)
+	if isNew && s.OnRoomCreated != nil {
+		s.OnRoomCreated()
+	}
 
 	// Participant limit check — return graceful ErrorEvent, not a stream-killing error
 	if s.MaxPeersPerRoom > 0 && room.ClientCount() >= s.MaxPeersPerRoom {
@@ -301,6 +334,9 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 		SendCh:    make(chan *pb.CollabEvent, 64),
 	}
 	room.AddClient(client)
+	if s.OnPeerJoined != nil {
+		s.OnPeerJoined()
+	}
 
 	// Set room ownership and metadata
 	room.mu.Lock()
@@ -376,6 +412,9 @@ func (s *CollabService) handleLeave(ctx context.Context, action *pb.CollabAction
 	room.mu.RUnlock()
 
 	room.RemoveClient(clientId)
+	if s.OnPeerLeft != nil {
+		s.OnPeerLeft()
+	}
 	remainingCount := room.ClientCount()
 
 	if isOwner && remainingCount > 0 {
@@ -552,6 +591,10 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 	targetCount := room.ClientCount() - 1
 	log.Printf("[RELAY] Broadcasting %T from client=%s to %d peers in room=%s", event.Event, clientId, targetCount, room.SessionId)
 	room.BroadcastExcept(event, clientId)
+
+	if s.OnMessageRelay != nil {
+		s.OnMessageRelay(fmt.Sprintf("%T", action.Action))
+	}
 
 	return nil, nil
 }

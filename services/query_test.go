@@ -158,7 +158,7 @@ func TestCollabClientEmbedsPeerInfo(t *testing.T) {
 	}
 	clientId := event.GetRoomJoined().GetClientId()
 
-	room := svc.GetOrCreateRoom("sess-embed")
+	room, _ := svc.GetOrCreateRoom("sess-embed")
 	client := room.Clients[clientId]
 
 	// Verify PeerInfo is embedded and fields are promoted
@@ -214,7 +214,7 @@ func TestGetPeerInfo_ReturnsEmbeddedPeerInfo(t *testing.T) {
 		},
 	})
 
-	room := svc.GetOrCreateRoom("sess-pi")
+	room, _ := svc.GetOrCreateRoom("sess-pi")
 	peers := room.GetPeerInfo()
 	if len(peers) != 1 {
 		t.Fatalf("expected 1 peer, got %d", len(peers))
@@ -237,7 +237,7 @@ func TestRoomToProto(t *testing.T) {
 	joinAsOwner(svc, ctx, "sess-proto", "Alice", "browser-1")
 	joinAsFollower(svc, ctx, "sess-proto", "Bob", "browser-2")
 
-	room := svc.GetOrCreateRoom("sess-proto")
+	room, _ := svc.GetOrCreateRoom("sess-proto")
 	room.mu.Lock()
 	room.Metadata = map[string]string{"tool": "whiteboard"}
 	room.Title = "Design Session"

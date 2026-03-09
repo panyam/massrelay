@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"os"
@@ -8,7 +9,10 @@ import (
 	"sync"
 	"time"
 
+	relaytelem "github.com/panyam/massrelay/otel"
 	"github.com/panyam/massrelay/services"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 )
 
@@ -42,6 +46,7 @@ func DefaultRateLimitConfig() RateLimitConfig {
 type RelayApp struct {
 	Service       *services.CollabService
 	RateLimit     RateLimitConfig
+	Metrics       *relaytelem.Metrics
 	mux           *http.ServeMux
 	globalLimiter *rate.Limiter
 	ipLimiters    map[string]*ipLimiterEntry
@@ -64,13 +69,32 @@ func NewRelayApp() *RelayApp {
 			svc.LogPayloads = n
 		}
 	}
+	metrics := relaytelem.NewMetrics()
 	app := &RelayApp{
 		Service:       svc,
 		RateLimit:     cfg,
+		Metrics:       metrics,
 		mux:           http.NewServeMux(),
 		globalLimiter: rate.NewLimiter(rate.Limit(cfg.GlobalConnPerSec), int(cfg.GlobalConnPerSec)),
 		ipLimiters:    make(map[string]*ipLimiterEntry),
 	}
+
+	// Wire service callbacks to OTEL metrics
+	ctx := context.Background()
+	svc.OnRoomCreated = func() { metrics.RoomsActive.Add(ctx, 1) }
+	svc.OnRoomRemoved = func() { metrics.RoomsActive.Add(ctx, -1) }
+	svc.OnPeerJoined = func() {
+		metrics.PeersActive.Add(ctx, 1)
+		metrics.JoinsTotal.Add(ctx, 1)
+	}
+	svc.OnPeerLeft = func() {
+		metrics.PeersActive.Add(ctx, -1)
+		metrics.LeavesTotal.Add(ctx, 1)
+	}
+	svc.OnMessageRelay = func(actionType string) {
+		metrics.MessagesTotal.Add(ctx, 1, metric.WithAttributes(attribute.String("type", actionType)))
+	}
+
 	// Background cleanup of stale per-IP limiters
 	go app.cleanupIPLimiters()
 	return app

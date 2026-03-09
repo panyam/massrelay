@@ -44,10 +44,19 @@
 - Multi-instance session support via memberlist + gRPC
 - See `docs/DISTRIBUTED_RELAY_ARCHITECTURE.md` for full design
 
+## Recently Completed
+
+### OpenTelemetry Instrumentation
+- [x] OTEL metrics setup (`otel/` package) with OTLP + Prometheus exporters
+- [x] Relay metrics: rooms, peers, connections, messages, rate limits, dropped messages
+- [x] Enriched `/health` endpoint (uptime, rooms, peers, goroutines)
+- [x] Service callbacks for metric instrumentation (decoupled from core service)
+- [x] Zero-config: no-op when OTEL env vars not set
+
 ## Future
 
 - Auto-reconnect with session validation (currently disabled to prevent phantom sessions)
 - `ListRooms` REST endpoint (exists in code, intentionally not registered to prevent session enumeration)
 - Binary protobuf transport (instead of JSON over WebSocket)
 - Python/Node client libraries
-- Observability (metrics, tracing)
+- OTEL tracing (message flow through relay)

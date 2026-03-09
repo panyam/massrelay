@@ -48,6 +48,35 @@ All wire types are defined in `protos/massrelay/v1/models/collab.proto`.
 - `BrowserId` is server-only (not in `PeerInfo`) — used for ownership transfer, not exposed to peers
 - `SessionId` is on `Room`, not `PeerInfo` — redundant per-peer
 
+## Observability (OpenTelemetry)
+
+The relay supports OTEL metrics, configured entirely via environment variables:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — enables OTLP export (e.g. Grafana Cloud)
+- `OTEL_SERVICE_NAME` — defaults to "massrelay"
+- `OTEL_METRICS_PROMETHEUS=true` — serves `/metrics` for Prometheus scraping
+
+If unconfigured, OTEL is a no-op (zero overhead).
+
+### Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `relay.rooms.active` | UpDownCounter | Active rooms |
+| `relay.peers.active` | UpDownCounter | Connected peers |
+| `relay.connections.total` | Counter | WebSocket connections |
+| `relay.messages.total` | Counter | Messages relayed (with `type` attribute) |
+| `relay.joins.total` / `relay.leaves.total` | Counter | Room joins/leaves |
+| `relay.rate_limited.total` | Counter | Rate-limited requests |
+| `relay.messages.dropped` | Counter | Dropped messages (full channel) |
+| `relay.message.size` | Histogram | Message payload size |
+
+### Architecture
+
+Metrics are wired via callbacks on `CollabService` (`OnRoomCreated`, `OnRoomRemoved`, `OnPeerJoined`, `OnPeerLeft`, `OnMessageRelay`), keeping the OTEL dependency in the server layer (`web/server/app.go`) rather than the core service. The `otel/` package provides setup and metric instrument creation.
+
+The `/health` endpoint returns enriched stats: `status`, `uptime_seconds`, `rooms`, `peers`, `goroutines`.
+
 ## Broadcast Model
 
 - `BroadcastToAll` / `BroadcastExcept` — non-blocking channel sends (cap 64)
