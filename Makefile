@@ -8,17 +8,26 @@ test-ts:
 	cd ts && npm test
 	npx vitest run
 
-## Local observability
+## Local dev stack (relay + Grafana in Docker)
 
-otel-up: ## Start local Grafana LGTM stack (metrics, logs, traces)
-	docker compose -f deploy/local/docker-compose.yml up -d
+local-up: ## Build and start relay + Grafana LGTM stack
+	docker compose -f deploy/local/docker-compose.yml up -d --build
+	@echo ""
+	@echo "Relay:   http://localhost:8787"
 	@echo "Grafana: http://localhost:3000"
-	@echo "OTLP:    http://localhost:4318"
 
-otel-down: ## Stop local Grafana LGTM stack
+local-down: ## Stop relay + Grafana LGTM stack
 	docker compose -f deploy/local/docker-compose.yml down
 
-run-otel: ## Run relay with OTEL metrics → local Grafana stack
+local-logs: ## Tail relay logs
+	docker compose -f deploy/local/docker-compose.yml logs -f relay
+
+local-rebuild: ## Rebuild relay image and restart
+	docker compose -f deploy/local/docker-compose.yml up -d --build relay
+
+## Run relay natively with OTEL (no Docker for relay)
+
+run-otel: ## Run relay natively with OTEL metrics → local Grafana stack
 	OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
 	OTEL_SERVICE_NAME=massrelay-local \
 	OTEL_METRICS_PROMETHEUS=true \

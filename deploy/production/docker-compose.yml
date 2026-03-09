@@ -1,23 +1,48 @@
-## Production relay server deployment.
+## Production relay server deployment with Caddy reverse proxy.
 ##
 ## Usage:
-##   docker compose up -d                    # start relay
-##   docker compose pull && docker compose up -d  # update to latest
-##   docker compose logs -f relay            # tail logs
+##   cp .env.example .env   # configure domain, OTEL, etc.
+##   docker compose up -d   # start everything
+##   docker compose logs -f # tail all logs
 ##
-## Required: set OTEL_EXPORTER_OTLP_ENDPOINT in .env or environment
-## if you want metrics shipped to a remote collector (e.g. Grafana Cloud).
+## Caddy provides:
+##   - Auto TLS via Let's Encrypt (just set RELAY_DOMAIN)
+##   - WebSocket proxying (wss://your-domain/ws/...)
+##   - /metrics and /grafana behind basic auth (TODO)
+##
+## Ports exposed:
+##   80/443  — Caddy (relay + Grafana)
 
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - RELAY_DOMAIN=${RELAY_DOMAIN:-localhost}
+    depends_on:
+      - relay
+
   relay:
     build:
       context: ../..
       dockerfile: Dockerfile
     restart: always
-    network_mode: host
+    expose:
+      - "8787"
     environment:
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-massrelay}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
-      - OTEL_METRICS_PROMETHEUS=${OTEL_METRICS_PROMETHEUS:-true}
+      - OTEL_METRICS_PROMETHEUS=true
       - RELAY_LOG_PAYLOADS=${RELAY_LOG_PAYLOADS:-0}
-    command: ["-port", "${RELAY_PORT:-8787}"]
+    command: ["-port", "8787"]
+
+volumes:
+  caddy_data:
+  caddy_config:
