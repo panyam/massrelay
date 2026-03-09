@@ -5,6 +5,43 @@ import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate, CursorData, PeerCursor } from './SyncAdapter.js';
 import { deriveKey, encryptPayload, decryptPayload } from './crypto.js';
 
+/**
+ * COLLAB TEST COVERAGE MATRIX
+ *
+ * User Flow                        | Unit Test (this file)            | E2E Test                                          | Browser-only (not tested here)
+ * ---------------------------------|----------------------------------|---------------------------------------------------|-------------------------------
+ * Owner starts sharing             | lifecycle: connect → RoomJoined  | test_share_owner::test_start_sharing                | SharePanel DOM, toolbar click
+ * Follower joins session           | scene init: request + response   | test_join_follower::test_join_via_link               | JoinPage form, IndexedDB seed
+ * Owner draws → follower sees      | two-peer sync: owner→follower    | test_collab_sync::test_owner_draws_follower_sees     | Canvas render, Excalidraw API
+ * Follower draws → owner sees      | two-peer sync: follower→owner    | test_collab_sync::test_follower_draws_owner_sees     | Canvas render, Excalidraw API
+ * Cursor visible across peers      | cursor round-trip                | test_collab_cursors::test_owner_sees_follower_cursor | Excalidraw collaborator overlay
+ * Encrypted sharing + join         | encryption: round-trip, wrong key| test_encryption::test_encrypted_share_and_join       | Password input DOM, JoinPage
+ * Owner stops sharing              | session ended                    | test_collab_sync::test_stop_sharing_disconnects_*    | SharePanel reverts to "Share"
+ * Owner disconnect → transfer      | owner changed                   | (none)                                              | Tab detection, localStorage
+ * Password change mid-session      | credentials changed              | (none)                                              | Reconnect prompt UI
+ * Room full rejection              | error events: ROOM_FULL         | (none)                                              | Error message toast
+ * Mermaid text sync                | text sync round-trip             | (none)                                              | Textarea render, onChange
+ * Room title sync                  | title changed                   | (none)                                              | Title input, header update
+ * Simultaneous edits               | concurrent edits                 | (none)                                              | Visual conflict resolution
+ * 3+ peer owner election           | owner election                  | (none)                                              | N/A (transparent to user)
+ * Late adapter (async editor load) | late-bound adapter               | (none)                                              | Excalidraw chunk loading
+ * Debounce during drag             | debounce batching               | (none)                                              | Drag performance
+ * Cursor throttle during fast move | cursor throttling               | (none)                                              | Pointer event frequency
+ * Peer list updates                | peer tracking                   | test_collab_sync::test_peer_count_updates            | Badge DOM, colored dots
+ * Cross-browser compatibility      | (N/A — protocol-level)          | test_cross_browser_collab::test_cross_browser_sync   | Firefox rendering
+ *
+ * Browser-only concerns NOT tested here:
+ * - DOM rendering (SharePanel, CollabBadge, JoinPage, FloatingToolbar)
+ * - Excalidraw canvas rendering and updateScene() visual output
+ * - IndexedDB persistence (drawing storage)
+ * - Clipboard API (copy join link)
+ * - WebSocket transport (real GRPCWSClient)
+ * - React component lifecycle (mount/unmount/rerender)
+ * - localStorage/sessionStorage side effects
+ *
+ * These are covered by E2E tests (Playwright) and excaliframe unit tests (jsdom).
+ */
+
 // ─── Immediate timers for deterministic tests ───
 
 function makeImmediateTimers(): TimerProvider & { flush(): void; pending: Array<() => void> } {
@@ -222,7 +259,11 @@ describe('CollabEngine', () => {
     timers = makeImmediateTimers();
   });
 
-  // 1. State machine lifecycle
+  /**
+   * @flow User opens Share → "Connecting..." → "Sharing Active" → Stop Sharing
+   * @browser SharePanel state indicators, toolbar click interactions
+   * @e2e test_share_owner.py::test_start_sharing, test_share_owner.py::test_stop_sharing
+   */
   describe('lifecycle', () => {
     it('starts in disconnected state', () => {
       const client = makeMockClient();
@@ -282,7 +323,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 2. Two-peer sync
+  /**
+   * @flow Owner draws rectangle → follower sees it (and vice versa)
+   * @browser Canvas rendering via Excalidraw updateScene() / textarea onChange
+   * @e2e test_collab_sync.py::test_owner_draws_follower_sees, test_collab_sync.py::test_follower_draws_owner_sees
+   */
   describe('two-peer sync', () => {
     it('owner notifyLocalChange flushes to follower adapter', () => {
       const ownerClient = makeMockClient();
@@ -317,9 +362,47 @@ describe('CollabEngine', () => {
       // Follower should receive
       expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { elements: [{ id: 'el-1', data: '{"x":1}' }] });
     });
+
+    it('follower notifyLocalChange flushes to owner adapter', () => {
+      const ownerClient = makeMockClient();
+      const followerClient = makeMockClient();
+      const ownerAdapter = makeMockAdapter();
+      const followerAdapter = makeMockAdapter();
+
+      const ownerEngine = new CollabEngine({ client: ownerClient, adapter: ownerAdapter, timers });
+      const followerEngine = new CollabEngine({ client: followerClient, adapter: followerAdapter, timers });
+
+      // Connect owner
+      ownerEngine.connect({ relayUrl: 'ws://test', sessionId: '', username: 'Owner', metadata: { tool: 'excalidraw' }, isOwner: true });
+      ownerClient.simulateRoomJoined({ clientId: 'owner-1', sessionId: 'sess1', ownerClientId: 'owner-1' });
+
+      // Connect follower
+      followerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'excalidraw' } });
+      followerClient.simulateRoomJoined({
+        clientId: 'follower-1',
+        sessionId: 'sess1',
+        ownerClientId: 'owner-1',
+        peers: [{ clientId: 'owner-1', username: 'Owner', avatarUrl: '', clientType: 'browser', isActive: true }],
+      });
+
+      // Wire relay
+      makeMockRelay(ownerClient, followerClient);
+
+      // Follower makes a change
+      followerAdapter._outgoing = { type: 'sceneUpdate', payload: { elements: [{ id: 'el-2', data: '{"y":5}' }] } };
+      followerEngine.notifyLocalChange();
+      timers.flush();
+
+      // Owner should receive
+      expect(ownerAdapter.applyRemote).toHaveBeenCalledWith('follower-1', { elements: [{ id: 'el-2', data: '{"y":5}' }] });
+    });
   });
 
-  // 3. Scene init protocol
+  /**
+   * @flow Follower joins mid-session, receives existing drawing
+   * @browser Canvas populates with elements, Excalidraw updateScene()
+   * @e2e test_join_follower.py::test_join_via_link
+   */
   describe('scene init', () => {
     it('marks initialized immediately when first peer (no others)', () => {
       const client = makeMockClient();
@@ -386,7 +469,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 4. Owner election (lowest clientId excluding requester)
+  /**
+   * @flow 3+ peers — only lowest-ID responds to scene init request (prevents duplicate snapshots)
+   * @browser Transparent to user (prevents duplicate scene init responses)
+   * @e2e None
+   */
   describe('owner election', () => {
     it('lowest clientId among non-requesters responds to sceneInitRequest', () => {
       const client = makeMockClient();
@@ -437,7 +524,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 5. Encryption round-trip
+  /**
+   * @flow Owner enables password → content encrypted on wire → follower decrypts
+   * @browser Password input DOM, JoinPage form, sessionStorage transfer
+   * @e2e test_encryption.py::test_encrypted_share_and_join
+   */
   describe('encryption', () => {
     it('encrypts outgoing and decrypts incoming', async () => {
       const ownerClient = makeMockClient();
@@ -530,7 +621,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 6. Cursor throttling
+  /**
+   * @flow Rapid mouse movement → one cursor send per throttle interval
+   * @browser Pointer events → smooth remote cursor via Excalidraw collaborator overlay
+   * @e2e test_collab_cursors.py (validates cursor appearance, not throttle timing)
+   */
   describe('cursor throttling', () => {
     it('only sends one cursor update per throttle interval', () => {
       const client = makeMockClient();
@@ -560,7 +655,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 7. Debounce batching
+  /**
+   * @flow Drag/resize generates many onChange → batched into single sync message
+   * @browser Drag performance, continuous edit responsiveness
+   * @e2e None
+   */
   describe('debounce', () => {
     it('multiple notifyLocalChange calls result in single flush', () => {
       const client = makeMockClient();
@@ -586,7 +685,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 8. Peer tracking
+  /**
+   * @flow Peer joins → "2 people" badge → peer leaves → "1 person"
+   * @browser SharePanel badge DOM, colored dots
+   * @e2e test_collab_sync.py::test_peer_count_updates
+   */
   describe('peer tracking', () => {
     it('updates peers map on join/leave', () => {
       const client = makeMockClient();
@@ -612,7 +715,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 9. Session ended
+  /**
+   * @flow Owner stops sharing → follower gets "session ended" error
+   * @browser Error message in SharePanel, UI reverts to pre-share state
+   * @e2e test_collab_sync.py::test_stop_sharing_disconnects_follower
+   */
   describe('session ended', () => {
     it('resets state and emits event', () => {
       const client = makeMockClient();
@@ -631,7 +738,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 10. Owner changed
+  /**
+   * @flow Owner's tab closes → another tab becomes owner via OwnerChanged
+   * @browser Tab detection, localStorage ownership transfer
+   * @e2e None
+   */
   describe('owner changed', () => {
     it('updates ownerClientId and isOwner', () => {
       const client = makeMockClient();
@@ -648,7 +759,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 11. Credentials changed
+  /**
+   * @flow Owner changes password → peers get "reconnect required" prompt
+   * @browser Reconnect prompt UI, password re-entry
+   * @e2e None
+   */
   describe('credentials changed', () => {
     it('resets state with password_changed error', () => {
       const client = makeMockClient();
@@ -677,7 +792,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 12. Title changed
+  /**
+   * @flow Owner renames drawing → followers see new title in header
+   * @browser Title input DOM, header title update
+   * @e2e None
+   */
   describe('title changed', () => {
     it('updates roomTitle and emits event', () => {
       const client = makeMockClient();
@@ -695,7 +814,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 13. Error events
+  /**
+   * @flow Room is full → "ROOM_FULL" error shown to joining user
+   * @browser Error toast / message in SharePanel
+   * @e2e None
+   */
   describe('error events', () => {
     it('sets error on ErrorEvent', () => {
       const client = makeMockClient();
@@ -709,7 +832,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 14. Late-bound adapter
+  /**
+   * @flow Engine connects before editor chunk loads → adapter set later triggers scene init
+   * @browser Async Excalidraw chunk loading via React.lazy
+   * @e2e None
+   */
   describe('late-bound adapter', () => {
     it('triggers scene init when adapter is set after connect', () => {
       const client = makeMockClient();
@@ -729,7 +856,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 15. Room info from RoomJoined
+  /**
+   * @flow RoomJoined carries session metadata (encrypted, maxPeers, title)
+   * @browser SharePanel shows encrypted badge, peer limit info
+   * @e2e None
+   */
   describe('room info', () => {
     it('extracts encrypted, maxPeers, title from RoomJoined', () => {
       const client = makeMockClient();
@@ -752,7 +883,11 @@ describe('CollabEngine', () => {
     });
   });
 
-  // 16. removePeerCursor on peerLeft
+  /**
+   * @flow Peer leaves → their cursor disappears from the canvas
+   * @browser Excalidraw removes collaborator dot via updateScene({ collaborators })
+   * @e2e None
+   */
   describe('peer cursor cleanup', () => {
     it('calls removePeerCursor when peer leaves', () => {
       const client = makeMockClient();
@@ -766,6 +901,227 @@ describe('CollabEngine', () => {
       client.simulatePeerLeft('c2');
 
       expect(adapter.removePeerCursor).toHaveBeenCalledWith('c2');
+    });
+  });
+
+  /**
+   * @flow Cursor moves from one peer to the other via relay
+   * @browser Excalidraw collaborator overlay rendering
+   * @e2e test_collab_cursors.py::test_owner_sees_follower_cursor
+   */
+  describe('cursor round-trip', () => {
+    it('cursor moves from one peer to the other via relay', () => {
+      const ownerClient = makeMockClient();
+      const followerClient = makeMockClient();
+      const ownerAdapter = makeMockAdapter();
+      const followerAdapter = makeMockAdapter();
+
+      const ownerEngine = new CollabEngine({ client: ownerClient, adapter: ownerAdapter, timers, cursorThrottleMs: 0 });
+      const followerEngine = new CollabEngine({ client: followerClient, adapter: followerAdapter, timers, cursorThrottleMs: 0 });
+
+      ownerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Owner', metadata: { tool: 'excalidraw' }, isOwner: true });
+      ownerClient.simulateRoomJoined({ clientId: 'owner-1', sessionId: 'sess1', ownerClientId: 'owner-1' });
+      followerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'excalidraw' } });
+      followerClient.simulateRoomJoined({
+        clientId: 'follower-1',
+        sessionId: 'sess1',
+        ownerClientId: 'owner-1',
+        peers: [{ clientId: 'owner-1', username: 'Owner', avatarUrl: '', clientType: 'browser', isActive: true }],
+      });
+
+      makeMockRelay(ownerClient, followerClient);
+
+      // Owner moves cursor
+      ownerAdapter._cursorData = { x: 100, y: 200, tool: 'rectangle' };
+      ownerEngine.notifyCursorMove();
+      timers.flush();
+
+      // Follower should receive via applyRemoteCursor
+      expect(followerAdapter.applyRemoteCursor).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'owner-1', x: 100, y: 200, tool: 'rectangle' }),
+      );
+    });
+
+    it('cursorUpdate resolves username from peers map', () => {
+      const ownerClient = makeMockClient();
+      const followerClient = makeMockClient();
+      const ownerAdapter = makeMockAdapter();
+      const followerAdapter = makeMockAdapter();
+
+      const ownerEngine = new CollabEngine({ client: ownerClient, adapter: ownerAdapter, timers, cursorThrottleMs: 0 });
+      const followerEngine = new CollabEngine({ client: followerClient, adapter: followerAdapter, timers, cursorThrottleMs: 0 });
+
+      ownerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Owner', metadata: { tool: 'excalidraw' }, isOwner: true });
+      ownerClient.simulateRoomJoined({ clientId: 'owner-1', sessionId: 'sess1', ownerClientId: 'owner-1' });
+
+      followerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'excalidraw' } });
+      followerClient.simulateRoomJoined({
+        clientId: 'follower-1',
+        sessionId: 'sess1',
+        ownerClientId: 'owner-1',
+        peers: [{ clientId: 'owner-1', username: 'Owner', avatarUrl: '', clientType: 'browser', isActive: true }],
+      });
+
+      // Simulate cursor event from owner (with known username in peers map)
+      followerClient.simulateEvent({
+        cursorUpdate: { x: 50, y: 75, tool: 'pointer' },
+        fromClientId: 'owner-1',
+      });
+
+      // Username should come from peers map, not fallback clientId.slice(0,6)
+      expect(followerAdapter.applyRemoteCursor).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'owner-1', username: 'Owner', x: 50, y: 75 }),
+      );
+    });
+  });
+
+  /**
+   * @flow Mermaid text update flows through relay between adapters
+   * @browser Textarea render, onChange callback
+   * @e2e None (highest-priority gap — no Mermaid collab E2E exists)
+   */
+  describe('text sync', () => {
+    it('text update flows through relay between mermaid adapters', () => {
+      const ownerClient = makeMockClient();
+      const followerClient = makeMockClient();
+      const ownerAdapter = makeMockAdapter({ tool: 'mermaid' });
+      const followerAdapter = makeMockAdapter({ tool: 'mermaid' });
+
+      const ownerEngine = new CollabEngine({ client: ownerClient, adapter: ownerAdapter, timers });
+      const followerEngine = new CollabEngine({ client: followerClient, adapter: followerAdapter, timers });
+
+      ownerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Owner', metadata: { tool: 'mermaid' }, isOwner: true });
+      ownerClient.simulateRoomJoined({ clientId: 'owner-1', sessionId: 'sess1', ownerClientId: 'owner-1' });
+      followerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'mermaid' } });
+      followerClient.simulateRoomJoined({
+        clientId: 'follower-1',
+        sessionId: 'sess1',
+        ownerClientId: 'owner-1',
+        peers: [{ clientId: 'owner-1', username: 'Owner', avatarUrl: '', clientType: 'browser', isActive: true }],
+      });
+
+      makeMockRelay(ownerClient, followerClient);
+
+      // Owner sends text update
+      ownerAdapter._outgoing = { type: 'textUpdate', payload: { text: 'flowchart TD\n    A --> B --> C', version: 1 } };
+      ownerEngine.notifyLocalChange();
+      timers.flush();
+
+      // Follower should receive the text
+      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { text: 'flowchart TD\n    A --> B --> C', version: 1 });
+    });
+  });
+
+  /**
+   * @flow Both peers flush changes at the same time — both should receive each other's data
+   * @browser Visual conflict resolution handled by adapter reconciliation
+   * @e2e None
+   */
+  describe('concurrent edits', () => {
+    it('both peers can flush changes simultaneously', () => {
+      const ownerClient = makeMockClient();
+      const followerClient = makeMockClient();
+      const ownerAdapter = makeMockAdapter();
+      const followerAdapter = makeMockAdapter();
+
+      const ownerEngine = new CollabEngine({ client: ownerClient, adapter: ownerAdapter, timers });
+      const followerEngine = new CollabEngine({ client: followerClient, adapter: followerAdapter, timers });
+
+      ownerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Owner', metadata: { tool: 'excalidraw' }, isOwner: true });
+      ownerClient.simulateRoomJoined({ clientId: 'owner-1', sessionId: 'sess1', ownerClientId: 'owner-1' });
+      followerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'excalidraw' } });
+      followerClient.simulateRoomJoined({
+        clientId: 'follower-1',
+        sessionId: 'sess1',
+        ownerClientId: 'owner-1',
+        peers: [{ clientId: 'owner-1', username: 'Owner', avatarUrl: '', clientType: 'browser', isActive: true }],
+      });
+
+      makeMockRelay(ownerClient, followerClient);
+
+      // Both peers have outgoing changes
+      ownerAdapter._outgoing = { type: 'sceneUpdate', payload: { elements: [{ id: 'el-A', data: '{"owner":true}' }] } };
+      followerAdapter._outgoing = { type: 'sceneUpdate', payload: { elements: [{ id: 'el-B', data: '{"follower":true}' }] } };
+
+      // Both notify
+      ownerEngine.notifyLocalChange();
+      followerEngine.notifyLocalChange();
+      timers.flush();
+
+      // Owner should receive follower's data
+      expect(ownerAdapter.applyRemote).toHaveBeenCalledWith('follower-1', { elements: [{ id: 'el-B', data: '{"follower":true}' }] });
+      // Follower should receive owner's data
+      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { elements: [{ id: 'el-A', data: '{"owner":true}' }] });
+    });
+  });
+
+  /**
+   * @flow Encrypted scene init: follower joins → sceneInitRequest → owner sends encrypted snapshot → follower decrypts
+   * @browser Password prompt, scene population
+   * @e2e test_encryption.py::test_encrypted_share_and_join (covers full flow including scene init)
+   */
+  describe('encrypted scene init', () => {
+    it('scene init snapshot is encrypted and decrypted', async () => {
+      const ownerClient = makeMockClient();
+      const followerClient = makeMockClient();
+      const ownerAdapter = makeMockAdapter();
+      const followerAdapter = makeMockAdapter();
+      ownerAdapter.getSceneSnapshot = vi.fn(() => '{"elements":[{"id":"secret-el"}]}');
+
+      const key = await deriveKey('password123', 'sess1');
+
+      const ownerEngine = new CollabEngine({ client: ownerClient, adapter: ownerAdapter, timers });
+      const followerEngine = new CollabEngine({ client: followerClient, adapter: followerAdapter, timers });
+
+      ownerEngine.setEncryptionKey(key);
+      followerEngine.setEncryptionKey(key);
+
+      // Owner connects first (alone)
+      ownerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Owner', metadata: { tool: 'excalidraw' }, isOwner: true });
+      ownerClient.simulateRoomJoined({ clientId: 'aaa-owner', sessionId: 'sess1', ownerClientId: 'aaa-owner', encrypted: true });
+
+      // Add follower to owner's peer list
+      ownerClient.simulatePeerJoined({ clientId: 'bbb-follower', username: 'Follower', avatarUrl: '', clientType: 'browser', isActive: true });
+
+      // Capture owner's sends to manually verify encryption and route
+      const ownerSends: any[] = [];
+      ownerClient._send.mockImplementation((action: any) => {
+        ownerSends.push(action);
+        // Route sceneInitResponse to follower
+        if (action.sceneInitResponse) {
+          followerClient.simulateEvent({
+            sceneInitResponse: action.sceneInitResponse,
+            fromClientId: 'aaa-owner',
+          });
+        }
+      });
+
+      // Follower connects (triggers sceneInitRequest → routed to owner)
+      followerClient._send.mockImplementation((action: any) => {
+        // Route sceneInitRequest to owner
+        ownerClient.simulateEvent({ ...action, fromClientId: 'bbb-follower' });
+      });
+
+      followerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'excalidraw' } });
+      followerClient.simulateRoomJoined({
+        clientId: 'bbb-follower',
+        sessionId: 'sess1',
+        ownerClientId: 'aaa-owner',
+        encrypted: true,
+        peers: [{ clientId: 'aaa-owner', username: 'Owner', avatarUrl: '', clientType: 'browser', isActive: true }],
+      });
+
+      // Wait for async encryption/decryption
+      await new Promise(r => setTimeout(r, 100));
+
+      // Owner should have encrypted the snapshot
+      const initResponse = ownerSends.find(s => s.sceneInitResponse);
+      expect(initResponse).toBeDefined();
+      expect(initResponse.sceneInitResponse.payload).not.toBe('{"elements":[{"id":"secret-el"}]}');
+
+      // Follower should have decrypted and applied the scene init
+      expect(followerAdapter.applySceneInit).toHaveBeenCalledWith('{"elements":[{"id":"secret-el"}]}');
+      expect(followerEngine.state.isInitialized).toBe(true);
     });
   });
 });
