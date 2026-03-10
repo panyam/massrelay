@@ -2,6 +2,7 @@
 	# Relay API + WebSocket
 	reverse_proxy /ws/* relay:8787
 	reverse_proxy /api/* relay:8787
+	reverse_proxy /admin/* relay:8787
 	reverse_proxy /health relay:8787
 	reverse_proxy /metrics relay:8787
 }
