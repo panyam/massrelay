@@ -29,6 +29,7 @@ type RelayApp struct {
 	Metrics       *relaytelem.Metrics
 	Guard         *middleware.Guard
 	OriginChecker *middleware.OriginChecker
+	AdminToken    string // bearer token for /admin/* endpoints; empty = admin API disabled
 	mux           *http.ServeMux
 	handler       http.Handler // mux wrapped with CORS
 }
@@ -47,6 +48,7 @@ type RelayApp struct {
 //	RELAY_MAX_CONNECTIONS=N     — max concurrent WebSocket connections (0 = unlimited, default 500)
 //	RELAY_GLOBAL_RATE=N         — max WebSocket connections/sec globally (default 100)
 //	RELAY_PER_IP_RATE=N         — max WebSocket connections/sec per IP (default 5)
+//	RELAY_ADMIN_TOKEN=...       — bearer token for /admin/* endpoints (required to enable admin API)
 func NewRelayApp() *RelayApp {
 	svc := services.NewCollabService()
 
@@ -114,11 +116,17 @@ func NewRelayApp() *RelayApp {
 		}
 	}
 
+	adminToken := os.Getenv("RELAY_ADMIN_TOKEN")
+	if adminToken != "" {
+		slog.Info("Admin API enabled", "path", "/admin/*")
+	}
+
 	app := &RelayApp{
 		Service:       svc,
 		Metrics:       metrics,
 		Guard:         guard,
 		OriginChecker: originChecker,
+		AdminToken:    adminToken,
 		mux:           http.NewServeMux(),
 	}
 

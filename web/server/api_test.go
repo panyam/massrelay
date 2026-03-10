@@ -16,6 +16,16 @@ func newTestApp(t *testing.T) *RelayApp {
 	return app
 }
 
+func newTestAppWithAdmin(t *testing.T, token string) *RelayApp {
+	t.Helper()
+	app := NewRelayApp()
+	app.AdminToken = token
+	if err := app.Init(); err != nil {
+		t.Fatalf("app init error: %v", err)
+	}
+	return app
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	app := newTestApp(t)
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -108,6 +118,129 @@ func TestCORSHeaders(t *testing.T) {
 			t.Fatalf("expected no ACAO without Origin, got %q", got)
 		}
 	})
+}
+
+// --- Admin endpoint tests ---
+
+func TestAdminStatus_NoToken(t *testing.T) {
+	app := newTestApp(t) // no admin token
+	req := httptest.NewRequest("GET", "/admin/status", nil)
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+	// Admin routes not registered when token is empty
+	if w.Code == http.StatusOK {
+		t.Fatal("expected admin endpoint to not be registered without token")
+	}
+}
+
+func TestAdminStatus_Unauthorized(t *testing.T) {
+	app := newTestAppWithAdmin(t, "secret-token-123")
+
+	t.Run("no auth header", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/admin/status", nil)
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("wrong token", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/admin/status", nil)
+		req.Header.Set("Authorization", "Bearer wrong-token")
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("no Bearer prefix", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/admin/status", nil)
+		req.Header.Set("Authorization", "secret-token-123")
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", w.Code)
+		}
+	})
+}
+
+func TestAdminStatus_Authorized(t *testing.T) {
+	app := newTestAppWithAdmin(t, "secret-token-123")
+	req := httptest.NewRequest("GET", "/admin/status", nil)
+	req.Header.Set("Authorization", "Bearer secret-token-123")
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var body map[string]any
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["status"] != "ok" {
+		t.Fatalf("expected status ok, got %v", body["status"])
+	}
+	if _, ok := body["room_details"]; !ok {
+		t.Fatal("expected room_details in response")
+	}
+	if _, ok := body["uptime_seconds"]; !ok {
+		t.Fatal("expected uptime_seconds in response")
+	}
+}
+
+func TestAdminListRooms_Authorized(t *testing.T) {
+	app := newTestAppWithAdmin(t, "secret-token-123")
+	req := httptest.NewRequest("GET", "/admin/rooms", nil)
+	req.Header.Set("Authorization", "Bearer secret-token-123")
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var body map[string]any
+	json.NewDecoder(w.Body).Decode(&body)
+	if _, ok := body["rooms"]; !ok {
+		t.Fatal("expected rooms key in response")
+	}
+}
+
+func TestAdminGetRoom_NotFound(t *testing.T) {
+	app := newTestAppWithAdmin(t, "secret-token-123")
+	req := httptest.NewRequest("GET", "/admin/rooms/nonexistent", nil)
+	req.Header.Set("Authorization", "Bearer secret-token-123")
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestAdminTimingAttack(t *testing.T) {
+	// Verify constant-time comparison is used (functional test, not timing)
+	app := newTestAppWithAdmin(t, "correct-token")
+
+	// Short wrong token
+	req := httptest.NewRequest("GET", "/admin/status", nil)
+	req.Header.Set("Authorization", "Bearer x")
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for short token, got %d", w.Code)
+	}
+
+	// Long wrong token
+	req = httptest.NewRequest("GET", "/admin/status", nil)
+	req.Header.Set("Authorization", "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+	w = httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for long token, got %d", w.Code)
+	}
 }
 
 func TestWSEndpoint_NoUpgrade(t *testing.T) {
