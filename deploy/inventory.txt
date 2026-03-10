@@ -1,0 +1,8 @@
+# Massrelay Relay Pool Inventory
+#
+# Format: <domain>  <provider>  <region>  <ip>  <monthly-cost>
+#
+# Example:
+# r01.relay.excaliframe.com    hetzner     eu-central    49.12.x.x      €3.29
+# r02.relay.excaliframe.com    ionos       us-east       85.215.x.x     $1.00
+# r03.relay.excaliframe.com    oracle      ap-south      132.145.x.x    $0.00

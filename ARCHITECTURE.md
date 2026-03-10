@@ -41,12 +41,95 @@ All wire types are defined in `protos/massrelay/v1/models/collab.proto`.
 
 - **JSON types in TypeScript**: `buf.gen.yaml` uses `json_types=true` to generate `CollabEventJson`, `PeerInfoJson`, etc. — types that match the raw JSON wire format. This eliminates `any` in the TS client without requiring `fromJson()`/`toJson()` deserialization. See Issue #9 for the future migration to canonical Message types.
 
+### Security Middleware (`web/middleware/`)
+
+```
+Guard                  ← composes all security middleware into single Wrap(handler)
+  ├── OriginChecker    ← WebSocket origin allowlist (exact, wildcard, localhost)
+  ├── ConnLimiter      ← atomic counter, max concurrent connections (503 when full)
+  └── RateLimiter      ← global + per-IP rate limiting with OnRejected callback
+
+CORS                   ← origin-aware CORS (reuses OriginChecker, reflects allowed origins)
+Recovery               ← panic recovery (logs stack trace, returns 500)
+RequestLogger          ← structured HTTP request logging (skip configurable paths)
+ClientIP / TrustedProxy ← trusted proxy-aware IP extraction (anti-spoofing)
+```
+
+Zero app-specific imports — designed for future lift to servicekit.
+
 ## Security Model
 
 - No authentication — session IDs are the only access control
 - Optional E2EE — relay never sees plaintext; encryption is client-side
 - `BrowserId` is server-only (not in `PeerInfo`) — used for ownership transfer, not exposed to peers
 - `SessionId` is on `Room`, not `PeerInfo` — redundant per-peer
+- **Origin allowlist** for WebSocket and CORS (`RELAY_ALLOWED_ORIGINS`)
+- **CORS**: reflects allowed origins instead of `Access-Control-Allow-Origin: *`; disallowed origins get no CORS headers
+- **Connection limits** (`RELAY_MAX_CONNECTIONS`, default 500)
+- **Rate limiting**: global (`RELAY_GLOBAL_RATE`, default 100/s), per-IP (`RELAY_PER_IP_RATE`, default 5/s), per-client messages (30/s)
+- **Trusted proxy**: `RELAY_TRUSTED_PROXIES` controls which proxies can set `X-Forwarded-For`; prevents IP spoofing to bypass rate limits
+- **Panic recovery**: catches handler panics, logs stack trace, returns 500 (keeps server alive)
+- **Server timeouts**: `ReadHeaderTimeout` (10s, slowloris defense), `IdleTimeout` (120s), `MaxHeaderBytes` (64KB)
+- **WebSocket keepalive**: servicekit provides 30s ping / 5min pong timeout (detects dead connections)
+
+## Observability (OpenTelemetry)
+
+The relay supports OTEL metrics, configured entirely via environment variables:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — enables OTLP export (e.g. Grafana Cloud)
+- `OTEL_SERVICE_NAME` — defaults to "massrelay"
+- `OTEL_METRICS_PROMETHEUS=true` — serves `/metrics` for Prometheus scraping
+
+If unconfigured, OTEL is a no-op (zero overhead).
+
+### Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `relay.rooms.active` | UpDownCounter | Active rooms |
+| `relay.peers.active` | UpDownCounter | Connected peers |
+| `relay.connections.total` | Counter | WebSocket connections |
+| `relay.messages.total` | Counter | Messages relayed (with `type` attribute) |
+| `relay.joins.total` / `relay.leaves.total` | Counter | Room joins/leaves |
+| `relay.rate_limited.total` | Counter | Rate-limited requests |
+| `relay.messages.dropped` | Counter | Dropped messages (full channel) |
+| `relay.message.size` | Histogram | Message payload size |
+
+### Architecture
+
+Metrics are wired via callbacks on `CollabService` (`OnRoomCreated`, `OnRoomRemoved`, `OnPeerJoined`, `OnPeerLeft`, `OnMessageRelay`), keeping the OTEL dependency in the server layer (`web/server/app.go`) rather than the core service. The `otel/` package provides setup and metric instrument creation.
+
+The `/health` endpoint returns enriched stats: `status`, `uptime_seconds`, `rooms`, `peers`, `goroutines`.
+
+### Structured Logging
+
+All logging uses `log/slog` with JSON output to stdout. Each log entry includes a `component` key (`relay`, `stream`, `http`, `origin`, `connlimit`, `ratelimit`, `otel`) for Grafana/Loki filtering. Loki ingests logs via the Docker log driver — no OTLP log bridge needed.
+
+### Dev Observability Stack
+
+`deploy/dev/docker-compose.yml` runs:
+- **Relay** with OTLP → Grafana LGTM
+- **Grafana LGTM** (Loki + Grafana + Tempo + Mimir) with pre-provisioned dashboards
+
+Dashboard JSON is provisioned via `deploy/dev/grafana/dashboards/relay.json`.
+
+## Deployment
+
+### Architecture
+
+Stateless relay pool — each VPS runs Caddy (auto-TLS) + relay binary. No coordination between relays. Client-side relay selection via static `relay-pool.json`.
+
+### Docker Packaging
+
+Multi-stage build produces ~35MB image with built-in healthcheck. Two compose stacks:
+- `deploy/dev/` — relay + Grafana LGTM for local development
+- `deploy/production/` — Caddy + relay for VPS deployment
+
+### Automation
+
+- `deploy/scripts/setup-host.sh` — bootstrap new VPS (Docker, firewall, clone, configure, start)
+- `deploy/scripts/update-pool.sh` — rolling updates, health checks, pool status
+- `deploy/inventory.txt` — host registry (domain, provider, region, IP, cost)
 
 ## Broadcast Model
 

@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
+	"runtime"
+	"time"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 
@@ -35,29 +37,35 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 		},
 		func() *pb.CollabAction { return &pb.CollabAction{} },
 	)
-	// Wrap with rate limiting
+	// WebSocket handler with metrics, wrapped by Guard (origin + rate limit + conn limit)
 	rawWSHandler := gohttp.WSServe(wsHandler, nil)
-	mux.HandleFunc("/ws/v1/{session_id}/sync", func(w http.ResponseWriter, r *http.Request) {
-		// Global connection rate limit
-		if !h.app.globalLimiter.Allow() {
-			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
-			return
-		}
-		// Per-IP connection rate limit
-		ip := clientIP(r)
-		if !h.app.getIPLimiter(ip).Allow() {
-			http.Error(w, `{"error":"per-IP rate limit exceeded"}`, http.StatusTooManyRequests)
-			return
-		}
+	metrics := h.app.Metrics
+	wsHandlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		metrics.ConnectionsTotal.Add(r.Context(), 1)
 		rawWSHandler(w, r)
 	})
-	log.Println("Registered Collab WebSocket handler at /ws/v1/{session_id}/sync")
+
+	// Guard wraps: origin check → rate limit → connection limit → handler
+	mux.Handle("/ws/v1/{session_id}/sync", h.app.Guard.Wrap(wsHandlerFunc))
+	slog.Info("Registered WebSocket handler", "path", "/ws/v1/{session_id}/sync")
 }
 
-// HandleHealth returns a simple health check response.
+// startTime is set when the API handler is created, for uptime reporting.
+var startTime = time.Now()
+
+// HandleHealth returns a health check response with relay stats.
 func (h *ApiHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	svc := h.app.Service
+	rooms, peers := svc.RoomAndPeerCount()
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":         "ok",
+		"uptime_seconds": int(time.Since(startTime).Seconds()),
+		"rooms":          rooms,
+		"peers":          peers,
+		"goroutines":     runtime.NumGoroutine(),
+	})
 }
 
 // HandleListRooms returns all active rooms.

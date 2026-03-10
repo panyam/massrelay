@@ -634,15 +634,32 @@ Logs the first N characters of `SceneUpdate.elements[].data`, `TextUpdate.text`,
 
 ### CORS
 
-The relay allows all origins by default:
+The relay uses origin-aware CORS that reflects allowed origins instead of `Access-Control-Allow-Origin: *`.
 
-```
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type, Authorization
+```bash
+# Allow specific origins (comma-separated)
+RELAY_ALLOWED_ORIGINS=excaliframe.com,*.excaliframe.com,localhost
 ```
 
-For production deployments behind a reverse proxy, configure CORS at the proxy level and remove the relay's default headers.
+| Origin config | Behavior |
+|---------------|----------|
+| Not set / empty | Reflects any `Origin` header (allow-all, suitable for development) |
+| Set | Only reflects origins matching the allowlist; disallowed origins get no CORS headers |
+
+Supports exact domains (`excaliframe.com`), wildcard subdomains (`*.excaliframe.com`), and `localhost` (matches any port, including `127.0.0.1`).
+
+Preflight `OPTIONS` requests return `204 No Content` with appropriate headers. Non-preflight requests from disallowed origins still execute (CORS is advisory — the browser enforces).
+
+### Trusted Proxies
+
+When deploying behind a reverse proxy (Caddy, nginx, etc.), configure trusted proxies so the relay uses the real client IP for rate limiting instead of the proxy IP:
+
+```bash
+# Trust Docker bridge network and localhost
+RELAY_TRUSTED_PROXIES=172.17.0.0/16,127.0.0.1,::1
+```
+
+The relay checks `X-Forwarded-For` and `X-Real-IP` headers only when `RemoteAddr` is from a trusted CIDR. This prevents direct clients from spoofing their IP to bypass rate limits. If not set, all proxies are trusted (backwards-compatible for single-proxy deployments).
 
 ---
 
@@ -1027,8 +1044,14 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 - **No authentication**: The relay does not authenticate clients. Anyone with a session ID can join. Applications should implement access control at a higher layer.
 - **No persistence**: No data is written to disk. Room state exists only in memory.
 - **Optional E2EE**: Rooms can be declared encrypted by the owner. The relay enforces protocol version checks but never sees plaintext. Encryption/decryption is entirely client-side (AES-256-GCM with PBKDF2 key derivation is the recommended scheme).
-- **Rate limiting**: Multi-layer rate limiting protects against connection floods and message spam.
+- **Rate limiting**: Multi-layer rate limiting protects against connection floods and message spam (global + per-IP + per-client).
 - **Participant limits**: Configurable per-room limits prevent resource exhaustion.
+- **Origin allowlist**: WebSocket and CORS share the same origin checker (`RELAY_ALLOWED_ORIGINS`). Disallowed origins are rejected at WebSocket upgrade and receive no CORS headers.
+- **Trusted proxy / anti-spoofing**: `RELAY_TRUSTED_PROXIES` controls which reverse proxies can set `X-Forwarded-For`. Direct clients cannot spoof their IP to bypass rate limits.
+- **CORS**: Reflects allowed origins (not `*`). Disallowed origins get no CORS headers.
+- **Panic recovery**: Middleware catches handler panics, logs a stack trace, and returns HTTP 500 — keeps the server alive.
+- **Server timeouts**: `ReadHeaderTimeout` (10s, slowloris defense), `IdleTimeout` (120s), `MaxHeaderBytes` (64KB). `ReadTimeout`/`WriteTimeout` are intentionally not set to avoid killing long-lived WebSocket connections.
+- **WebSocket keepalive**: servicekit sends 30s pings with a 5-minute pong timeout to detect dead connections.
 - **Zombie cleanup**: Server-side `watchClose` goroutine detects ungraceful disconnects and cleans up.
 
 ---

@@ -16,7 +16,7 @@ func TestOwnerJoin_SetsOwnership(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	if room.OwnerClientId != clientId {
 		t.Fatalf("expected OwnerClientId %s, got %s", clientId, room.OwnerClientId)
 	}
@@ -90,7 +90,7 @@ func TestOwnerLeave_TransfersToSameBrowserTab(t *testing.T) {
 	followerId, _ := joinAsFollower(svc, ctx, "sess1", "Bob", "browser-2")
 
 	// Drain PeerJoined broadcasts
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	drainCh(room.Clients[ownerId].SendCh)
 	drainCh(room.Clients[tab2Id].SendCh)
 	drainCh(room.Clients[followerId].SendCh)
@@ -128,7 +128,7 @@ func TestOwnerLeave_NoSameBrowser_SessionEnded(t *testing.T) {
 	followerId, _ := joinAsFollower(svc, ctx, "sess1", "Bob", "browser-2")
 
 	// Drain PeerJoined broadcasts
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	drainCh(room.Clients[ownerId].SendCh)
 	drainCh(room.Clients[followerId].SendCh)
 
@@ -162,7 +162,7 @@ func TestNonOwnerLeave_NormalPeerLeftBehavior(t *testing.T) {
 	ownerId, _ := joinAsOwner(svc, ctx, "sess1", "Alice", "browser-1")
 	followerId, _ := joinAsFollower(svc, ctx, "sess1", "Bob", "browser-2")
 
-	room := svc.GetOrCreateRoom("sess1")
+	room, _ := svc.GetOrCreateRoom("sess1")
 	drainCh(room.Clients[ownerId].SendCh)
 
 	// Follower leaves — normal PeerLeft, no session end

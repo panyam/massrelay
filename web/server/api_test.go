@@ -59,19 +59,55 @@ func TestGetRoomEndpoint_NotFound(t *testing.T) {
 
 func TestCORSHeaders(t *testing.T) {
 	app := newTestApp(t)
-	req := httptest.NewRequest("OPTIONS", "/health", nil)
-	w := httptest.NewRecorder()
-	app.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for OPTIONS, got %d", w.Code)
-	}
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Fatal("expected CORS Allow-Origin: *")
-	}
-	if w.Header().Get("Access-Control-Allow-Methods") == "" {
-		t.Fatal("expected CORS Allow-Methods header")
-	}
+	t.Run("preflight with origin", func(t *testing.T) {
+		req := httptest.NewRequest("OPTIONS", "/health", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("expected 204 for OPTIONS preflight, got %d", w.Code)
+		}
+		// No origin checker → reflects any origin
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+			t.Fatalf("expected origin reflected, got %q", got)
+		}
+		if w.Header().Get("Access-Control-Allow-Methods") == "" {
+			t.Fatal("expected CORS Allow-Methods header")
+		}
+	})
+
+	t.Run("GET with origin", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/health", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+			t.Fatalf("expected origin reflected, got %q", got)
+		}
+		if got := w.Header().Get("Vary"); got != "Origin" {
+			t.Fatalf("expected Vary: Origin, got %q", got)
+		}
+	})
+
+	t.Run("GET without origin", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/health", nil)
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		// No Origin header → no CORS headers
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Fatalf("expected no ACAO without Origin, got %q", got)
+		}
+	})
 }
 
 func TestWSEndpoint_NoUpgrade(t *testing.T) {
