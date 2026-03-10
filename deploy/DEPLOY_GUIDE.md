@@ -193,6 +193,30 @@ Available at `/metrics`. Key metrics:
 | `relay_rate_limited_total` | Counter | Rate-limited requests |
 | `relay_messages_dropped` | Counter | Messages dropped (full channel) |
 
+#### Admin API
+
+Set `RELAY_ADMIN_TOKEN` in `.env` to enable admin endpoints:
+
+```bash
+# Generate a token
+openssl rand -hex 32
+
+# Add to .env
+RELAY_ADMIN_TOKEN=your-generated-token
+```
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /admin/status` | Full overview: uptime, rooms, peers, goroutines + per-room details |
+| `GET /admin/rooms` | List all active rooms |
+| `GET /admin/rooms/{sessionId}` | Detailed room info with all peers |
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" https://r01.yourdomain.com/admin/status
+```
+
+When `RELAY_ADMIN_TOKEN` is not set, admin routes are not registered (404).
+
 #### OTLP Export
 
 Set `OTEL_EXPORTER_OTLP_ENDPOINT` in `.env` to ship metrics to any OTLP-compatible backend:
@@ -483,8 +507,9 @@ deploy/
 ├── DEPLOY_GUIDE.md              ← this file
 ├── inventory.txt                ← host registry (domain, provider, region, IP, cost)
 ├── scripts/
-│   ├── setup-host.sh            ← bootstrap a new VPS (one-time)
-│   └── update-pool.sh           ← rolling update, health check, pool status
+│   ├── setup-host.sh            ← bootstrap a new VPS (SSH harden, Docker, firewall, deploy)
+│   ├── update-pool.sh           ← rolling update, health check, pool status
+│   └── add-relay-dns.sh         ← add DNS A record via Namecheap API
 ├── dev/
 │   ├── docker-compose.yml       ← dev stack: relay + Grafana LGTM
 │   └── grafana/

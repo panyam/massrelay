@@ -76,6 +76,17 @@
 - [x] Request logging middleware (skip /health for probe noise)
 - [x] Injectable OTEL providers for embedded usage
 
+### Admin API & First Deployment
+- [x] Token-gated admin endpoints (`/admin/status`, `/admin/rooms`, `/admin/rooms/{id}`)
+- [x] Bearer token auth with constant-time comparison (`RELAY_ADMIN_TOKEN`)
+- [x] First relay deployed: `relay01.excaliframe.com` (IONOS VPS, AlmaLinux 9)
+- [x] SSH hardening automated in `setup-host.sh` (key-only, disable password auth)
+- [x] AlmaLinux/Rocky Linux support (Docker CentOS repo fallback)
+- [x] Namecheap DNS automation (`add-relay-dns.sh`, preserves existing records)
+- [x] All `RELAY_*` env vars passed through production docker-compose
+- [x] `/admin/*` route added to Caddyfile
+- [x] Local prod testing: `make prod-up` (Caddy + relay with self-signed cert)
+
 ## Future
 
 - Auto-reconnect with session validation (currently disabled to prevent phantom sessions)

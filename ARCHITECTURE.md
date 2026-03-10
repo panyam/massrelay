@@ -53,9 +53,20 @@ CORS                   ← origin-aware CORS (reuses OriginChecker, reflects all
 Recovery               ← panic recovery (logs stack trace, returns 500)
 RequestLogger          ← structured HTTP request logging (skip configurable paths)
 ClientIP / TrustedProxy ← trusted proxy-aware IP extraction (anti-spoofing)
+AdminAuth (requireAdmin) ← bearer token auth for /admin/* endpoints (constant-time compare)
 ```
 
 Zero app-specific imports — designed for future lift to servicekit.
+
+### Admin API
+
+Token-gated endpoints behind `RELAY_ADMIN_TOKEN`:
+
+- `GET /admin/status` — full relay overview (uptime, rooms, peers, goroutines + per-room details)
+- `GET /admin/rooms` — list all active rooms
+- `GET /admin/rooms/{sessionId}` — full room detail with peer info
+
+Disabled entirely when no token is set (routes not registered).
 
 ## Security Model
 

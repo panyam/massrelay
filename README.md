@@ -1053,6 +1053,7 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 - **Server timeouts**: `ReadHeaderTimeout` (10s, slowloris defense), `IdleTimeout` (120s), `MaxHeaderBytes` (64KB). `ReadTimeout`/`WriteTimeout` are intentionally not set to avoid killing long-lived WebSocket connections.
 - **WebSocket keepalive**: servicekit sends 30s pings with a 5-minute pong timeout to detect dead connections.
 - **Zombie cleanup**: Server-side `watchClose` goroutine detects ungraceful disconnects and cleans up.
+- **Admin API**: Token-gated `/admin/*` endpoints for operational visibility (`RELAY_ADMIN_TOKEN`). Constant-time token comparison. Disabled when no token is set.
 
 ---
 

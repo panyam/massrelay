@@ -1,15 +1,20 @@
 # Next Steps
 
-## Immediate (PR #10 in progress)
+## Immediate
 
 - [x] Merge PR #8 (embed PeerInfo, map peers, Timestamp, typed TS)
-- [x] OTEL metrics instrumentation
+- [x] OTEL metrics instrumentation (PR #10)
 - [x] Security hardening (origin allowlist, conn limits, rate limiting, Guard)
 - [x] Docker packaging + production/dev compose stacks
-- [x] Deployment scripts (setup-host.sh, update-pool.sh)
+- [x] Deployment scripts (setup-host.sh, update-pool.sh, add-relay-dns.sh)
 - [x] Structured logging (slog + JSON stdout)
 - [x] Grafana dashboard provisioning
-- [ ] Merge PR #10, deploy first relay to IONOS VPS
+- [x] Deploy first relay to IONOS VPS (relay01.excaliframe.com)
+- [x] Admin API endpoints (/admin/status, /admin/rooms) with bearer token auth
+- [x] SSH hardening in setup-host.sh (key-only, no password auth)
+- [x] AlmaLinux/Rocky support in setup-host.sh
+- [x] Namecheap DNS automation (add-relay-dns.sh)
+- [x] Local prod stack testing (make prod-up/prod-down)
 - [ ] Consider embedding `*pb.Room` in `CollabRoom`
 
 ## Short-term
