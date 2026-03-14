@@ -84,6 +84,8 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 | `RELAY_GLOBAL_RATE` | Global connections/sec | 100 |
 | `RELAY_PER_IP_RATE` | Per-IP connections/sec | 5 |
 | `RELAY_LOG_PAYLOADS` | Log first N chars of payloads | 0 (off) |
+| `RELAY_AUTH_REQUIRED` | Reject unauthenticated WebSocket connections | false |
+| `RELAY_AUTH_ISSUER` | Expected JWT `iss` claim | (any) |
 | `OTEL_SERVICE_NAME` | OTEL service identifier | massrelay |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector URL | (disabled) |
 | `OTEL_METRICS_PROMETHEUS` | Serve `/metrics` for Prometheus | false |
@@ -107,7 +109,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 
 - Relay is stateless — rooms exist only in memory, no database
 - `CollabService` core has no HTTP/OTEL dependencies; instrumentation via callbacks
-- `Guard` composes origin check → rate limit → connection limit (wraps WebSocket handler only)
+- `Guard` composes origin check → rate limit → auth → connection limit (wraps WebSocket handler only)
 - CORS middleware reuses same `OriginChecker` as WebSocket guard
 - Admin endpoints gated by bearer token with constant-time comparison
 - Caddy handles TLS (auto Let's Encrypt) and reverse-proxies to relay on port 8787

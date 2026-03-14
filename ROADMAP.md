@@ -28,6 +28,19 @@
 - PR #8 addresses this — embed PeerInfo, typed TS, map peers, Timestamp
 - Remaining: consider embedding `*pb.Room` in `CollabRoom` (now more viable with map peers + Timestamp)
 
+## Recently Completed
+
+### JWT Auth Middleware (Issue #12)
+- [x] `RelayAuthenticator` wrapping oneauth's `APIMiddleware` with typed `RelayClaims`
+- [x] Multi-tenant JWT validation via `KeyStore` interface (per-client signing keys)
+- [x] Token extraction from `Authorization: Bearer` header and `?token=` query param (configurable)
+- [x] Deny list (`DenySub`/`AllowSub`) for immediate subject blocking
+- [x] `OnAuthenticated`/`OnRejected` callbacks for metrics/logging
+- [x] Nil-safe: no KeyStore configured = auth disabled (feature flag via presence)
+- [x] Guard order updated: origin → rate limit → auth → conn limit → handler
+- [x] 17 test cases covering validation, extraction, deny list, callbacks, multi-tenant
+- [x] `RELAY_AUTH_REQUIRED` and `RELAY_AUTH_ISSUER` env vars
+
 ## Next Up
 
 ### Issue #9: Canonical protobuf-es Message types
@@ -89,6 +102,9 @@
 
 ## Future
 
+- Wire KeyStore to persistent source (oneauth FS/GAE/Datastore KeyStore)
+- Per-subject rate limiting (issue #14, depends on #12)
+- In-session re-auth (issue #13)
 - Auto-reconnect with session validation (currently disabled to prevent phantom sessions)
 - `ListRooms` REST endpoint (exists in code, intentionally not registered to prevent session enumeration)
 - Binary protobuf transport (instead of JSON over WebSocket)

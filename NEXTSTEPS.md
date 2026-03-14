@@ -15,13 +15,15 @@
 - [x] AlmaLinux/Rocky support in setup-host.sh
 - [x] Namecheap DNS automation (add-relay-dns.sh)
 - [x] Local prod stack testing (make prod-up/prod-down)
+- [x] JWT auth middleware with oneauth integration (issue #12)
 - [ ] Consider embedding `*pb.Room` in `CollabRoom`
 
 ## Short-term
 
+- [ ] **Issue #14**: Per-subject rate limiting — depends on #12 (done)
 - [ ] **Issue #9**: Migrate TS to canonical protobuf-es Message types with `fromJson()`/`toJson()` at the boundary
 - [ ] **Issue #2**: Replace manual broadcast with `gocurrent.FanOut` — **blocked on [gocurrent#1](https://github.com/panyam/gocurrent/issues/1)**
-- [ ] **Issue #14**: Extract sessionStore into massrelay as generic cross-tab session persistence
+- [ ] Wire KeyStore to a persistent source (e.g., oneauth FS/GAE KeyStore)
 - [ ] Type the `SyncAdapter` interface more strictly
 - [ ] Add `tsc --noEmit` to CI
 
