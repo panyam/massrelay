@@ -48,3 +48,8 @@ prod-down: ## Stop local production stack
 
 prod-logs: ## Tail local production stack logs
 	docker compose -f deploy/production/docker-compose.yml logs -f
+
+resymlink:
+	mkdir -p locallinks
+	rm -Rf locallinks/*
+	cd locallinks && ln -s ~/newstack
