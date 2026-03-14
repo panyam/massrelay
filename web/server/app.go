@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	oa "github.com/panyam/oneauth"
+
 	relaytelem "github.com/panyam/massrelay/otel"
 	"github.com/panyam/massrelay/services"
 	"github.com/panyam/massrelay/web/middleware"
@@ -49,6 +51,8 @@ type RelayApp struct {
 //	RELAY_GLOBAL_RATE=N         — max WebSocket connections/sec globally (default 100)
 //	RELAY_PER_IP_RATE=N         — max WebSocket connections/sec per IP (default 5)
 //	RELAY_ADMIN_TOKEN=...       — bearer token for /admin/* endpoints (required to enable admin API)
+//	RELAY_AUTH_REQUIRED=true    — reject unauthenticated WebSocket connections (default false)
+//	RELAY_AUTH_ISSUER=...       — expected JWT issuer claim (optional)
 func NewRelayApp() *RelayApp {
 	svc := services.NewCollabService()
 
@@ -100,11 +104,30 @@ func NewRelayApp() *RelayApp {
 	}
 	rateLimiter := middleware.NewRateLimiter(rlCfg)
 
+	// JWT authentication (optional — nil KeyStore means auth disabled)
+	var authKeyStore oa.KeyStore
+	// TODO: populate KeyStore from a persistent source (e.g., FS/GAE KeyStore)
+	// For now, the KeyStore remains nil unless set programmatically.
+
+	authRequired := os.Getenv("RELAY_AUTH_REQUIRED") == "true"
+	authIssuer := os.Getenv("RELAY_AUTH_ISSUER")
+
+	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{
+		KeyStore:        authKeyStore,
+		Required:        authRequired,
+		Issuer:          authIssuer,
+		TokenQueryParam: "token",
+	})
+	if auth != nil {
+		slog.Info("Auth middleware enabled", "required", authRequired, "issuer", authIssuer)
+	}
+
 	// Build Guard
 	guard := &middleware.Guard{
 		Origin:    originChecker,
 		Conn:      connLimiter,
 		RateLimit: rateLimiter,
+		Auth:      auth,
 	}
 
 	metrics := relaytelem.NewMetrics(nil) // nil = use global provider

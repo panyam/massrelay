@@ -8,15 +8,17 @@ type Guard struct {
 	Origin    *OriginChecker
 	Conn      *ConnLimiter
 	RateLimit *RateLimiter
+	Auth      *RelayAuthenticator
 }
 
 // Wrap applies all configured hardening middleware to a handler.
-// Order: origin check → rate limit → connection limit → handler.
+// Order: origin check → rate limit → auth → connection limit → handler.
 func (g *Guard) Wrap(h http.Handler) http.Handler {
 	if g == nil {
 		return h
 	}
 	h = g.Conn.Middleware(h)
+	h = g.Auth.Middleware(h)
 	h = g.RateLimit.Middleware(h)
 	h = g.Origin.Middleware(h)
 	return h
