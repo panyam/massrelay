@@ -2,7 +2,7 @@ import { TypedEmitter } from './EventEmitter.js';
 import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate } from './SyncAdapter.js';
 import { encryptPayload, decryptPayload } from './crypto.js';
-import type { PeerInfoJson, CollabEventJson } from './gen/massrelay/v1/models/collab_pb.js';
+import type { PeerInfoJson, CollabEvent } from './gen/massrelay/v1/models/collab_pb.js';
 
 // ─── Types ───
 
@@ -252,24 +252,25 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
       this.emit('ownerChanged', newOwnerClientId);
     };
 
-    client.options.onEvent = (event: CollabEventJson) => {
+    client.options.onEvent = (event: CollabEvent) => {
       // Extract room info from RoomJoined
-      if (event.roomJoined) {
-        const room = event.roomJoined.room || {};
-        const ownerClientId = room.ownerClientId || '';
-        const returnedSessionId = room.sessionId || params.sessionId;
+      if (event.event.case === 'roomJoined') {
+        const rj = event.event.value;
+        const room = rj.room;
+        const ownerClientId = room?.ownerClientId || '';
+        const returnedSessionId = room?.sessionId || params.sessionId;
         this._updateState({
           sessionId: returnedSessionId,
           ownerClientId,
           isOwner: this._state.clientId === ownerClientId || (params.isOwner ?? false),
-          roomEncrypted: !!room.encrypted,
-          maxPeers: event.roomJoined.maxPeers || 0,
-          roomTitle: room.title || '',
+          roomEncrypted: !!room?.encrypted,
+          maxPeers: rj.maxPeers,
+          roomTitle: room?.title || '',
         });
       }
 
       // Trigger scene init after roomJoined (all peers now in map)
-      if (event.roomJoined && !this._state.isInitialized && !this._initRequestSent && this._adapter) {
+      if (event.event.case === 'roomJoined' && !this._state.isInitialized && !this._initRequestSent && this._adapter) {
         this._triggerSceneInit();
       }
 
@@ -278,83 +279,117 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
     };
   }
 
-  private async _handleSyncEvent(event: CollabEventJson): Promise<void> {
+  private async _handleSyncEvent(event: CollabEvent): Promise<void> {
     const adapter = this._adapter;
 
-    if (event.sceneUpdate) {
-      if (!adapter) return;
-      if (this._encryptionKey && event.sceneUpdate.elements) {
-        try {
-          for (const el of event.sceneUpdate.elements) {
-            if (el.data) {
-              el.data = await decryptPayload(this._encryptionKey, el.data);
-            }
-          }
-        } catch {
-          return; // wrong key
-        }
-      }
-      adapter.applyRemote(event.fromClientId ?? '', event.sceneUpdate);
-    } else if (event.textUpdate) {
-      if (!adapter) return;
-      if (this._encryptionKey && typeof event.textUpdate.text === 'string') {
-        try {
-          event.textUpdate.text = await decryptPayload(this._encryptionKey, event.textUpdate.text);
-        } catch {
-          return;
-        }
-      }
-      adapter.applyRemote(event.fromClientId ?? '', event.textUpdate);
-    } else if (event.cursorUpdate && event.fromClientId) {
-      if (!adapter) return;
-      const peer = this._state.peers.get(event.fromClientId);
-      adapter.applyRemoteCursor({
-        clientId: event.fromClientId,
-        username: peer?.username || event.fromClientId.slice(0, 6),
-        x: Number(event.cursorUpdate.x ?? 0),
-        y: Number(event.cursorUpdate.y ?? 0),
-        tool: event.cursorUpdate.tool,
-        button: event.cursorUpdate.button,
-        selectedElementIds: event.cursorUpdate.selectedElementIds,
-      });
-    } else if (event.sceneInitResponse) {
-      if (!adapter) return;
-      let payload = event.sceneInitResponse.payload ?? '{}';
-      if (this._encryptionKey && payload !== '{}') {
-        try {
-          payload = await decryptPayload(this._encryptionKey, payload);
-        } catch {
-          return;
-        }
-      }
-      adapter.applySceneInit(payload);
-      this._updateState({ isInitialized: true });
-    } else if (event.sceneInitRequest && event.fromClientId) {
-      if (!adapter) return;
-      const shouldRespond = this._state.isOwner || (() => {
-        const myClientId = this._state.clientId;
-        if (!myClientId) return false;
-        const peerIds = Array.from(this._state.peers.keys());
-        const candidates = peerIds.filter(id => id !== event.fromClientId);
-        if (candidates.length === 0) return false;
-        candidates.sort();
-        return candidates[0] === myClientId;
-      })();
-
-      if (shouldRespond) {
-        let snapshot = adapter.getSceneSnapshot();
-        if (this._encryptionKey) {
+    switch (event.event.case) {
+      case 'sceneUpdate': {
+        if (!adapter) return;
+        const su = event.event.value;
+        if (this._encryptionKey && su.elements.length > 0) {
           try {
-            snapshot = await encryptPayload(this._encryptionKey, snapshot);
+            for (const el of su.elements) {
+              if (el.data) {
+                el.data = await decryptPayload(this._encryptionKey, el.data);
+              }
+            }
+          } catch {
+            return; // wrong key
+          }
+        }
+        adapter.applyRemote(event.fromClientId, {
+          elements: su.elements.map(el => ({
+            id: el.id,
+            version: el.version,
+            versionNonce: el.versionNonce,
+            data: el.data,
+            deleted: el.deleted,
+          })),
+        });
+        break;
+      }
+
+      case 'textUpdate': {
+        if (!adapter) return;
+        const tu = event.event.value;
+        let text = tu.text;
+        if (this._encryptionKey && typeof text === 'string') {
+          try {
+            text = await decryptPayload(this._encryptionKey, text);
           } catch {
             return;
           }
         }
-        this._client.send({ sceneInitResponse: { payload: snapshot } });
+        adapter.applyRemote(event.fromClientId, {
+          text,
+          version: tu.version,
+          cursorPosition: tu.cursorPosition,
+        });
+        break;
       }
-    } else if (event.peerLeft && event.peerLeft.clientId) {
-      // Already handled in onPeerLeft callback, but adapter cursor cleanup
-      // is also done there, so this is a no-op for the sync layer.
+
+      case 'cursorUpdate': {
+        if (!adapter || !event.fromClientId) return;
+        const cu = event.event.value;
+        const peer = this._state.peers.get(event.fromClientId);
+        adapter.applyRemoteCursor({
+          clientId: event.fromClientId,
+          username: peer?.username || event.fromClientId.slice(0, 6),
+          x: cu.x,
+          y: cu.y,
+          tool: cu.tool,
+          button: cu.button,
+          selectedElementIds: cu.selectedElementIds,
+        });
+        break;
+      }
+
+      case 'sceneInitResponse': {
+        if (!adapter) return;
+        let payload = event.event.value.payload || '{}';
+        if (this._encryptionKey && payload !== '{}') {
+          try {
+            payload = await decryptPayload(this._encryptionKey, payload);
+          } catch {
+            return;
+          }
+        }
+        adapter.applySceneInit(payload);
+        this._updateState({ isInitialized: true });
+        break;
+      }
+
+      case 'sceneInitRequest': {
+        if (!adapter || !event.fromClientId) return;
+        const fromClientId = event.fromClientId;
+        const shouldRespond = this._state.isOwner || (() => {
+          const myClientId = this._state.clientId;
+          if (!myClientId) return false;
+          const peerIds = Array.from(this._state.peers.keys());
+          const candidates = peerIds.filter(id => id !== fromClientId);
+          if (candidates.length === 0) return false;
+          candidates.sort();
+          return candidates[0] === myClientId;
+        })();
+
+        if (shouldRespond) {
+          let snapshot = adapter.getSceneSnapshot();
+          if (this._encryptionKey) {
+            try {
+              snapshot = await encryptPayload(this._encryptionKey, snapshot);
+            } catch {
+              return;
+            }
+          }
+          this._client.send({ sceneInitResponse: { payload: snapshot } });
+        }
+        break;
+      }
+
+      case 'peerLeft':
+        // Already handled in onPeerLeft callback, but adapter cursor cleanup
+        // is also done there, so this is a no-op for the sync layer.
+        break;
     }
   }
 

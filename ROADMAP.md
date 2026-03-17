@@ -54,9 +54,11 @@
 
 ## Next Up
 
-### Issue #9: Canonical protobuf-es Message types
-- Switch TS from JSON types (`CollabEventJson`) to Message types (`CollabEvent`) with `fromJson()`/`toJson()` at the transport boundary
-- Enables exhaustive `switch` on oneof, validates incoming messages, prepares for binary transport
+### Issue #9: Canonical protobuf-es Message types — DONE
+- [x] Switch TS from JSON types (`CollabEventJson`) to Message types (`CollabEvent`) with `fromJson()` at the transport boundary
+- [x] Exhaustive `switch` on `event.event.case` in `handleEvent()` and `_handleSyncEvent()`
+- [x] `SyncActions.handleEvent` typed as `CollabEvent` instead of `any`
+- [x] All tests updated to use `makeEvent()` helper via `fromJson(CollabEventSchema, ...)`
 
 ### Issue #2: Use gocurrent.FanOut for room broadcasting
 - Replace manual `BroadcastToAll`/`BroadcastExcept` with `gocurrent.FanOut`
