@@ -239,6 +239,18 @@ type denyError struct{}
 
 func (e *denyError) Error() string { return "subject is denied" }
 
+// SubjectKeyFunc extracts the authenticated subject from the request context
+// for use as a rate limiter key. Returns empty string for unauthenticated
+// requests, which causes them to share a single rate bucket (effectively
+// skipping per-subject limiting for anonymous users).
+func SubjectKeyFunc(r *http.Request) string {
+	claims := GetRelayClaimsFromContext(r.Context())
+	if claims == nil {
+		return ""
+	}
+	return claims.Subject
+}
+
 // --- Admin helpers for deny list management via admin API ---
 
 // IsDenied checks if a subject is on the deny list. Nil-safe.

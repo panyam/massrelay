@@ -12,8 +12,8 @@ import (
 	"time"
 
 	relaytelem "github.com/panyam/massrelay/otel"
-	"github.com/panyam/massrelay/web/middleware"
 	"github.com/panyam/massrelay/web/server"
+	mw "github.com/panyam/servicekit/middleware"
 )
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 	}
 
 	// Middleware chain: recovery → request logging → mux
-	handler := middleware.Recovery(middleware.RequestLogger("/health")(mux))
+	handler := mw.Recovery(mw.RequestLogger("/health")(mux))
 
 	addr := fmt.Sprintf(":%d", *port)
 	srv := &http.Server{

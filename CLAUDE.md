@@ -83,6 +83,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 | `RELAY_MAX_CONNECTIONS` | Max concurrent WebSocket connections | 500 |
 | `RELAY_GLOBAL_RATE` | Global connections/sec | 100 |
 | `RELAY_PER_IP_RATE` | Per-IP connections/sec | 5 |
+| `RELAY_PER_SUB_RATE` | Per-subject connections/sec (requires auth) | 0 (disabled) |
 | `RELAY_LOG_PAYLOADS` | Log first N chars of payloads | 0 (off) |
 | `RELAY_AUTH_REQUIRED` | Reject unauthenticated WebSocket connections | false |
 | `RELAY_AUTH_ISSUER` | Expected JWT `iss` claim | (any) |
@@ -100,7 +101,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 ## Code Conventions
 
 - **Structured logging**: Use `slog.Info`/`Warn`/`Error`/`Debug` with `"component"` key for Loki filtering
-- **Middleware**: Zero app-specific imports in `web/middleware/` (designed for servicekit lift)
+- **Middleware**: Generic middleware (rate limit, origin, CORS, recovery, logging, conn limit, Guard) lives in `servicekit/middleware`. Relay-specific middleware (auth, guard composition) stays in `web/middleware/`.
 - **ESM**: TypeScript package is `"type": "module"` — relative imports must use `.js` extensions
 - **Proto JSON**: Wire format uses camelCase field names (protobuf JSON mapping)
 - **Tests**: Go tests split by concern (service_core, broadcast, owner, query, limits_encryption, log_payloads, room). TS tests have `@flow`/`@browser`/`@e2e` JSDoc tags.

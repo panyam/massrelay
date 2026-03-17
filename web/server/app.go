@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	oa "github.com/panyam/oneauth"
+	mw "github.com/panyam/servicekit/middleware"
 
 	relaytelem "github.com/panyam/massrelay/otel"
 	"github.com/panyam/massrelay/services"
@@ -30,7 +31,7 @@ type RelayApp struct {
 	Service       *services.CollabService
 	Metrics       *relaytelem.Metrics
 	Guard         *middleware.Guard
-	OriginChecker *middleware.OriginChecker
+	OriginChecker *mw.OriginChecker
 	AdminToken    string // bearer token for /admin/* endpoints; empty = admin API disabled
 	mux           *http.ServeMux
 	handler       http.Handler // mux wrapped with CORS
@@ -50,6 +51,7 @@ type RelayApp struct {
 //	RELAY_MAX_CONNECTIONS=N     — max concurrent WebSocket connections (0 = unlimited, default 500)
 //	RELAY_GLOBAL_RATE=N         — max WebSocket connections/sec globally (default 100)
 //	RELAY_PER_IP_RATE=N         — max WebSocket connections/sec per IP (default 5)
+//	RELAY_PER_SUB_RATE=N        — max WebSocket connections/sec per subject (0 = disabled, default 0)
 //	RELAY_ADMIN_TOKEN=...       — bearer token for /admin/* endpoints (required to enable admin API)
 //	RELAY_AUTH_REQUIRED=true    — reject unauthenticated WebSocket connections (default false)
 //	RELAY_AUTH_ISSUER=...       — expected JWT issuer claim (optional)
@@ -66,15 +68,15 @@ func NewRelayApp() *RelayApp {
 	// Trusted proxies (for X-Forwarded-For)
 	if v := os.Getenv("RELAY_TRUSTED_PROXIES"); v != "" {
 		cidrs := strings.Split(v, ",")
-		middleware.SetTrustedProxies(cidrs)
+		mw.SetTrustedProxies(cidrs)
 		slog.Info("Trusted proxies configured", "cidrs", cidrs)
 	}
 
 	// Origin allowlist (shared between WebSocket guard and CORS)
-	var originChecker *middleware.OriginChecker
+	var originChecker *mw.OriginChecker
 	if v := os.Getenv("RELAY_ALLOWED_ORIGINS"); v != "" {
 		origins := strings.Split(v, ",")
-		originChecker = middleware.NewOriginChecker(origins)
+		originChecker = mw.NewOriginChecker(origins)
 		slog.Info("Origin allowlist configured", "origins", origins)
 	}
 
@@ -85,13 +87,13 @@ func NewRelayApp() *RelayApp {
 			maxConns = n
 		}
 	}
-	connLimiter := middleware.NewConnLimiter(maxConns)
+	connLimiter := mw.NewConnLimiter(maxConns)
 	if connLimiter != nil {
 		slog.Info("Max concurrent connections", "limit", maxConns)
 	}
 
-	// Rate limiting
-	rlCfg := middleware.DefaultRateLimitConfig()
+	// IP rate limiting
+	rlCfg := mw.DefaultRateLimitConfig()
 	if v := os.Getenv("RELAY_GLOBAL_RATE"); v != "" {
 		if n, err := strconv.ParseFloat(v, 64); err == nil {
 			rlCfg.GlobalPerSec = n
@@ -99,14 +101,27 @@ func NewRelayApp() *RelayApp {
 	}
 	if v := os.Getenv("RELAY_PER_IP_RATE"); v != "" {
 		if n, err := strconv.ParseFloat(v, 64); err == nil {
-			rlCfg.PerIPPerSec = n
+			rlCfg.PerKeyPerSec = n
 		}
 	}
-	rateLimiter := middleware.NewRateLimiter(rlCfg)
+	ipRateLimiter := mw.NewRateLimiter(rlCfg)
+
+	// Per-subject rate limiting (runs after auth)
+	var subRateLimiter *mw.RateLimiter
+	if v := os.Getenv("RELAY_PER_SUB_RATE"); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil && n > 0 {
+			subRateLimiter = mw.NewRateLimiter(mw.RateLimitConfig{
+				PerKeyPerSec:  n,
+				PerKeyBurst:   int(n), // burst = rate
+				KeyLimiterTTL: rlCfg.KeyLimiterTTL,
+			})
+			slog.Info("Per-subject rate limiting enabled", "rate", n)
+		}
+	}
 
 	// JWT authentication (optional — nil KeyStore means auth disabled)
 	var authKeyStore oa.KeyStore
-	// TODO: populate KeyStore from a persistent source (e.g., FS/GAE KeyStore)
+	// TODO: populate KeyStore from a persistent source (e.g., oneauth FS/GAE KeyStore)
 	// For now, the KeyStore remains nil unless set programmatically.
 
 	authRequired := os.Getenv("RELAY_AUTH_REQUIRED") == "true"
@@ -122,20 +137,22 @@ func NewRelayApp() *RelayApp {
 		slog.Info("Auth middleware enabled", "required", authRequired, "issuer", authIssuer)
 	}
 
-	// Build Guard
-	guard := &middleware.Guard{
-		Origin:    originChecker,
-		Conn:      connLimiter,
-		RateLimit: rateLimiter,
-		Auth:      auth,
-	}
+	// Build Guard: origin → IP rate limit → auth → subject rate limit → conn limit
+	guard := middleware.NewGuard(originChecker, ipRateLimiter, auth, subRateLimiter, connLimiter)
 
 	metrics := relaytelem.NewMetrics(nil) // nil = use global provider
 
 	// Wire rate limit rejections to metrics
-	if rateLimiter != nil {
-		rateLimiter.OnRejected = func() {
-			metrics.RateLimited.Add(context.Background(), 1)
+	if ipRateLimiter != nil {
+		ipRateLimiter.OnRejected = func(key string) {
+			metrics.RateLimited.Add(context.Background(), 1,
+				metric.WithAttributes(attribute.String("type", "ip")))
+		}
+	}
+	if subRateLimiter != nil {
+		subRateLimiter.OnRejected = func(key string) {
+			metrics.RateLimited.Add(context.Background(), 1,
+				metric.WithAttributes(attribute.String("type", "subject")))
 		}
 	}
 
@@ -177,7 +194,7 @@ func (a *RelayApp) Init() error {
 	h := NewApiHandler(a)
 	h.SetupRoutes(a.mux)
 	// Wrap mux with CORS middleware (uses same origin checker as WebSocket guard)
-	a.handler = middleware.CORS(a.OriginChecker)(a.mux)
+	a.handler = mw.CORS(a.OriginChecker)(a.mux)
 	return nil
 }
 

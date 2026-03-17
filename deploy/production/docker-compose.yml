@@ -47,6 +47,7 @@ services:
       - RELAY_MAX_CONNECTIONS=${RELAY_MAX_CONNECTIONS:-500}
       - RELAY_GLOBAL_RATE=${RELAY_GLOBAL_RATE:-100}
       - RELAY_PER_IP_RATE=${RELAY_PER_IP_RATE:-5}
+      - RELAY_PER_SUB_RATE=${RELAY_PER_SUB_RATE:-0}
     command: ["-port", "8787"]
 
 volumes:

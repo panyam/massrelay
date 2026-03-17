@@ -30,6 +30,17 @@
 
 ## Recently Completed
 
+### Middleware Lift to Servicekit + Per-Subject Rate Limiting (Issue #14)
+- [x] Lifted generic middleware to `servicekit/middleware` package (clientip, ratelimit, connlimit, origin, cors, recovery, logging, guard)
+- [x] `ClientIPExtractor` instance-based (eliminates package-global concurrency hazard)
+- [x] `RateLimiter` generalized with `KeyFunc` for per-key limiting (IP, subject, custom)
+- [x] `Guard` refactored as composable middleware chain
+- [x] Per-subject rate limiting via `RELAY_PER_SUB_RATE` env var
+- [x] Two rate limiter instances: IP (before auth) and subject (after auth)
+- [x] `SubjectKeyFunc` extracts subject from JWT claims context
+- [x] 4 new per-subject rate limit tests
+- [x] Servicekit `http/local.go` CORS wrapped as deprecated delegate
+
 ### JWT Auth Middleware (Issue #12)
 - [x] `RelayAuthenticator` wrapping oneauth's `APIMiddleware` with typed `RelayClaims`
 - [x] Multi-tenant JWT validation via `KeyStore` interface (per-client signing keys)
@@ -100,10 +111,17 @@
 - [x] `/admin/*` route added to Caddyfile
 - [x] Local prod testing: `make prod-up` (Caddy + relay with self-signed cert)
 
+## Recently Completed
+
+### OneAuth Federated Auth Demo
+- [x] End-to-end demo implemented in **panyam/oneauth** repo
+- [x] Docker Compose stack: oneauth-server, 2 host apps (drawapp, chatapp), 2 relays, PostgreSQL
+- [x] Browser auth (signup/login), JWT minting, multi-tenant relay validation
+- [x] Integration tests (browser auth, federated flow, multi-host, token refresh)
+
 ## Future
 
-- Wire KeyStore to persistent source (oneauth FS/GAE/Datastore KeyStore)
-- Per-subject rate limiting (issue #14, depends on #12)
+- Wire KeyStore to persistent source (oneauth now has JWKS endpoint + Cloud KMS KeyStore)
 - In-session re-auth (issue #13)
 - Auto-reconnect with session validation (currently disabled to prevent phantom sessions)
 - `ListRooms` REST endpoint (exists in code, intentionally not registered to prevent session enumeration)

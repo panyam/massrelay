@@ -661,6 +661,20 @@ RELAY_TRUSTED_PROXIES=172.17.0.0/16,127.0.0.1,::1
 
 The relay checks `X-Forwarded-For` and `X-Real-IP` headers only when `RemoteAddr` is from a trusted CIDR. This prevents direct clients from spoofing their IP to bypass rate limits. If not set, all proxies are trusted (backwards-compatible for single-proxy deployments).
 
+### Per-Subject Rate Limiting
+
+When JWT authentication is enabled, per-subject rate limiting restricts connection frequency per authenticated user:
+
+```bash
+RELAY_PER_SUB_RATE=10  # max 10 connections/sec per subject
+```
+
+This runs *after* authentication in the middleware chain, so IP rate limiting still applies first (protecting against JWT validation CPU cost). Different subjects get independent rate buckets. Unauthenticated requests share a single bucket (effectively bypassed when IP rate limiting is more restrictive).
+
+| Config | Default | Purpose |
+|--------|---------|---------|
+| `RELAY_PER_SUB_RATE` | 0 (disabled) | Max connections/sec per authenticated subject |
+
 ---
 
 ## Embedding in Another Server
