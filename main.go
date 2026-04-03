@@ -7,12 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	relaytelem "github.com/panyam/massrelay/otel"
 	"github.com/panyam/massrelay/web/server"
+	skhttp "github.com/panyam/servicekit/http"
 	mw "github.com/panyam/servicekit/middleware"
 )
 
@@ -57,27 +56,12 @@ func main() {
 		// the WS connection manages its own deadlines.
 	}
 
-	// Graceful shutdown on SIGTERM/SIGINT
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, syscall.SIGTERM, syscall.SIGINT)
-
-	go func() {
-		slog.Info("Relay server listening", "addr", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("Server error", "error", err)
-			os.Exit(1)
-		}
-	}()
-
-	<-done
-	slog.Info("Shutting down gracefully")
-
-	// Give active connections 10 seconds to finish
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Error("Shutdown error", "error", err)
+	slog.Info("Relay server listening", "addr", addr)
+	if err := skhttp.ListenAndServeGraceful(srv,
+		skhttp.WithDrainTimeout(10*time.Second),
+	); err != nil {
+		slog.Error("Server error", "error", err)
+		os.Exit(1)
 	}
 	slog.Info("Server stopped")
 }

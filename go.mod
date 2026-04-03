@@ -1,12 +1,12 @@
 module github.com/panyam/massrelay
 
-go 1.25.0
+go 1.26.1
 
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/panyam/oneauth v0.0.32
+	github.com/panyam/oneauth v0.0.40
 	github.com/panyam/servicekit v0.0.4
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.42.0
@@ -21,7 +21,6 @@ require (
 )
 
 require (
-	github.com/alexedwards/scs/v2 v2.8.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -31,7 +30,7 @@ require (
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/panyam/gocurrent v0.0.11 // indirect
+	github.com/panyam/gocurrent v0.0.13 // indirect
 	github.com/panyam/goutils v0.1.8 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
@@ -50,6 +49,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 )
 
-replace github.com/panyam/oneauth v0.0.32 => ./locallinks/newstack/oneauth/main
+replace github.com/panyam/oneauth v0.0.40 => ./locallinks/newstack/oneauth/main
 
 replace github.com/panyam/servicekit v0.0.4 => ./locallinks/newstack/servicekit/master
