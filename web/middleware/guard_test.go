@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	oa "github.com/panyam/oneauth"
+	"github.com/panyam/oneauth/keys"
 	mw "github.com/panyam/servicekit/middleware"
 
 	"github.com/panyam/massrelay/web/middleware"
 )
 
 func TestPerSubjectRateLimit_DifferentSubjects(t *testing.T) {
-	ks := oa.NewInMemoryKeyStore()
+	ks := keys.NewInMemoryKeyStore()
 	secret := "test-secret-for-subject-rate"
 	ks.RegisterKey("host-a", []byte(secret), "HS256")
 
@@ -68,7 +68,7 @@ func TestPerSubjectRateLimit_DifferentSubjects(t *testing.T) {
 }
 
 func TestPerSubjectRateLimit_SameSubject(t *testing.T) {
-	ks := oa.NewInMemoryKeyStore()
+	ks := keys.NewInMemoryKeyStore()
 	secret := "test-secret-same-sub"
 	ks.RegisterKey("host-a", []byte(secret), "HS256")
 
@@ -115,7 +115,7 @@ func TestPerSubjectRateLimit_SameSubject(t *testing.T) {
 }
 
 func TestPerSubjectRateLimit_UnauthenticatedPassthrough(t *testing.T) {
-	ks := oa.NewInMemoryKeyStore()
+	ks := keys.NewInMemoryKeyStore()
 	ks.RegisterKey("host-a", []byte("secret"), "HS256")
 
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{
@@ -156,7 +156,7 @@ func TestPerSubjectRateLimit_UnauthenticatedPassthrough(t *testing.T) {
 }
 
 func TestPerSubjectRateLimit_IntegrationWithGuard(t *testing.T) {
-	ks := oa.NewInMemoryKeyStore()
+	ks := keys.NewInMemoryKeyStore()
 	secret := "integration-test-secret"
 	ks.RegisterKey("host-a", []byte(secret), "HS256")
 

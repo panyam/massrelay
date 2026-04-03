@@ -43,6 +43,10 @@ github.com/panyam/gocurrent v0.0.13 h1:2ezdE8w6xY8ukKy4KGRwpsVhLQOf97vXXO1POd1tP
 github.com/panyam/gocurrent v0.0.13/go.mod h1:jIIhcNfNnnIe2JXH8aY2+ba+/5G1fzwCWoZXdcMNw6o=
 github.com/panyam/goutils v0.1.8 h1:5UscYTP892k54+Nyb01tKGGwZxczZ5k7BC+c0nXmcoc=
 github.com/panyam/goutils v0.1.8/go.mod h1:ntucs8GJOHQ0LmlRGRjeup3aDC2t7xPMudrRwUHrJNM=
+github.com/panyam/oneauth v0.0.53 h1:nBkjc2f3XzyL9pwPe2WatKsXUB7dThbB5u8ltXlKB9I=
+github.com/panyam/oneauth v0.0.53/go.mod h1:Gz0xF9sRHlBAMhrX9gwDkCVXDbJjowcVKAp8xO+wJP8=
+github.com/panyam/servicekit v0.0.12 h1:YavBLUiKyTUObX4Ohgsc0dhsuwsm+ACC3NBmzjkzppw=
+github.com/panyam/servicekit v0.0.12/go.mod h1:zK2rZAMSladqAJIwn3sytRqs2RF3OtN9OeYFV2NZPAc=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/prometheus/client_golang v1.23.2 h1:Je96obch5RDVy3FDMndoUsjAhG5Edi49h0RJWRi/o0o=

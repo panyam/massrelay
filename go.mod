@@ -6,8 +6,8 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/panyam/oneauth v0.0.40
-	github.com/panyam/servicekit v0.0.4
+	github.com/panyam/oneauth v0.0.53
+	github.com/panyam/servicekit v0.0.12
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.42.0
@@ -48,7 +48,3 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 )
-
-replace github.com/panyam/oneauth v0.0.40 => ./locallinks/newstack/oneauth/main
-
-replace github.com/panyam/servicekit v0.0.4 => ./locallinks/newstack/servicekit/master

@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	oa "github.com/panyam/oneauth"
+	"github.com/panyam/oneauth/keys"
 
 	"github.com/panyam/massrelay/web/middleware"
 )
 
 // testKeyStore sets up an InMemoryKeyStore with a test secret.
-func testKeyStore(clientID, secret string) *oa.InMemoryKeyStore {
-	ks := oa.NewInMemoryKeyStore()
+func testKeyStore(clientID, secret string) *keys.InMemoryKeyStore {
+	ks := keys.NewInMemoryKeyStore()
 	ks.RegisterKey(clientID, []byte(secret), "HS256")
 	return ks
 }
@@ -427,7 +427,7 @@ func TestOnRejectedCallback(t *testing.T) {
 }
 
 func TestMultiTenantDifferentKeys(t *testing.T) {
-	ks := oa.NewInMemoryKeyStore()
+	ks := keys.NewInMemoryKeyStore()
 	secretA := "secret-for-host-alpha"
 	secretB := "secret-for-host-beta"
 	ks.RegisterKey("host-alpha", []byte(secretA), "HS256")

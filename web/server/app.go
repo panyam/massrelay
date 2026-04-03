@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	oa "github.com/panyam/oneauth"
+	"github.com/panyam/oneauth/keys"
 	mw "github.com/panyam/servicekit/middleware"
 
 	relaytelem "github.com/panyam/massrelay/otel"
@@ -120,7 +120,7 @@ func NewRelayApp() *RelayApp {
 	}
 
 	// JWT authentication (optional — nil KeyStore means auth disabled)
-	var authKeyStore oa.KeyStore
+	var authKeyStore keys.KeyLookup
 	// TODO: populate KeyStore from a persistent source (e.g., oneauth FS/GAE KeyStore)
 	// For now, the KeyStore remains nil unless set programmatically.
 
