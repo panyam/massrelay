@@ -36,3 +36,4 @@
 - [ ] Auto-reconnect with session validation
 - [ ] OTEL tracing (message flow through relay — spans for join, broadcast, leave)
 - [x] Lift `web/middleware` hardening to servicekit (generic middleware in `servicekit/middleware`, relay-specific stays in `web/middleware/`)
+- [x] Migrate to servicekit `ListenAndServeGraceful` (issue #17)
