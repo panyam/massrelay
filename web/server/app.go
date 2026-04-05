@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/panyam/oneauth/apiauth"
 	"github.com/panyam/oneauth/keys"
 	mw "github.com/panyam/servicekit/middleware"
 
@@ -33,6 +34,7 @@ type RelayApp struct {
 	Guard         *middleware.Guard
 	OriginChecker *mw.OriginChecker
 	AdminToken    string // bearer token for /admin/* endpoints; empty = admin API disabled
+	PRM           *apiauth.ProtectedResourceMetadata // RFC 9728; nil = endpoint disabled
 	mux           *http.ServeMux
 	handler       http.Handler // mux wrapped with CORS
 }
@@ -55,6 +57,8 @@ type RelayApp struct {
 //	RELAY_ADMIN_TOKEN=...       — bearer token for /admin/* endpoints (required to enable admin API)
 //	RELAY_AUTH_REQUIRED=true    — reject unauthenticated WebSocket connections (default false)
 //	RELAY_AUTH_ISSUER=...       — expected JWT issuer claim (optional)
+//	RELAY_RESOURCE_URL=...      — resource server base URL for RFC 9728 PRM (e.g. "https://relay.example.com")
+//	RELAY_AUTH_SERVERS=...      — comma-separated trusted authorization server URLs for PRM
 func NewRelayApp() *RelayApp {
 	svc := services.NewCollabService()
 
@@ -161,12 +165,29 @@ func NewRelayApp() *RelayApp {
 		slog.Info("Admin API enabled", "path", "/admin/*")
 	}
 
+	// Protected Resource Metadata (RFC 9728)
+	// RELAY_RESOURCE_URL and RELAY_AUTH_SERVERS are required to enable PRM.
+	var prm *apiauth.ProtectedResourceMetadata
+	if resourceURL := os.Getenv("RELAY_RESOURCE_URL"); resourceURL != "" {
+		if authServers := os.Getenv("RELAY_AUTH_SERVERS"); authServers != "" {
+			prm = &apiauth.ProtectedResourceMetadata{
+				Resource:             resourceURL,
+				AuthorizationServers: strings.Split(authServers, ","),
+				ScopesSupported:      []string{"relay:connect", "relay:publish"},
+				TokenFormatsSupported: []string{"jwt"},
+				SigningAlgsSupported: []string{"HS256", "RS256", "ES256"},
+			}
+			slog.Info("PRM endpoint enabled", "resource", resourceURL, "path", "/.well-known/oauth-protected-resource")
+		}
+	}
+
 	app := &RelayApp{
 		Service:       svc,
 		Metrics:       metrics,
 		Guard:         guard,
 		OriginChecker: originChecker,
 		AdminToken:    adminToken,
+		PRM:           prm,
 		mux:           http.NewServeMux(),
 	}
 

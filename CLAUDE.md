@@ -87,6 +87,8 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 | `RELAY_LOG_PAYLOADS` | Log first N chars of payloads | 0 (off) |
 | `RELAY_AUTH_REQUIRED` | Reject unauthenticated WebSocket connections | false |
 | `RELAY_AUTH_ISSUER` | Expected JWT `iss` claim | (any) |
+| `RELAY_RESOURCE_URL` | Resource server base URL for RFC 9728 PRM | (disabled) |
+| `RELAY_AUTH_SERVERS` | Comma-separated trusted auth server URLs for PRM | (disabled) |
 | `OTEL_SERVICE_NAME` | OTEL service identifier | massrelay |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector URL | (disabled) |
 | `OTEL_METRICS_PROMETHEUS` | Serve `/metrics` for Prometheus | false |

@@ -30,6 +30,18 @@
 
 ## Recently Completed
 
+### Short-term Improvements (PR #16)
+- [x] PRM endpoint (RFC 9728 `/.well-known/oauth-protected-resource`) via oneauth v0.0.55
+  - Serves resource metadata for OAuth 2.0 client auto-discovery
+  - Configured via `RELAY_RESOURCE_URL` + `RELAY_AUTH_SERVERS` env vars
+  - Advertises `relay:connect`, `relay:publish` scopes, JWT format, HS256/RS256/ES256 signing
+- [x] `tsc --noEmit` added to CI (catches type errors before merge)
+- [x] Fixed `fromJson()` casts to use `JsonValue` (caught by new tsc check)
+- [x] `SyncConnection.peers` typed as `ReadonlyMap<string, PeerInfoJson>` (was `Map<string, unknown>`)
+- [x] Oneauth upgraded v0.0.53 → v0.0.55 (PRM + JWT `aud` array validation fix)
+- [x] Caddyfile updated with `/.well-known/*` route
+- [x] Docker Compose + `.env.example` updated with PRM env vars
+
 ### Middleware Lift to Servicekit + Per-Subject Rate Limiting (Issue #14)
 - [x] Lifted generic middleware to `servicekit/middleware` package (clientip, ratelimit, connlimit, origin, cors, recovery, logging, guard)
 - [x] `ClientIPExtractor` instance-based (eliminates package-global concurrency hazard)
@@ -53,12 +65,6 @@
 - [x] `RELAY_AUTH_REQUIRED` and `RELAY_AUTH_ISSUER` env vars
 
 ## Next Up
-
-### Issue #9: Canonical protobuf-es Message types — DONE
-- [x] Switch TS from JSON types (`CollabEventJson`) to Message types (`CollabEvent`) with `fromJson()` at the transport boundary
-- [x] Exhaustive `switch` on `event.event.case` in `handleEvent()` and `_handleSyncEvent()`
-- [x] `SyncActions.handleEvent` typed as `CollabEvent` instead of `any`
-- [x] All tests updated to use `makeEvent()` helper via `fromJson(CollabEventSchema, ...)`
 
 ### Issue #2: Use gocurrent.FanOut for room broadcasting
 - Replace manual `BroadcastToAll`/`BroadcastExcept` with `gocurrent.FanOut`

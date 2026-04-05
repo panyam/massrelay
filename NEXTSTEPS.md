@@ -25,9 +25,10 @@
 - [ ] **Issue #2**: Replace manual broadcast with `gocurrent.FanOut` — **blocked on [gocurrent#1](https://github.com/panyam/gocurrent/issues/1)**
 - [ ] Wire KeyStore to a persistent source (e.g., oneauth FS/GAE KeyStore)
 - [x] ~~OneAuth federated auth demo~~ — implemented in **panyam/oneauth** repo (Docker Compose + integration tests)
-- [ ] Wire per-subject rate limit rejections to OTEL metrics (type=subject attribute)
-- [ ] Type the `SyncAdapter` interface more strictly
-- [ ] Add `tsc --noEmit` to CI
+- [x] Wire per-subject rate limit rejections to OTEL metrics (type=subject attribute)
+- [x] Type the `SyncAdapter` interface more strictly (`SyncConnection.peers` → `ReadonlyMap<string, PeerInfoJson>`)
+- [x] Add `tsc --noEmit` to CI
+- [x] Add PRM endpoint (RFC 9728 `/.well-known/oauth-protected-resource`) via oneauth v0.0.55
 
 ## Medium-term
 

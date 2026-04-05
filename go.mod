@@ -6,7 +6,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/panyam/oneauth v0.0.53
+	github.com/panyam/oneauth v0.0.55
 	github.com/panyam/servicekit v0.0.12
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.42.0
