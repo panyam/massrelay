@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	oa "github.com/panyam/oneauth"
+	"github.com/panyam/oneauth/apiauth"
+	"github.com/panyam/oneauth/keys"
 )
 
 // RelayClaims holds the validated JWT claims relevant to the relay.
@@ -43,7 +44,7 @@ func GetRelayClaimsFromContext(ctx context.Context) *RelayClaims {
 // RelayAuthConfig configures the RelayAuthenticator.
 type RelayAuthConfig struct {
 	// KeyStore for multi-tenant JWT validation. If nil, auth is disabled.
-	KeyStore oa.KeyStore
+	KeyStore keys.KeyLookup
 
 	// Required rejects unauthenticated connections when true.
 	// When false, unauthenticated requests pass through without claims.
@@ -66,7 +67,7 @@ type RelayAuthConfig struct {
 // RelayAuthenticator validates relay JWTs using oneauth's APIMiddleware.
 // Nil-safe: a nil authenticator is a no-op passthrough.
 type RelayAuthenticator struct {
-	mw       *oa.APIMiddleware
+	mw       *apiauth.APIMiddleware
 	config   RelayAuthConfig
 	denyList map[string]struct{}
 	denyMu   sync.RWMutex
@@ -112,7 +113,7 @@ func NewRelayAuthenticator(cfg RelayAuthConfig) *RelayAuthenticator {
 		return nil
 	}
 	return &RelayAuthenticator{
-		mw: &oa.APIMiddleware{
+		mw: &apiauth.APIMiddleware{
 			KeyStore:        cfg.KeyStore,
 			JWTIssuer:       cfg.Issuer,
 			TokenQueryParam: cfg.TokenQueryParam,
@@ -166,7 +167,7 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 	}
 
 	return oaMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := oa.GetUserIDFromAPIContext(r.Context())
+		userID := apiauth.GetUserIDFromAPIContext(r.Context())
 
 		// If we got a userID, build RelayClaims
 		if userID != "" {
@@ -197,10 +198,10 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 func (a *RelayAuthenticator) buildRelayClaims(ctx context.Context, userID string) *RelayClaims {
 	claims := &RelayClaims{
 		Subject: userID,
-		Scopes:  oa.GetScopesFromAPIContext(ctx),
+		Scopes:  apiauth.GetScopesFromAPIContext(ctx),
 	}
 
-	custom := oa.GetCustomClaimsFromContext(ctx)
+	custom := apiauth.GetCustomClaimsFromContext(ctx)
 	if custom != nil {
 		if v, ok := custom["client_id"].(string); ok {
 			claims.ClientID = v

@@ -21,7 +21,7 @@
 ## Short-term
 
 - [x] **Issue #14**: Per-subject rate limiting — `RELAY_PER_SUB_RATE` env var, `SubjectKeyFunc`, 4 new tests
-- [ ] **Issue #9**: Migrate TS to canonical protobuf-es Message types with `fromJson()`/`toJson()` at the boundary
+- [x] **Issue #9**: Migrate TS to canonical protobuf-es Message types with `fromJson()` at the boundary
 - [ ] **Issue #2**: Replace manual broadcast with `gocurrent.FanOut` — **blocked on [gocurrent#1](https://github.com/panyam/gocurrent/issues/1)**
 - [ ] Wire KeyStore to a persistent source (e.g., oneauth FS/GAE KeyStore)
 - [x] ~~OneAuth federated auth demo~~ — implemented in **panyam/oneauth** repo (Docker Compose + integration tests)
@@ -36,3 +36,4 @@
 - [ ] Auto-reconnect with session validation
 - [ ] OTEL tracing (message flow through relay — spans for join, broadcast, leave)
 - [x] Lift `web/middleware` hardening to servicekit (generic middleware in `servicekit/middleware`, relay-specific stays in `web/middleware/`)
+- [x] Migrate to servicekit `ListenAndServeGraceful` (issue #17)

@@ -4,7 +4,14 @@ import type { CollabEngineState, TimerProvider } from './CollabEngine.js';
 import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate, CursorData, PeerCursor } from './SyncAdapter.js';
 import { deriveKey, encryptPayload, decryptPayload } from './crypto.js';
-import type { CollabEventJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
+import { fromJson } from '@bufbuild/protobuf';
+import type { CollabEvent, PeerInfoJson, CollabEventJson } from './gen/massrelay/v1/models/collab_pb.js';
+import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
+
+/** Helper: construct a CollabEvent Message from JSON shape. */
+function makeEvent(json: CollabEventJson): CollabEvent {
+  return fromJson(CollabEventSchema, json as Record<string, unknown>);
+}
 
 /**
  * COLLAB TEST COVERAGE MATRIX
@@ -98,7 +105,7 @@ function makeMockClient(): CollabClient & {
   simulateRoomJoined(data: Record<string, any>): void;
   simulatePeerJoined(peer: PeerInfoJson): void;
   simulatePeerLeft(clientId: string): void;
-  simulateEvent(event: CollabEventJson): void;
+  simulateEvent(event: CollabEvent): void;
   simulateDisconnect(): void;
   simulateSessionEnded(reason?: string): void;
   simulateOwnerChanged(newOwnerClientId: string): void;
@@ -180,7 +187,7 @@ function makeMockClient(): CollabClient & {
     for (const p of data.peers ?? []) {
       peersMap[p.clientId] = p;
     }
-    client.options.onEvent?.({
+    client.options.onEvent?.(makeEvent({
       roomJoined: {
         clientId: data.clientId,
         maxPeers: data.maxPeers ?? 0,
@@ -192,7 +199,7 @@ function makeMockClient(): CollabClient & {
           peers: peersMap,
         },
       },
-    });
+    }));
   };
 
   mock.simulatePeerJoined = (peer: PeerInfoJson) => {
@@ -202,10 +209,10 @@ function makeMockClient(): CollabClient & {
   mock.simulatePeerLeft = (clientId: string) => {
     client.options.onPeerLeft?.(clientId);
     // Also fire onEvent with peerLeft (as useSync expects)
-    client.options.onEvent?.({ peerLeft: { clientId } });
+    client.options.onEvent?.(makeEvent({ peerLeft: { clientId } }));
   };
 
-  mock.simulateEvent = (event: CollabEventJson) => {
+  mock.simulateEvent = (event: CollabEvent) => {
     client.options.onEvent?.(event);
   };
 
@@ -251,12 +258,12 @@ function makeMockRelay(
 ) {
   // Route sends from A to B's onEvent, and vice versa
   clientA._send.mockImplementation((action: any) => {
-    const event = { ...action, fromClientId: (clientA as any)._clientId };
-    clientB.options.onEvent?.(event);
+    const eventJson = { ...action, fromClientId: (clientA as any)._clientId };
+    clientB.options.onEvent?.(makeEvent(eventJson));
   });
   clientB._send.mockImplementation((action: any) => {
-    const event = { ...action, fromClientId: (clientB as any)._clientId };
-    clientA.options.onEvent?.(event);
+    const eventJson = { ...action, fromClientId: (clientB as any)._clientId };
+    clientA.options.onEvent?.(makeEvent(eventJson));
   });
 }
 
@@ -365,12 +372,12 @@ describe('CollabEngine', () => {
       makeMockRelay(ownerClient, followerClient);
 
       // Owner makes a change
-      ownerAdapter._outgoing = { type: 'sceneUpdate', payload: { elements: [{ id: 'el-1', data: '{"x":1}' }] } };
+      ownerAdapter._outgoing = { type: 'sceneUpdate', payload: { elements: [{ id: 'el-1', data: '{"x":1}', version: 0, versionNonce: 0, deleted: false }] } };
       ownerEngine.notifyLocalChange();
       timers.flush();
 
       // Follower should receive
-      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { elements: [{ id: 'el-1', data: '{"x":1}' }] });
+      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { elements: [{ id: 'el-1', data: '{"x":1}', version: 0, versionNonce: 0, deleted: false }] });
     });
 
     it('follower notifyLocalChange flushes to owner adapter', () => {
@@ -404,7 +411,7 @@ describe('CollabEngine', () => {
       timers.flush();
 
       // Owner should receive
-      expect(ownerAdapter.applyRemote).toHaveBeenCalledWith('follower-1', { elements: [{ id: 'el-2', data: '{"y":5}' }] });
+      expect(ownerAdapter.applyRemote).toHaveBeenCalledWith('follower-1', { elements: [{ id: 'el-2', data: '{"y":5}', version: 0, versionNonce: 0, deleted: false }] });
     });
   });
 
@@ -502,7 +509,7 @@ describe('CollabEngine', () => {
       client._send.mockClear();
 
       // ccc-requester sends sceneInitRequest
-      client.simulateEvent({ sceneInitRequest: {}, fromClientId: 'ccc-requester' });
+      client.simulateEvent(makeEvent({ sceneInitRequest: {}, fromClientId: 'ccc-requester' }));
 
       // aaa-self is lowest → should respond
       expect(adapter.getSceneSnapshot).toHaveBeenCalled();
@@ -523,7 +530,7 @@ describe('CollabEngine', () => {
 
       client._send.mockClear();
 
-      client.simulateEvent({ sceneInitRequest: {}, fromClientId: 'ccc-requester' });
+      client.simulateEvent(makeEvent({ sceneInitRequest: {}, fromClientId: 'ccc-requester' }));
 
       // bbb-self is NOT lowest → should NOT respond
       expect(adapter.getSceneSnapshot).not.toHaveBeenCalled();
@@ -579,16 +586,16 @@ describe('CollabEngine', () => {
       expect(encryptedData).not.toBe('{"x":42}');
 
       // Now route to follower
-      followerClient.simulateEvent({
+      followerClient.simulateEvent(makeEvent({
         sceneUpdate: sentPayload.sceneUpdate,
         fromClientId: 'owner-1',
-      });
+      }));
 
       // Wait for async decryption
       await new Promise(r => setTimeout(r, 50));
 
       expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', {
-        elements: [{ id: 'el-1', data: '{"x":42}' }],
+        elements: [{ id: 'el-1', data: '{"x":42}', version: 0, versionNonce: 0, deleted: false }],
       });
     });
 
@@ -621,10 +628,10 @@ describe('CollabEngine', () => {
       await new Promise(r => setTimeout(r, 50));
 
       // Route encrypted payload to follower with wrong key
-      followerClient.simulateEvent({
+      followerClient.simulateEvent(makeEvent({
         sceneUpdate: sentPayload.sceneUpdate,
         fromClientId: 'owner-1',
-      });
+      }));
       await new Promise(r => setTimeout(r, 50));
 
       expect(followerAdapter.applyRemote).not.toHaveBeenCalled();
@@ -1002,10 +1009,10 @@ describe('CollabEngine', () => {
       });
 
       // Simulate cursor event from owner (with known username in peers map)
-      followerClient.simulateEvent({
+      followerClient.simulateEvent(makeEvent({
         cursorUpdate: { x: 50, y: 75, tool: 'pointer' },
         fromClientId: 'owner-1',
-      });
+      }));
 
       // Username should come from peers map, not fallback clientId.slice(0,6)
       expect(followerAdapter.applyRemoteCursor).toHaveBeenCalledWith(
@@ -1047,7 +1054,7 @@ describe('CollabEngine', () => {
       timers.flush();
 
       // Follower should receive the text
-      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { text: 'flowchart TD\n    A --> B --> C', version: 1 });
+      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { text: 'flowchart TD\n    A --> B --> C', version: 1, cursorPosition: 0 });
     });
   });
 
@@ -1088,9 +1095,9 @@ describe('CollabEngine', () => {
       timers.flush();
 
       // Owner should receive follower's data
-      expect(ownerAdapter.applyRemote).toHaveBeenCalledWith('follower-1', { elements: [{ id: 'el-B', data: '{"follower":true}' }] });
+      expect(ownerAdapter.applyRemote).toHaveBeenCalledWith('follower-1', { elements: [{ id: 'el-B', data: '{"follower":true}', version: 0, versionNonce: 0, deleted: false }] });
       // Follower should receive owner's data
-      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { elements: [{ id: 'el-A', data: '{"owner":true}' }] });
+      expect(followerAdapter.applyRemote).toHaveBeenCalledWith('owner-1', { elements: [{ id: 'el-A', data: '{"owner":true}', version: 0, versionNonce: 0, deleted: false }] });
     });
   });
 
@@ -1128,17 +1135,17 @@ describe('CollabEngine', () => {
         ownerSends.push(action);
         // Route sceneInitResponse to follower
         if (action.sceneInitResponse) {
-          followerClient.simulateEvent({
+          followerClient.simulateEvent(makeEvent({
             sceneInitResponse: action.sceneInitResponse,
             fromClientId: 'aaa-owner',
-          });
+          }));
         }
       });
 
       // Follower connects (triggers sceneInitRequest → routed to owner)
       followerClient._send.mockImplementation((action: any) => {
         // Route sceneInitRequest to owner
-        ownerClient.simulateEvent({ ...action, fromClientId: 'bbb-follower' });
+        ownerClient.simulateEvent(makeEvent({ ...action, fromClientId: 'bbb-follower' }));
       });
 
       followerEngine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'excalidraw' } });

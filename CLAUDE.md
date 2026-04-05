@@ -115,6 +115,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 - Admin endpoints gated by bearer token with constant-time comparison
 - Caddy handles TLS (auto Let's Encrypt) and reverse-proxies to relay on port 8787
 - WebSocket keepalive (30s ping, 5min pong) handled by servicekit — don't set `ReadTimeout`/`WriteTimeout` on `http.Server`
+- **Graceful shutdown** uses `servicekit/http.ListenAndServeGraceful` — no manual `signal.Notify`/`srv.Shutdown` boilerplate needed
 
 ## Known Gotchas
 

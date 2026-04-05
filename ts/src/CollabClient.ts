@@ -1,9 +1,12 @@
 import { GRPCWSClient } from '@panyam/servicekit-client';
-import type { CollabEventJson, CollabActionJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
+import { fromJson } from '@bufbuild/protobuf';
+import type { CollabActionJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
+import type { CollabEvent } from './gen/massrelay/v1/models/collab_pb.js';
+import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
 import { resolveRelayUrl } from './url-params.js';
 
 export interface CollabClientOptions {
-  onEvent?: (event: CollabEventJson) => void;
+  onEvent?: (event: CollabEvent) => void;
   onPeerJoined?: (peer: PeerInfoJson) => void;
   onPeerLeft?: (clientId: string) => void;
   onError?: (error: Error) => void;
@@ -142,8 +145,10 @@ export class CollabClient {
 
     // GRPCWSClient.onMessage receives data already unwrapped from the
     // servicekit envelope ({type:"data", data:...} → just the data).
+    // Convert raw JSON to canonical protobuf-es Message type at the boundary.
     this.grpc.onMessage = (data: unknown) => {
-      this.handleEvent(data as CollabEventJson);
+      const event = fromJson(CollabEventSchema, data as Record<string, unknown>);
+      this.handleEvent(event);
     };
 
     this.grpc.onClose = () => {
@@ -179,71 +184,110 @@ export class CollabClient {
     });
   }
 
-  private handleEvent(data: CollabEventJson): void {
-    const eventKeys = Object.keys(data).filter(k => k !== 'eventId' && k !== 'fromClientId' && k !== 'serverTimestamp');
-    console.log('[COLLAB] Received event:', eventKeys.join(','), 'from:', data.fromClientId);
-    this.options.onEvent?.(data);
+  private handleEvent(event: CollabEvent): void {
+    const eventCase = event.event.case;
+    console.log('[COLLAB] Received event:', eventCase ?? 'unknown', 'from:', event.fromClientId);
+    this.options.onEvent?.(event);
 
-    // Standard protobuf JSON: oneof fields appear at the top level
-    // e.g. { "roomJoined": { "clientId": "c1", ... } }
-    if (data.error) {
-      // Graceful error from relay (e.g. ROOM_FULL, PROTOCOL_VERSION_TOO_OLD)
-      this.options.onErrorEvent?.(data.error.code || '', data.error.message || '');
-      this.explicitDisconnect = true; // Don't auto-reconnect on graceful rejection
-      this.grpc?.close();
-      this.resetState();
-      return;
-    }
-
-    if (data.roomJoined) {
-      const room = data.roomJoined.room;
-      this._clientId = data.roomJoined.clientId || '';
-      // Capture relay-generated sessionId (may differ from what we sent)
-      if (room?.sessionId) {
-        this._sessionId = room.sessionId;
+    switch (event.event.case) {
+      case 'error': {
+        // Graceful error from relay (e.g. ROOM_FULL, PROTOCOL_VERSION_TOO_OLD)
+        const err = event.event.value;
+        this.options.onErrorEvent?.(err.code, err.message);
+        this.explicitDisconnect = true; // Don't auto-reconnect on graceful rejection
+        this.grpc?.close();
+        this.resetState();
+        break;
       }
-      this._maxPeers = data.roomJoined.maxPeers || 0;
-      this._roomEncrypted = !!room?.encrypted;
-      this._title = room?.title || '';
-      this._isConnected = true;
-      this._isConnecting = false;
-      this.retryCount = 0;
-      this.options.onConnect?.(this._clientId);
 
-      // Add self as a peer (server doesn't include joining client in peers list)
-      this.options.onPeerJoined?.({
-        clientId: this._clientId,
-        username: this._username,
-        avatarUrl: '',
-        clientType: 'browser',
-        isActive: true,
-        metadata: this._metadata,
-      });
-
-      // Add existing peers already in the room (map keyed by clientId)
-      if (room?.peers) {
-        for (const peer of Object.values(room.peers)) {
-          this.options.onPeerJoined?.(peer);
+      case 'roomJoined': {
+        const rj = event.event.value;
+        const room = rj.room;
+        this._clientId = rj.clientId;
+        // Capture relay-generated sessionId (may differ from what we sent)
+        if (room?.sessionId) {
+          this._sessionId = room.sessionId;
         }
+        this._maxPeers = rj.maxPeers;
+        this._roomEncrypted = !!room?.encrypted;
+        this._title = room?.title || '';
+        this._isConnected = true;
+        this._isConnecting = false;
+        this.retryCount = 0;
+        this.options.onConnect?.(this._clientId);
+
+        // Add self as a peer (server doesn't include joining client in peers list)
+        this.options.onPeerJoined?.({
+          clientId: this._clientId,
+          username: this._username,
+          avatarUrl: '',
+          clientType: 'browser',
+          isActive: true,
+          metadata: this._metadata,
+        });
+
+        // Add existing peers already in the room (map keyed by clientId)
+        if (room?.peers) {
+          for (const peer of Object.values(room.peers)) {
+            // Convert PeerInfo Message to PeerInfoJson for callbacks
+            this.options.onPeerJoined?.({
+              clientId: peer.clientId,
+              username: peer.username,
+              avatarUrl: peer.avatarUrl,
+              clientType: peer.clientType,
+              isActive: peer.isActive,
+              isOwner: peer.isOwner,
+              metadata: peer.metadata,
+            });
+          }
+        }
+        break;
       }
-    } else if (data.peerJoined) {
-      this.options.onPeerJoined?.(data.peerJoined.peer || {});
-    } else if (data.peerLeft) {
-      this.options.onPeerLeft?.(data.peerLeft.clientId || '');
-    } else if (data.sessionEnded) {
-      this.options.onSessionEnded?.(data.sessionEnded.reason || '');
-      this.explicitDisconnect = true; // Don't reconnect
-      this.grpc?.close();
-      this.resetState();
-    } else if (data.ownerChanged) {
-      const newOwnerId = data.ownerChanged.newOwnerClientId || '';
-      this._isOwner = newOwnerId === this._clientId;
-      this.options.onOwnerChanged?.(newOwnerId);
-    } else if (data.credentialsChanged) {
-      this.options.onCredentialsChanged?.(data.credentialsChanged.reason || '');
-    } else if (data.titleChanged) {
-      this._title = data.titleChanged.title || '';
-      this.options.onTitleChanged?.(this._title);
+
+      case 'peerJoined': {
+        const peer = event.event.value.peer;
+        if (peer) {
+          this.options.onPeerJoined?.({
+            clientId: peer.clientId,
+            username: peer.username,
+            avatarUrl: peer.avatarUrl,
+            clientType: peer.clientType,
+            isActive: peer.isActive,
+            isOwner: peer.isOwner,
+            metadata: peer.metadata,
+          });
+        } else {
+          this.options.onPeerJoined?.({});
+        }
+        break;
+      }
+
+      case 'peerLeft':
+        this.options.onPeerLeft?.(event.event.value.clientId);
+        break;
+
+      case 'sessionEnded':
+        this.options.onSessionEnded?.(event.event.value.reason);
+        this.explicitDisconnect = true; // Don't reconnect
+        this.grpc?.close();
+        this.resetState();
+        break;
+
+      case 'ownerChanged': {
+        const newOwnerId = event.event.value.newOwnerClientId;
+        this._isOwner = newOwnerId === this._clientId;
+        this.options.onOwnerChanged?.(newOwnerId);
+        break;
+      }
+
+      case 'credentialsChanged':
+        this.options.onCredentialsChanged?.(event.event.value.reason);
+        break;
+
+      case 'titleChanged':
+        this._title = event.event.value.title;
+        this.options.onTitleChanged?.(this._title);
+        break;
     }
   }
 

@@ -1,3 +1,5 @@
+import type { CollabEvent } from './gen/massrelay/v1/models/collab_pb.js';
+
 /** Tool-agnostic sync adapter interface. Each editor tool (Excalidraw, Mermaid)
  *  implements this to provide diffing, merging, and scene snapshot logic.
  *  The useSync hook orchestrates timing (debounce, throttle) and routing
@@ -62,7 +64,7 @@ export interface SyncActions {
   /** Call on cursor move. Throttled internally. */
   notifyCursorMove(): void;
   /** Route an incoming collab event to the adapter. Called by the editor. */
-  handleEvent(event: any): void;
+  handleEvent(event: CollabEvent): void;
 }
 
 /** Minimal connection info sync needs — no dependency on framework-specific types. */
