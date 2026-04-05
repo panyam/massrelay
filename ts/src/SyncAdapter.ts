@@ -1,4 +1,4 @@
-import type { CollabEvent } from './gen/massrelay/v1/models/collab_pb.js';
+import type { CollabEvent, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 
 /** Tool-agnostic sync adapter interface. Each editor tool (Excalidraw, Mermaid)
  *  implements this to provide diffing, merging, and scene snapshot logic.
@@ -72,6 +72,6 @@ export interface SyncConnection {
   isConnected: boolean;
   clientId: string;
   isOwner: boolean;
-  peers: Map<string, unknown>;
+  peers: ReadonlyMap<string, PeerInfoJson>;
   send: (msg: Record<string, unknown>) => void;
 }

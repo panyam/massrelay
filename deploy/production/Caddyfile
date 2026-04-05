@@ -5,4 +5,5 @@
 	reverse_proxy /admin/* relay:8787
 	reverse_proxy /health relay:8787
 	reverse_proxy /metrics relay:8787
+	reverse_proxy /.well-known/* relay:8787
 }

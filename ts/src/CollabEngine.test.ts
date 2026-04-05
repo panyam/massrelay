@@ -4,13 +4,13 @@ import type { CollabEngineState, TimerProvider } from './CollabEngine.js';
 import { CollabClient } from './CollabClient.js';
 import type { SyncAdapter, OutgoingUpdate, CursorData, PeerCursor } from './SyncAdapter.js';
 import { deriveKey, encryptPayload, decryptPayload } from './crypto.js';
-import { fromJson } from '@bufbuild/protobuf';
+import { fromJson, type JsonValue } from '@bufbuild/protobuf';
 import type { CollabEvent, PeerInfoJson, CollabEventJson } from './gen/massrelay/v1/models/collab_pb.js';
 import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
 
 /** Helper: construct a CollabEvent Message from JSON shape. */
 function makeEvent(json: CollabEventJson): CollabEvent {
-  return fromJson(CollabEventSchema, json as Record<string, unknown>);
+  return fromJson(CollabEventSchema, json as JsonValue);
 }
 
 /**

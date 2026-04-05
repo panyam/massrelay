@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/panyam/oneauth/apiauth"
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 
 	"github.com/panyam/servicekit/grpcws"
@@ -50,6 +51,11 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 	// Guard wraps: origin check → rate limit → connection limit → handler
 	mux.Handle("/ws/v1/{session_id}/sync", h.app.Guard.Wrap(wsHandlerFunc))
 	slog.Info("Registered WebSocket handler", "path", "/ws/v1/{session_id}/sync")
+
+	// Protected Resource Metadata (RFC 9728)
+	if h.app.PRM != nil {
+		mux.Handle("GET /.well-known/oauth-protected-resource", apiauth.NewProtectedResourceHandler(h.app.PRM))
+	}
 
 	// Admin endpoints (token-gated)
 	if h.app.AdminToken != "" {

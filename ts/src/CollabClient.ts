@@ -1,5 +1,5 @@
 import { GRPCWSClient } from '@panyam/servicekit-client';
-import { fromJson } from '@bufbuild/protobuf';
+import { fromJson, type JsonValue } from '@bufbuild/protobuf';
 import type { CollabActionJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 import type { CollabEvent } from './gen/massrelay/v1/models/collab_pb.js';
 import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
@@ -147,7 +147,7 @@ export class CollabClient {
     // servicekit envelope ({type:"data", data:...} → just the data).
     // Convert raw JSON to canonical protobuf-es Message type at the boundary.
     this.grpc.onMessage = (data: unknown) => {
-      const event = fromJson(CollabEventSchema, data as Record<string, unknown>);
+      const event = fromJson(CollabEventSchema, data as JsonValue);
       this.handleEvent(event);
     };
 
