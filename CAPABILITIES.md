@@ -1,7 +1,7 @@
 # MassRelay
 
 ## Version
-0.0.12
+0.1.0
 
 ## Provides
 - websocket-relay: Stateless WebSocket relay for real-time collaboration
@@ -35,7 +35,7 @@ Requires Go 1.26.4+ (oneauth v0.1.36 minimum).
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/massrelay 0.0.12
+require github.com/panyam/massrelay 0.1.0
 
 // Local development
 replace github.com/panyam/massrelay => ~/newstack/massrelay
