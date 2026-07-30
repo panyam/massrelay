@@ -29,6 +29,8 @@
 - [x] Type the `SyncAdapter` interface more strictly (`SyncConnection.peers` → `ReadonlyMap<string, PeerInfoJson>`)
 - [x] Add `tsc --noEmit` to CI
 - [x] Add PRM endpoint (RFC 9728 `/.well-known/oauth-protected-resource`) via oneauth v0.0.55
+- [x] Update all panyam/* libs to latest (oneauth v0.1.36, servicekit v0.1.3, gocurrent v0.1.1, goutils v0.1.13); absorb oneauth 0.0.x→0.1.x `apiauth`/`keys` API rewrite; Go floor now 1.26.4
+- [ ] Consider decoupling from oneauth's full module: depend only on the thin JWT-verification slice (local `TokenVerifier` interface adapting oneauth) so oneauth OAuth-server refactors stop surfacing as breaking changes here
 
 ## Medium-term
 

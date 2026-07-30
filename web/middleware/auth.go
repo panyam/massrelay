@@ -114,9 +114,9 @@ func NewRelayAuthenticator(cfg RelayAuthConfig) *RelayAuthenticator {
 	}
 	return &RelayAuthenticator{
 		mw: &apiauth.APIMiddleware{
-			KeyStore:        cfg.KeyStore,
-			JWTIssuer:       cfg.Issuer,
-			TokenQueryParam: cfg.TokenQueryParam,
+			KeyStore:               cfg.KeyStore,
+			JWTIssuer:              cfg.Issuer,
+			LegacyQueryParamBearer: cfg.TokenQueryParam,
 		},
 		config:   cfg,
 		denyList: make(map[string]struct{}),
@@ -167,7 +167,7 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 	}
 
 	return oaMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := apiauth.GetUserIDFromAPIContext(r.Context())
+		userID := apiauth.GetSubjectFromAPIContext(r.Context())
 
 		// If we got a userID, build RelayClaims
 		if userID != "" {

@@ -1,7 +1,7 @@
 # MassRelay
 
 ## Version
-0.0.4
+0.0.12
 
 ## Provides
 - websocket-relay: Stateless WebSocket relay for real-time collaboration
@@ -23,15 +23,19 @@ github.com/panyam/massrelay
 newstack/massrelay
 
 ## Stack Dependencies
-- oneauth (github.com/panyam/oneauth)
-- servicekit (github.com/panyam/servicekit)
+- oneauth (github.com/panyam/oneauth) v0.1.36 — uses only `apiauth` (JWT middleware) + `keys` (multi-tenant KeyLookup)
+- servicekit (github.com/panyam/servicekit) v0.1.3 — `middleware`, `http` (ListenAndServeGraceful), `grpcws`
+- gocurrent (github.com/panyam/gocurrent) v0.1.1 — indirect
+- goutils (github.com/panyam/goutils) v0.1.13 — indirect
+
+Requires Go 1.26.4+ (oneauth v0.1.36 minimum).
 
 ## Integration
 
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/massrelay 0.0.4
+require github.com/panyam/massrelay 0.0.12
 
 // Local development
 replace github.com/panyam/massrelay => ~/newstack/massrelay

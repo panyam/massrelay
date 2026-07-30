@@ -118,6 +118,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 - Caddy handles TLS (auto Let's Encrypt) and reverse-proxies to relay on port 8787
 - WebSocket keepalive (30s ping, 5min pong) handled by servicekit — don't set `ReadTimeout`/`WriteTimeout` on `http.Server`
 - **Graceful shutdown** uses `servicekit/http.ListenAndServeGraceful` — no manual `signal.Notify`/`srv.Shutdown` boilerplate needed
+- **oneauth surface is deliberately thin**: massrelay imports only `oneauth/apiauth` (the JWT-validating `APIMiddleware` + context accessors `GetSubjectFromAPIContext`/`GetScopesFromAPIContext`/`GetCustomClaimsFromContext`) and `oneauth/keys` (`KeyLookup`/`InMemoryKeyStore` for per-`client_id` key resolution). It does not use oneauth's OAuth-server surface. `web/middleware/auth.go` wraps these into `RelayAuthenticator`; `guard.go` composes it into the WebSocket Guard chain. Because massrelay rides oneauth's larger module, oneauth's periodic API refactors (e.g. the 0.0.x→0.1.x `apiauth`/`keys` rewrite) surface here as breaking changes — see Known Gotchas.
 
 ## Known Gotchas
 
@@ -126,3 +127,4 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 - **Namecheap DNS API**: `setHosts` is replace-all — must send ALL existing records plus new ones
 - **`docker compose up -d`**: Won't reload Caddy config if only the mounted file changed — use `docker compose restart caddy`
 - **`make prod-up` before deploy**: Always test the full Caddy + relay stack locally to catch routing issues
+- **oneauth 0.0.x → 0.1.x API migration** (done at massrelay v0.0.12): `apiauth.APIMiddleware.TokenQueryParam` → `LegacyQueryParamBearer`; `apiauth.GetUserIDFromAPIContext` → `GetSubjectFromAPIContext`; `keys.InMemoryKeyStore.RegisterKey(id, key, alg)` → request/response `PutKey(ctx, &keys.PutKeyRequest{Record: &keys.KeyRecord{ClientID, Key, Algorithm}})`. oneauth v0.1.36 also requires **Go 1.26.4+**.

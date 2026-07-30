@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,10 +14,21 @@ import (
 	"github.com/panyam/massrelay/web/middleware"
 )
 
+// registerHS256 stores an HS256 signing key for clientID in the key store.
+func registerHS256(ks *keys.InMemoryKeyStore, clientID, secret string) {
+	ks.PutKey(context.Background(), &keys.PutKeyRequest{
+		Record: &keys.KeyRecord{
+			ClientID:  clientID,
+			Key:       []byte(secret),
+			Algorithm: "HS256",
+		},
+	})
+}
+
 // testKeyStore sets up an InMemoryKeyStore with a test secret.
 func testKeyStore(clientID, secret string) *keys.InMemoryKeyStore {
 	ks := keys.NewInMemoryKeyStore()
-	ks.RegisterKey(clientID, []byte(secret), "HS256")
+	registerHS256(ks, clientID, secret)
 	return ks
 }
 
@@ -430,8 +442,8 @@ func TestMultiTenantDifferentKeys(t *testing.T) {
 	ks := keys.NewInMemoryKeyStore()
 	secretA := "secret-for-host-alpha"
 	secretB := "secret-for-host-beta"
-	ks.RegisterKey("host-alpha", []byte(secretA), "HS256")
-	ks.RegisterKey("host-beta", []byte(secretB), "HS256")
+	registerHS256(ks, "host-alpha", secretA)
+	registerHS256(ks, "host-beta", secretB)
 
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{
 		KeyStore: ks,

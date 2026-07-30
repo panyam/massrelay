@@ -16,7 +16,7 @@ import (
 func TestPerSubjectRateLimit_DifferentSubjects(t *testing.T) {
 	ks := keys.NewInMemoryKeyStore()
 	secret := "test-secret-for-subject-rate"
-	ks.RegisterKey("host-a", []byte(secret), "HS256")
+	registerHS256(ks, "host-a", secret)
 
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{
 		KeyStore:        ks,
@@ -70,7 +70,7 @@ func TestPerSubjectRateLimit_DifferentSubjects(t *testing.T) {
 func TestPerSubjectRateLimit_SameSubject(t *testing.T) {
 	ks := keys.NewInMemoryKeyStore()
 	secret := "test-secret-same-sub"
-	ks.RegisterKey("host-a", []byte(secret), "HS256")
+	registerHS256(ks, "host-a", secret)
 
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{
 		KeyStore:        ks,
@@ -116,7 +116,7 @@ func TestPerSubjectRateLimit_SameSubject(t *testing.T) {
 
 func TestPerSubjectRateLimit_UnauthenticatedPassthrough(t *testing.T) {
 	ks := keys.NewInMemoryKeyStore()
-	ks.RegisterKey("host-a", []byte("secret"), "HS256")
+	registerHS256(ks, "host-a", "secret")
 
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{
 		KeyStore: ks,
@@ -158,7 +158,7 @@ func TestPerSubjectRateLimit_UnauthenticatedPassthrough(t *testing.T) {
 func TestPerSubjectRateLimit_IntegrationWithGuard(t *testing.T) {
 	ks := keys.NewInMemoryKeyStore()
 	secret := "integration-test-secret"
-	ks.RegisterKey("host-a", []byte(secret), "HS256")
+	registerHS256(ks, "host-a", secret)
 
 	// Origin checker that allows our test origin
 	originChecker := mw.NewOriginChecker([]string{"excaliframe.com"})
