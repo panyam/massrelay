@@ -1,13 +1,14 @@
 # MassRelay
 
 ## Version
-0.1.0
+0.1.1
 
 ## Provides
 - websocket-relay: Stateless WebSocket relay for real-time collaboration
 - room-routing: Room-based message routing
 - peer-management: Peer tracking with client_hint, session ownership, ownership transfer
 - collab-protocol: CollabAction/CollabEvent protobuf messaging protocol
+- app-message: generic app-defined pub-sub messages (AppMessage{kind,payload}), room-wide fan-out with no editor semantics — use massrelay as a message bus without the Scene/Text protocol
 - admin-api: Token-gated admin endpoints (/admin/status, /admin/rooms)
 - security-middleware: Origin allowlist, connection limiting, rate limiting, CSRF, trusted proxy
 - observability: OpenTelemetry metrics (Prometheus, OTLP), structured JSON logging (slog)
@@ -35,7 +36,7 @@ Requires Go 1.26.4+ (oneauth v0.1.36 minimum).
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/massrelay 0.1.0
+require github.com/panyam/massrelay 0.1.1
 
 // Local development
 replace github.com/panyam/massrelay => ~/newstack/massrelay

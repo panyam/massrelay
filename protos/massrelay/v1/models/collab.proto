@@ -24,6 +24,10 @@ message CollabAction {
     SceneInitResponse scene_init_response = 17;
     CredentialsChanged credentials_changed = 18;
     TitleChanged title_changed = 19;
+    // Generic, app-defined pub-sub message (no editor semantics). Relay-only:
+    // fanned out to the room unchanged, so any application can use massrelay as a
+    // message bus without adopting the editor (Scene/Text) protocol.
+    AppMessage app_message = 20;
   }
 }
 
@@ -85,6 +89,15 @@ message SceneInitResponse {
   string payload = 1;
 }
 
+// AppMessage is a generic, application-defined message the relay fans out to the
+// room unchanged (no server-side state, no editor semantics). kind is an
+// app-defined discriminator so peers route without decoding; payload is opaque
+// bytes whose schema the application owns.
+message AppMessage {
+  string kind = 1;
+  bytes payload = 2;
+}
+
 // ─── Server → Client ────────────────────────────
 
 message CollabEvent {
@@ -108,6 +121,9 @@ message CollabEvent {
     OwnerChanged owner_changed = 21;
     CredentialsChanged credentials_changed = 22;
     TitleChanged title_changed = 23;
+    // Generic, app-defined pub-sub message fanned out to the room (see the
+    // matching CollabAction.app_message).
+    AppMessage app_message = 24;
   }
 }
 

@@ -173,7 +173,8 @@ func (s *CollabService) HandleAction(ctx context.Context, action *pb.CollabActio
 		*pb.CollabAction_SceneInitRequest,
 		*pb.CollabAction_SceneInitResponse,
 		*pb.CollabAction_CredentialsChanged,
-		*pb.CollabAction_TitleChanged:
+		*pb.CollabAction_TitleChanged,
+		*pb.CollabAction_AppMessage:
 		return s.handleBroadcast(ctx, action)
 	default:
 		return nil, fmt.Errorf("unknown or empty action type")
@@ -584,6 +585,13 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 		room.Title = a.TitleChanged.GetTitle()
 		room.mu.Unlock()
 		event.Event = &pb.CollabEvent_TitleChanged{TitleChanged: a.TitleChanged}
+	case *pb.CollabAction_AppMessage:
+		// Generic app-defined message: fanned out to the room unchanged, no
+		// server-side state and no editor semantics.
+		event.Event = &pb.CollabEvent_AppMessage{AppMessage: a.AppMessage}
+		if s.LogPayloads > 0 {
+			slog.Debug("AppMessage", "kind", a.AppMessage.GetKind(), "bytes", len(a.AppMessage.GetPayload()))
+		}
 	default:
 		return nil, fmt.Errorf("unsupported broadcast action type")
 	}

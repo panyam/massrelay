@@ -248,3 +248,57 @@ func TestCredentialsChanged_Broadcast(t *testing.T) {
 		t.Fatal("expected CredentialsChanged event on peer channel")
 	}
 }
+
+func TestBroadcastAppMessage(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+
+	joinAction := func(name string) string {
+		action := &pb.CollabAction{
+			Action: &pb.CollabAction_Join{
+				Join: &pb.JoinRoom{SessionId: "sessAM", Username: name, Metadata: map[string]string{"tool": "diffpp"}},
+			},
+		}
+		event, _ := svc.HandleAction(ctx, action)
+		return event.GetRoomJoined().GetClientId()
+	}
+	clientId1 := joinAction("window1")
+	clientId2 := joinAction("window2")
+
+	// Drain window1's PeerJoined for window2.
+	<-svc.GetRoomByID("sessAM").Clients[clientId1].SendCh
+
+	// window2 publishes a generic app message.
+	payload := []byte(`{"requestId":"r1","markdown":"the answer"}`)
+	action := &pb.CollabAction{
+		ClientId: clientId2,
+		Action:   &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{Kind: "answer", Payload: payload}},
+	}
+	if _, err := svc.HandleAction(ctx, action); err != nil {
+		t.Fatalf("broadcast error: %v", err)
+	}
+
+	room := svc.GetRoomByID("sessAM")
+	// window1 (the other peer) receives it verbatim.
+	select {
+	case evt := <-room.Clients[clientId1].SendCh:
+		am := evt.GetAppMessage()
+		if am == nil {
+			t.Fatalf("expected AppMessage event, got %T", evt.Event)
+		}
+		if am.GetKind() != "answer" || string(am.GetPayload()) != string(payload) {
+			t.Fatalf("app message not fanned out verbatim: kind=%q payload=%q", am.GetKind(), am.GetPayload())
+		}
+	default:
+		t.Fatal("window1 should have received the AppMessage broadcast")
+	}
+
+	// The sender (window2) must NOT receive its own message (BroadcastExcept).
+	select {
+	case evt := <-room.Clients[clientId2].SendCh:
+		if evt.GetAppMessage() != nil {
+			t.Fatal("sender should not receive its own AppMessage")
+		}
+	default:
+	}
+}

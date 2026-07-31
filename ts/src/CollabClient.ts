@@ -1,5 +1,6 @@
 import { GRPCWSClient } from '@panyam/servicekit-client';
 import { fromJson, type JsonValue } from '@bufbuild/protobuf';
+import { base64Encode } from '@bufbuild/protobuf/wire';
 import type { CollabActionJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 import type { CollabEvent } from './gen/massrelay/v1/models/collab_pb.js';
 import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
@@ -16,6 +17,8 @@ export interface CollabClientOptions {
   onOwnerChanged?: (newOwnerClientId: string) => void;
   onCredentialsChanged?: (reason: string) => void;
   onTitleChanged?: (title: string) => void;
+  /** A generic app-defined message another peer broadcast to the room. */
+  onAppMessage?: (kind: string, payload: Uint8Array) => void;
   /** Called when relay returns an ErrorEvent (e.g. ROOM_FULL). */
   onErrorEvent?: (code: string, message: string) => void;
   maxRetries?: number;
@@ -135,6 +138,13 @@ export class CollabClient {
       clientId: this._clientId,
       timestamp: String(Date.now()),
     });
+  }
+
+  /** Broadcast a generic app-defined message to the room (fanned out to all
+   * other peers). kind is an app-defined discriminator; payload is opaque bytes. */
+  sendAppMessage(kind: string, payload: Uint8Array): void {
+    // The JSON action encodes bytes as base64; keep the public API Uint8Array.
+    this.send({ appMessage: { kind, payload: base64Encode(payload) } });
   }
 
   private openWebSocket(): void {
@@ -287,6 +297,10 @@ export class CollabClient {
       case 'titleChanged':
         this._title = event.event.value.title;
         this.options.onTitleChanged?.(this._title);
+        break;
+
+      case 'appMessage':
+        this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload);
         break;
     }
   }

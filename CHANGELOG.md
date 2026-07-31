@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-07-31
+
+### Added
+- `AppMessage { kind, payload }` — a generic, app-defined pub-sub message added to
+  the collab protocol (`CollabAction`/`CollabEvent` oneofs). The relay fans it out
+  to the room unchanged, with **no server-side state and no editor semantics**, so
+  any application can use massrelay as a message bus without adopting the
+  Scene/Text editor protocol. The TypeScript client gains `sendAppMessage(kind,
+  payload)` and an `onAppMessage(kind, payload)` callback. Backward-compatible
+  (additive oneof fields).
+
 ## [0.1.0] - 2026-07-29
 
 First release since v0.0.11. Full write-up in
