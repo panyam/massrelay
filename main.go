@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	relaytelem "github.com/panyam/massrelay/otel"
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	// Middleware chain: recovery → request logging → mux
-	handler := mw.Recovery(mw.RequestLogger("/health")(mux))
+	handler := relayHandler(mux)
 
 	addr := fmt.Sprintf(":%d", *port)
 	srv := &http.Server{
@@ -64,4 +65,19 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("Server stopped")
+}
+
+// relayHandler wraps mux in recovery and request logging. WebSocket paths
+// skip the request logger: its status recorder doesn't implement
+// http.Hijacker, so gorilla/websocket refuses every upgrade behind it.
+// Drop the bypass once servicekit ships panyam/servicekit#38.
+func relayHandler(mux http.Handler) http.Handler {
+	logged := mw.RequestLogger("/health")(mux)
+	return mw.Recovery(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/ws/") {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		logged.ServeHTTP(w, r)
+	}))
 }
