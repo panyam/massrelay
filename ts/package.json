@@ -65,11 +65,11 @@
   ],
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.0.0",
-    "@panyam/servicekit-client": "^0.0.7"
+    "@panyam/servicekit-client": "^0.0.7 || ^0.1.9"
   },
   "devDependencies": {
     "@bufbuild/protobuf": "^2.11.0",
-    "@panyam/servicekit-client": "^0.0.7",
+    "@panyam/servicekit-client": "^0.1.9",
     "@types/node": "^22.20.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
