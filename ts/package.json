@@ -1,10 +1,14 @@
 {
   "name": "@panyam/massrelay",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
-  "main": "dist/gen/massrelay/v1/models/collab_pb.js",
-  "types": "dist/gen/massrelay/v1/models/collab_pb.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./models": {
       "types": "./dist/gen/massrelay/v1/models/collab_pb.d.ts",
       "default": "./dist/gen/massrelay/v1/models/collab_pb.js"
