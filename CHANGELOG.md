@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- servicekit v0.1.10 (was v0.1.9), which makes grpcws's message counters and
+  ping id atomic (a data race under `-race`), and `@panyam/servicekit-client`
+  ^0.1.10 in development. No API changes; the peer range is unchanged.
+
 ## [0.2.4] - 2026-10-23
 
 `CollabClient` stays in the room after a refused message, and the package is
