@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `CollabClient` no longer closes the connection on a relay error that follows
+  the join. `PEER_NOT_FOUND` (replying to a peer that already left) and
+  `ALREADY_JOINED` refuse one action and the relay keeps the stream open, so the
+  client now reports them through `onErrorEvent` and stays in the room. Errors
+  that refuse the join (`ROOM_FULL`, `ROOM_FORBIDDEN`,
+  `PROTOCOL_VERSION_TOO_OLD`) still close it. `CollabEngine` follows the same
+  split and stays `connected` (issue 33).
+- `onDisconnect` fires once for every connection that reached `onConnect`,
+  including when the owner ends the session (it runs before `onSessionEnded`).
+  Before, a close the relay caused skipped it.
+
+### Changed
+- npm publishing goes through servicekit's shared `npm-publish.yml` with npm
+  trusted publishing, so release tags publish `@panyam/massrelay` without an
+  `NPM_TOKEN` secret.
+- `scripts/check-versions.sh` fails CI when `ts/package.json` drifts from
+  CAPABILITIES.md's version, and a publish when the tag does.
+- `ts/package.json` gains `description` and `repository`, which npm provenance
+  checks against the publishing repo.
+
 ## [0.2.3] - 2026-10-23
 
 ### Added

@@ -448,6 +448,8 @@ Graceful error — the relay sends this instead of closing the stream, so the cl
 | `PEER_NOT_FOUND` | An `AppMessage.toClientId` named a client that is not in the sender's room. |
 | `ALREADY_JOINED` | A second `JoinRoom` on a connection that is already in a room. One connection holds one room; open another connection for a second one. |
 
+The first three answer a `JoinRoom` and mean the join was refused; `CollabClient` closes the connection after reporting them. `PEER_NOT_FOUND` and `ALREADY_JOINED` arrive after the join and refuse one action; the relay keeps the stream open, and `CollabClient` stays connected and only reports them through `onErrorEvent`.
+
 #### SessionEnded
 
 Broadcast when the owner disconnects and no same-browser successor exists. All remaining peers are disconnected.

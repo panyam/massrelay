@@ -34,6 +34,10 @@ make prod-down       # stop
 make prod-logs       # tail logs
 ```
 
+## Releases
+
+The Go module and `@panyam/massrelay` share one version, under `## Version` in CAPABILITIES.md. A release bumps it there, in `ts/package.json` and in `ts/package-lock.json`; `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` runs `publish-npm.yml`, which tests and then calls servicekit's shared `npm-publish.yml` (npm trusted publishing, no token). Manual fallback: `cd ts && rm -rf dist && npm run build && npm run check:pack && npm publish --access public --otp=<code>`.
+
 ## Proto Regeneration
 
 ```bash

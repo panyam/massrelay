@@ -92,6 +92,12 @@ describe('AppMessage against a real relay', () => {
 
     expect(bridge.errors).toEqual(['PEER_NOT_FOUND']);
     expect(page1.received).toEqual([]);
+
+    // The refused message doesn't cost the sender its place in the room.
+    expect(bridge.client.isConnected).toBe(true);
+    bridge.client.sendAppMessage('tools/call', new Uint8Array([2]), { to: page1.clientId });
+    await until(() => page1.received.length > 0, 'page1 to receive after the error');
+    expect(page1.received.map((r) => [r.from, r.to])).toEqual([[bridge.clientId, page1.clientId]]);
   });
 
   it('joins a room whose id contains a slash, and messages within it', async () => {
