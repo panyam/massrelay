@@ -21,6 +21,7 @@ type RelayClaims struct {
 	Scopes     []string  // JWT "scopes" claim
 	MaxRooms   int       // custom "max_rooms" claim (0 = unlimited)
 	MaxMsgRate float64   // custom "max_msg_rate" claim (0 = unlimited)
+	Rooms      []string  // custom "rooms" claim: sessions this token may join (exact, or prefix ending in "*"); empty = any
 	ExpiresAt  time.Time // JWT "exp" claim
 	IssuedAt   time.Time // JWT "iat" claim
 }
@@ -212,6 +213,7 @@ func (a *RelayAuthenticator) buildRelayClaims(ctx context.Context, userID string
 		if v, ok := custom["max_msg_rate"].(float64); ok {
 			claims.MaxMsgRate = v
 		}
+		claims.Rooms = stringOrStrings(custom["rooms"])
 		if v, ok := custom["exp"].(float64); ok {
 			claims.ExpiresAt = time.Unix(int64(v), 0)
 		}
@@ -221,6 +223,24 @@ func (a *RelayAuthenticator) buildRelayClaims(ctx context.Context, userID string
 	}
 
 	return claims
+}
+
+// stringOrStrings reads a claim that may be a single string or a JSON array of
+// strings. Non-string array entries are skipped.
+func stringOrStrings(v any) []string {
+	switch v := v.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // errorJSON writes a JSON error response.

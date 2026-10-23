@@ -153,7 +153,10 @@ func (s *CollabService) GetClientSendCh(sessionId, clientId string) chan *pb.Col
 //     CredentialsChanged, TitleChanged → handleBroadcast (broadcasts, returns nil)
 //
 // For join/leave actions, the returned event is sent directly to the acting client.
-// For broadcast actions, the return is nil (events are fanned out via BroadcastExcept).
+// For broadcast actions, the return is nil (events are fanned out via BroadcastExcept),
+// except an AppMessage whose to_client_id is not in the room, which returns
+// ErrorEvent{PEER_NOT_FOUND}. A join returns ErrorEvent{ROOM_FORBIDDEN} when ctx
+// carries a Principal whose Rooms do not cover the session (see WithPrincipal).
 // Returns an error for unknown action types or if the client is not in any room.
 func (s *CollabService) HandleAction(ctx context.Context, action *pb.CollabAction) (*pb.CollabEvent, error) {
 	if action == nil {
@@ -245,6 +248,10 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 	clientHint := join.GetClientHint()
 	sessionId := join.GetSessionId()
 
+	if !PrincipalFromContext(ctx).AllowsRoom(sessionId) {
+		return errorEvent("ROOM_FORBIDDEN", "This token may not join this room"), nil
+	}
+
 	// If no session_id provided, resolve via hint or generate a new one
 	if sessionId == "" {
 		if clientHint != "" {
@@ -329,6 +336,7 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 			IsActive:   true,
 			IsOwner:    isOwner,
 			Metadata:   join.GetMetadata(),
+			Identity:   PrincipalFromContext(ctx).identity(),
 		},
 		SessionId: sessionId,
 		BrowserId: browserId,
@@ -590,7 +598,16 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 		// server-side state and no editor semantics.
 		event.Event = &pb.CollabEvent_AppMessage{AppMessage: a.AppMessage}
 		if s.LogPayloads > 0 {
-			slog.Debug("AppMessage", "kind", a.AppMessage.GetKind(), "bytes", len(a.AppMessage.GetPayload()))
+			slog.Debug("AppMessage", "kind", a.AppMessage.GetKind(), "to", a.AppMessage.GetToClientId(), "bytes", len(a.AppMessage.GetPayload()))
+		}
+		if to := a.AppMessage.GetToClientId(); to != "" {
+			if !room.SendTo(event, to) {
+				return errorEvent("PEER_NOT_FOUND", fmt.Sprintf("No client %s in this room", to)), nil
+			}
+			if s.OnMessageRelay != nil {
+				s.OnMessageRelay(fmt.Sprintf("%T", action.Action))
+			}
+			return nil, nil
 		}
 	default:
 		return nil, fmt.Errorf("unsupported broadcast action type")
@@ -605,4 +622,42 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 	}
 
 	return nil, nil
+}
+
+// DeliverAppMessage sends msg into sessionId's room on behalf of fromClientId,
+// for an embedding server that has no socket of its own. fromClientId is what
+// receivers see as from_client_id; it may be empty for a server-originated
+// message and need not be a peer in the room.
+//
+// With msg.to_client_id set, only that client receives it, and ErrPeerNotFound
+// is returned if it is not in the room. Otherwise every peer except
+// fromClientId receives it. Returns ErrRoomNotFound if the room does not exist.
+func (s *CollabService) DeliverAppMessage(sessionId, fromClientId string, msg *pb.AppMessage) error {
+	room := s.GetRoomByID(sessionId)
+	if room == nil {
+		return ErrRoomNotFound
+	}
+	event := &pb.CollabEvent{
+		EventId:      uuid.New().String(),
+		FromClientId: fromClientId,
+		Event:        &pb.CollabEvent_AppMessage{AppMessage: msg},
+	}
+	if to := msg.GetToClientId(); to != "" {
+		if !room.SendTo(event, to) {
+			return ErrPeerNotFound
+		}
+	} else {
+		room.BroadcastExcept(event, fromClientId)
+	}
+	if s.OnMessageRelay != nil {
+		s.OnMessageRelay(fmt.Sprintf("%T", &pb.CollabAction_AppMessage{}))
+	}
+	return nil
+}
+
+func errorEvent(code, message string) *pb.CollabEvent {
+	return &pb.CollabEvent{
+		EventId: uuid.New().String(),
+		Event:   &pb.CollabEvent_Error{Error: &pb.ErrorEvent{Code: code, Message: message}},
+	}
 }

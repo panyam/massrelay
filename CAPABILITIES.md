@@ -1,14 +1,15 @@
 # MassRelay
 
 ## Version
-0.1.1
+0.2.0
 
 ## Provides
 - websocket-relay: Stateless WebSocket relay for real-time collaboration
 - room-routing: Room-based message routing
 - peer-management: Peer tracking with client_hint, session ownership, ownership transfer
 - collab-protocol: CollabAction/CollabEvent protobuf messaging protocol
-- app-message: generic app-defined pub-sub messages (AppMessage{kind,payload}), room-wide fan-out with no editor semantics — use massrelay as a message bus without the Scene/Text protocol
+- app-message: generic app-defined pub-sub messages (AppMessage{kind,payload,to_client_id}), room-wide fan-out or addressed to one peer, with no editor semantics — use massrelay as a message bus without the Scene/Text protocol
+- peer-identity: PeerInfo.identity from the connection's validated JWT (sub, client_id); `rooms` claim restricts which sessions a token may join
 - admin-api: Token-gated admin endpoints (/admin/status, /admin/rooms)
 - security-middleware: Origin allowlist, connection limiting, rate limiting, CSRF, trusted proxy
 - observability: OpenTelemetry metrics (Prometheus, OTLP), structured JSON logging (slog)
@@ -26,8 +27,8 @@ newstack/massrelay
 ## Stack Dependencies
 - oneauth (github.com/panyam/oneauth) v0.1.36 — uses only `apiauth` (JWT middleware) + `keys` (multi-tenant KeyLookup)
 - servicekit (github.com/panyam/servicekit) v0.1.3 — `middleware`, `http` (ListenAndServeGraceful), `grpcws`
-- gocurrent (github.com/panyam/gocurrent) v0.1.1 — indirect
-- goutils (github.com/panyam/goutils) v0.1.13 — indirect
+- gocurrent (github.com/panyam/gocurrent) v0.2.0 — indirect
+- goutils (github.com/panyam/goutils) v0.2.03 — indirect
 
 Requires Go 1.26.4+ (oneauth v0.1.36 minimum).
 
@@ -36,7 +37,7 @@ Requires Go 1.26.4+ (oneauth v0.1.36 minimum).
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/massrelay 0.1.1
+require github.com/panyam/massrelay 0.2.0
 
 // Local development
 replace github.com/panyam/massrelay => ~/newstack/massrelay

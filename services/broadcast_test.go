@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
@@ -300,5 +301,146 @@ func TestBroadcastAppMessage(t *testing.T) {
 			t.Fatal("sender should not receive its own AppMessage")
 		}
 	default:
+	}
+}
+
+// joinN joins len(names) peers to sessionId and drains every PeerJoined, so
+// each SendCh starts empty.
+func joinN(t *testing.T, svc *CollabService, sessionId string, names ...string) []string {
+	t.Helper()
+	ids := make([]string, 0, len(names))
+	for _, name := range names {
+		event, err := svc.HandleAction(context.Background(), &pb.CollabAction{
+			Action: &pb.CollabAction_Join{Join: &pb.JoinRoom{SessionId: sessionId, Username: name}},
+		})
+		if err != nil {
+			t.Fatalf("join %s: %v", name, err)
+		}
+		ids = append(ids, event.GetRoomJoined().GetClientId())
+	}
+	room := svc.GetRoomByID(sessionId)
+	for _, id := range ids {
+		drainCh(room.Clients[id].SendCh)
+	}
+	return ids
+}
+
+func sendAppMessage(t *testing.T, svc *CollabService, from, to, kind string) *pb.CollabEvent {
+	t.Helper()
+	resp, err := svc.HandleAction(context.Background(), &pb.CollabAction{
+		ClientId: from,
+		Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{
+			Kind: kind, Payload: []byte("args"), ToClientId: to,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("app message: %v", err)
+	}
+	return resp
+}
+
+func TestAppMessageAddressedReachesOnlyTarget(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessAddr", "bridge", "page1", "page2")
+	bridge, page1, page2 := ids[0], ids[1], ids[2]
+
+	if resp := sendAppMessage(t, svc, bridge, page2, "tools/call"); resp != nil {
+		t.Fatalf("expected no direct response on successful delivery, got %v", resp)
+	}
+
+	room := svc.GetRoomByID("sessAddr")
+	select {
+	case evt := <-room.Clients[page2].SendCh:
+		am := evt.GetAppMessage()
+		if am == nil || am.GetKind() != "tools/call" || string(am.GetPayload()) != "args" {
+			t.Fatalf("target got wrong event: %v", evt)
+		}
+		if evt.GetFromClientId() != bridge {
+			t.Fatalf("from_client_id = %q, want %q", evt.GetFromClientId(), bridge)
+		}
+	default:
+		t.Fatal("addressed peer did not receive the AppMessage")
+	}
+	select {
+	case evt := <-room.Clients[page1].SendCh:
+		t.Fatalf("non-addressed peer received %v", evt)
+	default:
+	}
+	select {
+	case evt := <-room.Clients[bridge].SendCh:
+		t.Fatalf("sender received %v", evt)
+	default:
+	}
+}
+
+func TestAppMessageAddressedPeerNotFound(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessA", "bridge", "page1", "gone")
+	bridge, page1, gone := ids[0], ids[1], ids[2]
+	other := joinN(t, svc, "sessB", "elsewhere")[0]
+	if err := leaveRoom(svc, context.Background(), gone); err != nil {
+		t.Fatalf("leave: %v", err)
+	}
+	room := svc.GetRoomByID("sessA")
+	drainCh(room.Clients[bridge].SendCh)
+	drainCh(room.Clients[page1].SendCh)
+
+	for name, to := range map[string]string{"left the room": gone, "in another room": other} {
+		resp := sendAppMessage(t, svc, bridge, to, "tools/call")
+		if resp.GetError().GetCode() != "PEER_NOT_FOUND" {
+			t.Fatalf("%s: expected PEER_NOT_FOUND, got %v", name, resp)
+		}
+		select {
+		case evt := <-room.Clients[page1].SendCh:
+			t.Fatalf("%s: room peer received %v", name, evt)
+		default:
+		}
+		select {
+		case evt := <-svc.GetRoomByID("sessB").Clients[other].SendCh:
+			t.Fatalf("%s: peer in another room received %v", name, evt)
+		default:
+		}
+	}
+}
+
+func TestDeliverAppMessage(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessD", "page1", "page2")
+	room := svc.GetRoomByID("sessD")
+
+	if err := svc.DeliverAppMessage("sessD", "", &pb.AppMessage{Kind: "k", ToClientId: ids[1]}); err != nil {
+		t.Fatalf("addressed deliver: %v", err)
+	}
+	select {
+	case evt := <-room.Clients[ids[1]].SendCh:
+		if evt.GetAppMessage().GetKind() != "k" || evt.GetFromClientId() != "" {
+			t.Fatalf("unexpected event %v", evt)
+		}
+	default:
+		t.Fatal("target did not receive server-originated AppMessage")
+	}
+	select {
+	case evt := <-room.Clients[ids[0]].SendCh:
+		t.Fatalf("non-target received %v", evt)
+	default:
+	}
+
+	if err := svc.DeliverAppMessage("sessD", ids[0], &pb.AppMessage{Kind: "all"}); err != nil {
+		t.Fatalf("fan-out deliver: %v", err)
+	}
+	if evt := <-room.Clients[ids[1]].SendCh; evt.GetAppMessage().GetKind() != "all" || evt.GetFromClientId() != ids[0] {
+		t.Fatalf("fan-out got %v", evt)
+	}
+	select {
+	case evt := <-room.Clients[ids[0]].SendCh:
+		t.Fatalf("fan-out echoed to sender: %v", evt)
+	default:
+	}
+
+	if err := svc.DeliverAppMessage("sessD", "", &pb.AppMessage{ToClientId: "nobody"}); !errors.Is(err, ErrPeerNotFound) {
+		t.Fatalf("want ErrPeerNotFound, got %v", err)
+	}
+	if err := svc.DeliverAppMessage("no-such-room", "", &pb.AppMessage{}); !errors.Is(err, ErrRoomNotFound) {
+		t.Fatalf("want ErrRoomNotFound, got %v", err)
 	}
 }

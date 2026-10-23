@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-22
+
+### Added
+- `AppMessage.to_client_id` addresses one peer. The relay delivers to that
+  client alone and answers the sender with `ErrorEvent{PEER_NOT_FOUND}` when it
+  is not in the room. Empty keeps the room-wide fan-out (issue 23).
+- `PeerInfo.identity` (`PeerIdentity{subject, client_id}`), filled from the
+  connection's validated JWT. Absent without a token, and not settable from
+  `JoinRoom`.
+- `rooms` JWT claim (string or array; exact session IDs or `prefix*`). A join
+  outside it gets `ErrorEvent{ROOM_FORBIDDEN}`.
+- Go: `CollabService.DeliverAppMessage` for embedding servers, with
+  `ErrPeerNotFound` / `ErrRoomNotFound`; `services.Principal` /
+  `WithPrincipal` to attach an identity to in-process joins.
+- TS: `sendAppMessage(kind, payload, { to })`; `onAppMessage` gets the sender's
+  `fromClientId` as a third argument.
+
+### Changed
+- The WebSocket stream now sets `CollabAction.client_id` from the connection
+  instead of trusting the client's value, and rejects any action other than
+  `JoinRoom` before the join. Before this, a connection could send updates or a
+  `LeaveRoom` as another peer. The TS client already sent its own ID and only
+  sends after `RoomJoined`, so it is unaffected.
+
 ## [0.1.1] - 2026-07-31
 
 ### Added

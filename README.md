@@ -352,6 +352,18 @@ Owner broadcasts a title rename to all peers.
 
 The relay stores the updated title so new joiners receive it via `RoomJoined.title`.
 
+#### AppMessage
+
+A generic, application-defined message. The relay keeps no state for it and gives it no editor meaning, so an app can use the relay as a message bus without the Scene/Text protocol.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kind` | string | App-defined discriminator, so peers can route without decoding the payload. |
+| `payload` | bytes | Opaque to the relay (base64 in JSON). |
+| `toClientId` | string | Optional. When set, only that client receives the message. If it is not in the sender's room, the sender gets `ErrorEvent{PEER_NOT_FOUND}` and nothing is delivered. Empty fans out to every other peer. |
+
+Receivers read the sender from the event's `fromClientId`, which the relay sets from the sending connection, so a reply can be addressed back.
+
 ---
 
 ### Server → Client (CollabEvent)
@@ -424,6 +436,8 @@ Graceful error — the relay sends this instead of closing the stream, so the cl
 |------|-------|
 | `ROOM_FULL` | Room has reached `MaxPeersPerRoom` limit. |
 | `PROTOCOL_VERSION_TOO_OLD` | Encrypted room requires `protocolVersion >= 2`. |
+| `ROOM_FORBIDDEN` | The connection's token has a `rooms` claim that does not cover this session (see [Token Claims](#token-claims)). |
+| `PEER_NOT_FOUND` | An `AppMessage.toClientId` named a client that is not in the sender's room. |
 
 #### SessionEnded
 
@@ -441,7 +455,7 @@ Broadcast when ownership transfers to another tab of the same browser.
 |-------|------|-------------|
 | `newOwnerClientId` | string | Client ID of the new owner. |
 
-#### SceneUpdate, CursorUpdate, TextUpdate, SceneInitRequest, SceneInitResponse, CredentialsChanged, TitleChanged
+#### SceneUpdate, CursorUpdate, TextUpdate, SceneInitRequest, SceneInitResponse, CredentialsChanged, TitleChanged, AppMessage
 
 These are relayed as-is from the originating client to all other peers in the room. See the [Client → Server](#client--server-collabaction) section for field details. The `fromClientId` envelope field identifies the sender.
 
@@ -462,6 +476,16 @@ Describes a connected peer.
 | `isActive` | bool | Online status. |
 | `isOwner` | bool | `true` if this peer owns the session. |
 | `metadata` | map | Application-defined key-value pairs (from JoinRoom). |
+| `identity` | PeerIdentity | Set by the relay from the connection's validated JWT. Absent for a connection without a token. Clients cannot set it. |
+
+#### PeerIdentity
+
+Who a peer is according to the token the relay validated for its connection. Use this, not `username`, to make trust decisions about a peer.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `subject` | string | The token's `sub`. |
+| `clientId` | string | The token's `client_id` (the app it was minted for), if present. |
 
 ---
 
@@ -675,6 +699,17 @@ This runs *after* authentication in the middleware chain, so IP rate limiting st
 |--------|---------|---------|
 | `RELAY_PER_SUB_RATE` | 0 (disabled) | Max connections/sec per authenticated subject |
 
+### Token Claims
+
+Besides `sub`, the relay reads these from a validated JWT:
+
+| Claim | Type | Effect |
+|-------|------|--------|
+| `client_id` | string | Selects the signing key, and is reported as `PeerInfo.identity.clientId`. |
+| `rooms` | string or string[] | Sessions the token may join. Each entry is an exact session ID, or a prefix ending in `*` (`"design:*"`). A join outside them gets `ErrorEvent{ROOM_FORBIDDEN}`. A restricted token must name its session; it cannot have the relay generate one or resolve one from `clientHint`. Absent means any session. |
+
+`sub` and `client_id` become the joining peer's `PeerInfo.identity`. An app can mint a token with `"rooms": "design:abc"` so a page can only join the room for the resource it shows.
+
 ---
 
 ## Embedding in Another Server
@@ -749,6 +784,7 @@ const client = new CollabClient(options?: CollabClientOptions);
 | `onOwnerChanged` | `(newOwnerClientId: string) => void` | Ownership transferred. |
 | `onCredentialsChanged` | `(reason: string) => void` | Session password changed. |
 | `onTitleChanged` | `(title: string) => void` | Drawing title changed. |
+| `onAppMessage` | `(kind: string, payload: Uint8Array, fromClientId: string) => void` | An `AppMessage` from another peer, or from the embedding server (empty `fromClientId`). |
 | `maxRetries` | number | Max auto-reconnect attempts (default: `5`). Currently unused — auto-reconnect is disabled. |
 | `_grpcFactory` | `() => GRPCWSClient` | Override WebSocket client for testing. |
 
@@ -802,6 +838,14 @@ client.send({
 ```
 
 Throws if not connected.
+
+**`sendAppMessage(kind, payload, opts?)`**
+
+Sends an `AppMessage`. With `opts.to` set to a client ID, only that peer receives it; the relay answers `PEER_NOT_FOUND` through `onErrorEvent` if the peer is not in the room. Without it, every other peer receives it.
+
+```typescript
+client.sendAppMessage('tools/call', bytes, { to: pageClientId });
+```
 
 #### Behavior Notes
 
@@ -959,6 +1003,9 @@ svc.LogPayloads = 0         // 0 = disabled
 | `ListRooms(ctx, *ListRoomsRequest) (*ListRoomsResponse, error)` | List all active rooms. |
 | `FindSessionByHint(hint) string` | Resolve a client hint to a session ID. |
 | `GetClientSendCh(sessionId, clientId) chan *CollabEvent` | Get a client's broadcast channel. |
+| `DeliverAppMessage(sessionId, fromClientId, *AppMessage) error` | Send an `AppMessage` into a room without a socket. Honors `toClientId`; returns `ErrPeerNotFound` / `ErrRoomNotFound`. `fromClientId` may be empty for a server-originated message. |
+
+To attach an authenticated identity to joins made through `HandleAction`, pass a context from `services.WithPrincipal(ctx, &services.Principal{Subject, ClientID, Rooms})`. The WebSocket handler does this from the validated JWT.
 
 ### CollabRoom
 
