@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, inject, it } from 'vitest';
 import { CollabClient } from '../src/CollabClient.js';
 
-type Received = { kind: string; payload: Uint8Array; from: string };
+type Received = { kind: string; payload: Uint8Array; from: string; to: string };
 
 interface Peer {
   client: CollabClient;
@@ -35,7 +35,7 @@ async function join(sessionId: string, name: string): Promise<Peer> {
   let connected = '';
   peer.client = new CollabClient({
     onConnect: (id) => (connected = id),
-    onAppMessage: (kind, payload, from) => peer.received.push({ kind, payload, from }),
+    onAppMessage: (kind, payload, from, to) => peer.received.push({ kind, payload, from, to }),
     onErrorEvent: (code) => peer.errors.push(code),
   });
   open.push(peer.client);
@@ -56,7 +56,7 @@ describe('AppMessage against a real relay', () => {
     await until(() => page2.received.length > 0, 'page2 to receive');
     await settle();
 
-    expect(page2.received).toEqual([{ kind: 'tools/call', payload: new Uint8Array([1, 2, 3]), from: bridge.clientId }]);
+    expect(page2.received).toEqual([{ kind: 'tools/call', payload: new Uint8Array([1, 2, 3]), from: bridge.clientId, to: page2.clientId }]);
     expect(page1.received).toEqual([]);
     expect(bridge.received).toEqual([]);
     expect(bridge.errors).toEqual([]);
@@ -72,8 +72,8 @@ describe('AppMessage against a real relay', () => {
     await until(() => page1.received.length > 0 && page2.received.length > 0, 'both pages to receive');
     await settle();
 
-    expect(page1.received.map((r) => r.from)).toEqual([bridge.clientId]);
-    expect(page2.received.map((r) => r.from)).toEqual([bridge.clientId]);
+    expect(page1.received.map((r) => [r.from, r.to])).toEqual([[bridge.clientId, '']]);
+    expect(page2.received.map((r) => [r.from, r.to])).toEqual([[bridge.clientId, '']]);
     expect(bridge.received).toEqual([]);
   });
 
@@ -92,5 +92,17 @@ describe('AppMessage against a real relay', () => {
 
     expect(bridge.errors).toEqual(['PEER_NOT_FOUND']);
     expect(page1.received).toEqual([]);
+  });
+
+  it('joins a room whose id contains a slash, and messages within it', async () => {
+    const room = `design:${crypto.randomUUID()}/board.kicad_sch`;
+    const bridge = await join(room, 'bridge');
+    const page = await join(room, 'page');
+
+    expect(bridge.client.sessionId).toBe(room);
+    bridge.client.sendAppMessage('roster', new Uint8Array([7]));
+    await until(() => page.received.length > 0, 'page to receive');
+
+    expect(page.received.map((r) => r.from)).toEqual([bridge.clientId]);
   });
 });
