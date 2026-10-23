@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - unreleased
+
+### Fixed
+- `import { CollabClient } from "@panyam/massrelay"` resolves. The `exports`
+  map had subpaths (`./client`, `./engine`, ...) and no `"."` entry, so the
+  package root threw `ERR_PACKAGE_PATH_NOT_EXPORTED`, and `main` pointed at the
+  generated model file. A new `src/index.ts` re-exports the client, engine,
+  sync, crypto, peer and URL helpers and the model types. The subpaths are
+  unchanged. Generated service stubs stay on `./services`.
+
 ## [0.2.1] - 2026-10-23
 
 Security patch release. The Docker image builds again, and the binary picks
