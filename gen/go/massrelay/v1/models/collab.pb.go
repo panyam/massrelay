@@ -840,15 +840,22 @@ func (x *SceneInitResponse) GetPayload() string {
 // app-defined discriminator so peers route without decoding; payload is opaque
 // bytes whose schema the application owns.
 //
-// to_client_id, when set, addresses one peer: the relay delivers to that client
-// alone and answers the sender with ErrorEvent{PEER_NOT_FOUND} if it is not in
-// the sender's room. Empty keeps the room-wide fan-out. The sender is named by
+// to_client_ids, when set, addresses those peers: each one present in the
+// sender's room gets the message once, and the sender gets one
+// ErrorEvent{PEER_NOT_FOUND} naming any that are not. On delivery a receiver
+// sees to_client_ids holding only its own id, so it can tell an addressed
+// message from a room-wide one without learning who else was addressed. Empty
+// keeps the room-wide fan-out. The sender is named by
 // CollabEvent.from_client_id on delivery.
+//
+// Messages from one sender reach each receiver in the order they were sent.
+// The relay never skips one: a receiver that falls too far behind is removed
+// from the room with SessionEnded{reason: "slow_consumer"} instead.
 type AppMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
 	Payload       []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	ToClientId    string                 `protobuf:"bytes,3,opt,name=to_client_id,json=toClientId,proto3" json:"to_client_id,omitempty"`
+	ToClientIds   []string               `protobuf:"bytes,3,rep,name=to_client_ids,json=toClientIds,proto3" json:"to_client_ids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -897,11 +904,11 @@ func (x *AppMessage) GetPayload() []byte {
 	return nil
 }
 
-func (x *AppMessage) GetToClientId() string {
+func (x *AppMessage) GetToClientIds() []string {
 	if x != nil {
-		return x.ToClientId
+		return x.ToClientIds
 	}
-	return ""
+	return nil
 }
 
 type CollabEvent struct {
@@ -2174,13 +2181,12 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x0fcursor_position\x18\x03 \x01(\x05R\x0ecursorPosition\"\x12\n" +
 	"\x10SceneInitRequest\"-\n" +
 	"\x11SceneInitResponse\x12\x18\n" +
-	"\apayload\x18\x01 \x01(\tR\apayload\"\\\n" +
+	"\apayload\x18\x01 \x01(\tR\apayload\"^\n" +
 	"\n" +
 	"AppMessage\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
-	"\apayload\x18\x02 \x01(\fR\apayload\x12 \n" +
-	"\fto_client_id\x18\x03 \x01(\tR\n" +
-	"toClientId\"\xc8\t\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\x12\"\n" +
+	"\rto_client_ids\x18\x03 \x03(\tR\vtoClientIds\"\xc8\t\n" +
 	"\vCollabEvent\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12$\n" +
 	"\x0efrom_client_id\x18\x02 \x01(\tR\ffromClientId\x12)\n" +

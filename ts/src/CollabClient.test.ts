@@ -17,14 +17,18 @@ async function connectedClient(received: Array<[string, Uint8Array, string, stri
 
 describe('CollabClient AppMessage', () => {
   /** @flow Bridge calls a tool on one page → only that page's AppMessage is addressed */
-  it('sends to_client_id when addressed, and omits it otherwise', async () => {
+  it('sends to_client_ids when addressed, and omits it otherwise', async () => {
     const { client, controller } = await connectedClient([]);
     client.sendAppMessage('tools/call', new Uint8Array([1, 2]), { to: 'page-2' });
+    client.sendAppMessage('tools/call', new Uint8Array([1, 2]), { to: ['page-2', 'page-3'] });
     client.sendAppMessage('roster', new Uint8Array([3]));
+    client.sendAppMessage('roster', new Uint8Array([3]), { to: [] });
 
-    const sent = controller.sentMessages.slice(-2) as Array<{ appMessage: Record<string, unknown> }>;
-    expect(sent[0].appMessage).toEqual({ kind: 'tools/call', payload: 'AQI=', toClientId: 'page-2' });
-    expect(sent[1].appMessage).toEqual({ kind: 'roster', payload: 'Aw==' });
+    const sent = controller.sentMessages.slice(-4) as Array<{ appMessage: Record<string, unknown> }>;
+    expect(sent[0].appMessage).toEqual({ kind: 'tools/call', payload: 'AQI=', toClientIds: ['page-2'] });
+    expect(sent[1].appMessage).toEqual({ kind: 'tools/call', payload: 'AQI=', toClientIds: ['page-2', 'page-3'] });
+    expect(sent[2].appMessage).toEqual({ kind: 'roster', payload: 'Aw==' });
+    expect(sent[3].appMessage).toEqual({ kind: 'roster', payload: 'Aw==' });
   });
 
   it('passes the sender and the addressee to onAppMessage', async () => {
@@ -32,7 +36,7 @@ describe('CollabClient AppMessage', () => {
     const { controller } = await connectedClient(received);
     controller.simulateMessage({
       fromClientId: 'bridge-1',
-      appMessage: { kind: 'tools/call', payload: 'AQI=', toClientId: 'me' },
+      appMessage: { kind: 'tools/call', payload: 'AQI=', toClientIds: ['me'] },
     });
     controller.simulateMessage({
       fromClientId: 'bridge-1',

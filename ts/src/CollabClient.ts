@@ -21,17 +21,18 @@ export interface CollabClientOptions {
   onCredentialsChanged?: (reason: string) => void;
   onTitleChanged?: (title: string) => void;
   /** A generic app-defined message another peer sent to the room, or to this
-   * client alone. fromClientId is the sender, as stamped by the relay; it is
-   * empty for a message the relay's embedding server originated. toClientId is
-   * this client's id when the message was addressed to it, and empty when it
-   * went to the whole room, so a receiver can refuse a room-wide message that
-   * should only ever arrive addressed. */
+   * client among the peers it addressed. fromClientId is the sender, as stamped
+   * by the relay; it is empty for a message the relay's embedding server
+   * originated. toClientId is this client's id when the message was addressed
+   * to it, and empty when it went to the whole room, so a receiver can refuse a
+   * room-wide message that should only ever arrive addressed. Messages from one
+   * sender arrive in the order it sent them. */
   onAppMessage?: (kind: string, payload: Uint8Array, fromClientId: string, toClientId: string) => void;
   /** Called when the relay returns an ErrorEvent. One that arrives before the
    * join (ROOM_FULL, ROOM_FORBIDDEN, PROTOCOL_VERSION_TOO_OLD) means the join
    * was refused, and the client closes without calling onDisconnect. One that
-   * arrives after it (PEER_NOT_FOUND, ALREADY_JOINED) refuses that one action,
-   * and the connection stays open. */
+   * arrives after it (PEER_NOT_FOUND, ALREADY_JOINED, RATE_LIMITED) refuses
+   * that one action, and the connection stays open. */
   onErrorEvent?: (code: string, message: string) => void;
   maxRetries?: number;
   /** JWT for a relay running with auth. Sent as the `token` query parameter,
@@ -157,12 +158,15 @@ export class CollabClient {
 
   /** Send a generic app-defined message. kind is an app-defined discriminator;
    * payload is opaque bytes. By default it fans out to all other peers in the
-   * room; with opts.to it goes to that client alone, and the relay answers with
-   * an ErrorEvent PEER_NOT_FOUND (see onErrorEvent) if it is not in the room. */
-  sendAppMessage(kind: string, payload: Uint8Array, opts?: { to?: string }): void {
+   * room; with opts.to it goes to that client or those clients alone, each
+   * seeing only its own id as the addressee. The relay answers with one
+   * ErrorEvent PEER_NOT_FOUND (see onErrorEvent) naming any that are not in the
+   * room, and still delivers to the rest. */
+  sendAppMessage(kind: string, payload: Uint8Array, opts?: { to?: string | string[] }): void {
     // The JSON action encodes bytes as base64; keep the public API Uint8Array.
-    const appMessage: { kind: string; payload: string; toClientId?: string } = { kind, payload: base64Encode(payload) };
-    if (opts?.to) appMessage.toClientId = opts.to;
+    const appMessage: { kind: string; payload: string; toClientIds?: string[] } = { kind, payload: base64Encode(payload) };
+    const to = typeof opts?.to === 'string' ? [opts.to] : (opts?.to ?? []);
+    if (to.length > 0) appMessage.toClientIds = to;
     this.send({ appMessage });
   }
 
@@ -317,7 +321,7 @@ export class CollabClient {
         break;
 
       case 'appMessage':
-        this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload, event.fromClientId, event.event.value.toClientId);
+        this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload, event.fromClientId, event.event.value.toClientIds[0] ?? '');
         break;
     }
   }

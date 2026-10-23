@@ -94,14 +94,21 @@ message SceneInitResponse {
 // app-defined discriminator so peers route without decoding; payload is opaque
 // bytes whose schema the application owns.
 //
-// to_client_id, when set, addresses one peer: the relay delivers to that client
-// alone and answers the sender with ErrorEvent{PEER_NOT_FOUND} if it is not in
-// the sender's room. Empty keeps the room-wide fan-out. The sender is named by
+// to_client_ids, when set, addresses those peers: each one present in the
+// sender's room gets the message once, and the sender gets one
+// ErrorEvent{PEER_NOT_FOUND} naming any that are not. On delivery a receiver
+// sees to_client_ids holding only its own id, so it can tell an addressed
+// message from a room-wide one without learning who else was addressed. Empty
+// keeps the room-wide fan-out. The sender is named by
 // CollabEvent.from_client_id on delivery.
+//
+// Messages from one sender reach each receiver in the order they were sent.
+// The relay never skips one: a receiver that falls too far behind is removed
+// from the room with SessionEnded{reason: "slow_consumer"} instead.
 message AppMessage {
   string kind = 1;
   bytes payload = 2;
-  string to_client_id = 3;
+  repeated string to_client_ids = 3;
 }
 
 // ─── Server → Client ────────────────────────────

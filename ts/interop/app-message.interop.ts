@@ -77,6 +77,41 @@ describe('AppMessage against a real relay', () => {
     expect(bridge.received).toEqual([]);
   });
 
+  it('addresses several peers in one message, each seeing only its own id', async () => {
+    const room = `design:${crypto.randomUUID()}`;
+    const bridge = await join(room, 'bridge');
+    const pages = [await join(room, 'page1'), await join(room, 'page2'), await join(room, 'page3')];
+    const bystander = await join(room, 'bystander');
+
+    bridge.client.sendAppMessage('tools/call', new Uint8Array([4]), { to: pages.map((p) => p.clientId) });
+    await until(() => pages.every((p) => p.received.length > 0), 'every page to receive');
+    await settle();
+
+    for (const page of pages) {
+      expect(page.received.map((r) => [r.from, r.to])).toEqual([[bridge.clientId, page.clientId]]);
+    }
+    expect(bystander.received).toEqual([]);
+    expect(bridge.errors).toEqual([]);
+  });
+
+  it("keeps one sender's messages in order at every receiver", async () => {
+    const room = `design:${crypto.randomUUID()}`;
+    const bridge = await join(room, 'bridge');
+    const pages: Peer[] = [];
+    for (let i = 1; i <= 5; i++) pages.push(await join(room, `page${i}`));
+    const to = pages.map((p) => p.clientId);
+
+    // Batch A: one message per page, then batch B: one multi-peer message per round.
+    pages.forEach((p, i) => bridge.client.sendAppMessage(`A${i + 1}`, new Uint8Array([i]), { to: p.clientId }));
+    for (let i = 1; i <= 5; i++) bridge.client.sendAppMessage(`B${i}`, new Uint8Array([i]), { to });
+    await until(() => pages.every((p) => p.received.length === 6), 'every page to receive all six');
+
+    pages.forEach((p, i) => {
+      expect(p.received.map((r) => r.kind)).toEqual([`A${i + 1}`, 'B1', 'B2', 'B3', 'B4', 'B5']);
+    });
+    expect(bridge.errors).toEqual([]);
+  });
+
   it('answers PEER_NOT_FOUND for a peer that left, and delivers nothing', async () => {
     const room = `design:${crypto.randomUUID()}`;
     const bridge = await join(room, 'bridge');
@@ -92,6 +127,13 @@ describe('AppMessage against a real relay', () => {
 
     expect(bridge.errors).toEqual(['PEER_NOT_FOUND']);
     expect(page1.received).toEqual([]);
+
+    // One absent peer among several doesn't stop delivery to the rest.
+    bridge.client.sendAppMessage('tools/call', new Uint8Array([3]), { to: [goneId, page1.clientId] });
+    await until(() => page1.received.length > 0, 'page1 to receive despite the absent peer');
+    await until(() => bridge.errors.length > 1, 'bridge to get a second error');
+    expect(bridge.errors).toEqual(['PEER_NOT_FOUND', 'PEER_NOT_FOUND']);
+    page1.received.length = 0;
 
     // The refused message doesn't cost the sender its place in the room.
     expect(bridge.client.isConnected).toBe(true);

@@ -8,7 +8,7 @@
 - room-routing: Room-based message routing
 - peer-management: Peer tracking with client_hint, session ownership, ownership transfer
 - collab-protocol: CollabAction/CollabEvent protobuf messaging protocol
-- app-message: generic app-defined pub-sub messages (AppMessage{kind,payload,to_client_id}), room-wide fan-out or addressed to one peer, with no editor semantics — use massrelay as a message bus without the Scene/Text protocol
+- app-message: generic app-defined pub-sub messages (AppMessage{kind,payload,to_client_ids}), room-wide fan-out or addressed to a set of peers in one message, in order per sender, with no editor semantics — use massrelay as a message bus without the Scene/Text protocol
 - peer-identity: PeerInfo.identity from the connection's validated JWT (sub, client_id); `rooms` claim restricts which sessions a token may join
 - admin-api: Token-gated admin endpoints (/admin/status, /admin/rooms)
 - security-middleware: Origin allowlist, connection limiting, rate limiting, CSRF, trusted proxy

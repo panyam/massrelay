@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
@@ -325,12 +327,12 @@ func joinN(t *testing.T, svc *CollabService, sessionId string, names ...string) 
 	return ids
 }
 
-func sendAppMessage(t *testing.T, svc *CollabService, from, to, kind string) *pb.CollabEvent {
+func sendAppMessage(t *testing.T, svc *CollabService, from, kind string, to ...string) *pb.CollabEvent {
 	t.Helper()
 	resp, err := svc.HandleAction(context.Background(), &pb.CollabAction{
 		ClientId: from,
 		Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{
-			Kind: kind, Payload: []byte("args"), ToClientId: to,
+			Kind: kind, Payload: []byte("args"), ToClientIds: to,
 		}},
 	})
 	if err != nil {
@@ -344,7 +346,7 @@ func TestAppMessageAddressedReachesOnlyTarget(t *testing.T) {
 	ids := joinN(t, svc, "sessAddr", "bridge", "page1", "page2")
 	bridge, page1, page2 := ids[0], ids[1], ids[2]
 
-	if resp := sendAppMessage(t, svc, bridge, page2, "tools/call"); resp != nil {
+	if resp := sendAppMessage(t, svc, bridge, "tools/call", page2); resp != nil {
 		t.Fatalf("expected no direct response on successful delivery, got %v", resp)
 	}
 
@@ -386,7 +388,7 @@ func TestAppMessageAddressedPeerNotFound(t *testing.T) {
 	drainCh(room.Clients[page1].SendCh)
 
 	for name, to := range map[string]string{"left the room": gone, "in another room": other} {
-		resp := sendAppMessage(t, svc, bridge, to, "tools/call")
+		resp := sendAppMessage(t, svc, bridge, "tools/call", to)
 		if resp.GetError().GetCode() != "PEER_NOT_FOUND" {
 			t.Fatalf("%s: expected PEER_NOT_FOUND, got %v", name, resp)
 		}
@@ -408,7 +410,7 @@ func TestDeliverAppMessage(t *testing.T) {
 	ids := joinN(t, svc, "sessD", "page1", "page2")
 	room := svc.GetRoomByID("sessD")
 
-	if err := svc.DeliverAppMessage("sessD", "", &pb.AppMessage{Kind: "k", ToClientId: ids[1]}); err != nil {
+	if err := svc.DeliverAppMessage("sessD", "", &pb.AppMessage{Kind: "k", ToClientIds: []string{ids[1]}}); err != nil {
 		t.Fatalf("addressed deliver: %v", err)
 	}
 	select {
@@ -437,10 +439,138 @@ func TestDeliverAppMessage(t *testing.T) {
 	default:
 	}
 
-	if err := svc.DeliverAppMessage("sessD", "", &pb.AppMessage{ToClientId: "nobody"}); !errors.Is(err, ErrPeerNotFound) {
+	if err := svc.DeliverAppMessage("sessD", "", &pb.AppMessage{ToClientIds: []string{"nobody"}}); !errors.Is(err, ErrPeerNotFound) {
 		t.Fatalf("want ErrPeerNotFound, got %v", err)
 	}
 	if err := svc.DeliverAppMessage("no-such-room", "", &pb.AppMessage{}); !errors.Is(err, ErrRoomNotFound) {
 		t.Fatalf("want ErrRoomNotFound, got %v", err)
+	}
+}
+
+func TestAppMessageAddressedToSeveralPeers(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessMany", "bridge", "page1", "page2", "page3", "bystander")
+	bridge, pages, bystander := ids[0], ids[1:4], ids[4]
+
+	if resp := sendAppMessage(t, svc, bridge, "tools/call", pages...); resp != nil {
+		t.Fatalf("expected no direct response on successful delivery, got %v", resp)
+	}
+
+	room := svc.GetRoomByID("sessMany")
+	for _, page := range pages {
+		select {
+		case evt := <-room.Clients[page].SendCh:
+			am := evt.GetAppMessage()
+			if am.GetKind() != "tools/call" || evt.GetFromClientId() != bridge {
+				t.Fatalf("%s got wrong event: %v", page, evt)
+			}
+			if got := am.GetToClientIds(); len(got) != 1 || got[0] != page {
+				t.Fatalf("%s sees to_client_ids %v, want only its own id", page, got)
+			}
+		default:
+			t.Fatalf("%s did not receive the AppMessage", page)
+		}
+	}
+	for name, id := range map[string]string{"bystander": bystander, "sender": bridge} {
+		select {
+		case evt := <-room.Clients[id].SendCh:
+			t.Fatalf("%s received %v", name, evt)
+		default:
+		}
+	}
+}
+
+func TestAppMessageAddressedSomeAbsentStillDeliversToTheRest(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessPart", "bridge", "page1", "gone")
+	bridge, page1, gone := ids[0], ids[1], ids[2]
+	if err := leaveRoom(svc, context.Background(), gone); err != nil {
+		t.Fatalf("leave: %v", err)
+	}
+	room := svc.GetRoomByID("sessPart")
+	drainCh(room.Clients[bridge].SendCh)
+	drainCh(room.Clients[page1].SendCh)
+
+	resp := sendAppMessage(t, svc, bridge, "tools/call", page1, gone)
+	if resp.GetError().GetCode() != "PEER_NOT_FOUND" {
+		t.Fatalf("expected PEER_NOT_FOUND, got %v", resp)
+	}
+	if msg := resp.GetError().GetMessage(); !strings.Contains(msg, gone) || strings.Contains(msg, page1) {
+		t.Fatalf("PEER_NOT_FOUND should name only the absent peer, got %q", msg)
+	}
+	select {
+	case evt := <-room.Clients[page1].SendCh:
+		if evt.GetAppMessage().GetKind() != "tools/call" {
+			t.Fatalf("page1 got wrong event: %v", evt)
+		}
+	default:
+		t.Fatal("present peer should still receive the message")
+	}
+}
+
+func TestAppMessageAddressedDuplicateIdsDeliverOnce(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessDup", "bridge", "page1")
+	if resp := sendAppMessage(t, svc, ids[0], "tools/call", ids[1], ids[1]); resp != nil {
+		t.Fatalf("unexpected response %v", resp)
+	}
+	ch := svc.GetRoomByID("sessDup").Clients[ids[1]].SendCh
+	<-ch
+	select {
+	case evt := <-ch:
+		t.Fatalf("duplicate id delivered twice: %v", evt)
+	default:
+	}
+}
+
+func TestDeliverAppMessageSeveralPeers(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessDM", "page1", "page2")
+	room := svc.GetRoomByID("sessDM")
+
+	err := svc.DeliverAppMessage("sessDM", "", &pb.AppMessage{Kind: "k", ToClientIds: []string{ids[0], "nobody", ids[1]}})
+	if !errors.Is(err, ErrPeerNotFound) || !strings.Contains(err.Error(), "nobody") {
+		t.Fatalf("want ErrPeerNotFound naming nobody, got %v", err)
+	}
+	for _, id := range ids {
+		select {
+		case evt := <-room.Clients[id].SendCh:
+			if got := evt.GetAppMessage().GetToClientIds(); len(got) != 1 || got[0] != id {
+				t.Fatalf("%s sees to_client_ids %v", id, got)
+			}
+		default:
+			t.Fatalf("%s did not receive the message", id)
+		}
+	}
+}
+
+// A receiver whose buffer overflows is marked slow, and nothing sent after the
+// overflow reaches it, even once its buffer drains: it sees a prefix of the
+// sender's messages, never one with a hole in it.
+func TestSlowConsumerIsMarkedAndSkipsLaterMessages(t *testing.T) {
+	svc := NewCollabService()
+	ids := joinN(t, svc, "sessSlow", "bridge", "slow", "fast")
+	bridge, slow, fast := ids[0], ids[1], ids[2]
+	room := svc.GetRoomByID("sessSlow")
+	slowClient := room.Clients[slow]
+
+	for i := 0; i <= cap(slowClient.SendCh); i++ {
+		sendAppMessage(t, svc, bridge, fmt.Sprintf("A%d", i), slow)
+	}
+	select {
+	case <-slowClient.Slow():
+	default:
+		t.Fatal("overflowing receiver should be marked slow")
+	}
+
+	drainCh(slowClient.SendCh)
+	sendAppMessage(t, svc, bridge, "B", slow, fast)
+	select {
+	case evt := <-slowClient.SendCh:
+		t.Fatalf("slow receiver got a message after its overflow: %v", evt)
+	default:
+	}
+	if evt := <-room.Clients[fast].SendCh; evt.GetAppMessage().GetKind() != "B" {
+		t.Fatalf("other receivers are unaffected, got %v", evt)
 	}
 }
