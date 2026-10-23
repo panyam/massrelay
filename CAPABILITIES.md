@@ -26,7 +26,7 @@ newstack/massrelay
 
 ## Stack Dependencies
 - oneauth (github.com/panyam/oneauth) v0.3.0 — uses only `apiauth` (JWT middleware) + `keys` (multi-tenant KeyLookup)
-- servicekit (github.com/panyam/servicekit) v0.1.9 — `middleware`, `http` (ListenAndServeGraceful), `grpcws`
+- servicekit (github.com/panyam/servicekit) v0.1.10 — `middleware`, `http` (ListenAndServeGraceful), `grpcws`
 - gocurrent (github.com/panyam/gocurrent) v0.1.1 — indirect
 - goutils (github.com/panyam/goutils) v0.1.13 — indirect
 
