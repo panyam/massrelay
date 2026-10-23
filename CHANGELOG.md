@@ -4,16 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.5] - 2026-10-23
+
+Moves to servicekit v0.1.11. No API changes in the Go module or the TS package.
 
 ### Changed
-- servicekit v0.1.10 (was v0.1.9), which makes grpcws's message counters and
-  ping id atomic (a data race under `-race`), and `@panyam/servicekit-client`
-  ^0.1.10 in development. No API changes; the peer range is unchanged.
-- servicekit v0.1.11, a dependency patch release (grpc v1.83.2,
-  gorilla/websocket v1.5.3, x/net v0.58.0), and `@panyam/servicekit-client`
-  ^0.1.11 in development. massrelay already required these versions, so its
-  build doesn't change.
+- servicekit v0.1.11 (was v0.1.9), and `@panyam/servicekit-client` ^0.1.11 in
+  development; the peer range is unchanged. v0.1.10 fixes a data race on
+  every grpcws WebSocket close by making `StreamMetrics.MsgsSent`/`MsgsReceived`
+  and `BaseConn.PingId` `atomic.Int64`. massrelay doesn't read them, so nothing
+  here changes. v0.1.11 raises servicekit's grpc, gorilla/websocket and x/net
+  minimums for Dependabot alerts; massrelay already required newer versions
+  (PR 40, PR 41).
 
 ## [0.2.4] - 2026-10-23
 
