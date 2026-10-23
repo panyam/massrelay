@@ -1,13 +1,13 @@
 module github.com/panyam/massrelay
 
-go 1.26.4
+go 1.26.9
 
 require (
 	connectrpc.com/connect v1.19.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/panyam/oneauth v0.1.36
+	github.com/panyam/oneauth v0.3.0
 	github.com/panyam/servicekit v0.1.7
 	github.com/prometheus/client_golang v1.24.1
 	go.opentelemetry.io/otel v1.47.0
@@ -22,6 +22,7 @@ require (
 )
 
 require (
+	github.com/alexedwards/scs/v2 v2.8.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
