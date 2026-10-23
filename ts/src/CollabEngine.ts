@@ -216,7 +216,10 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
     };
 
     client.options.onErrorEvent = (code: string, message: string) => {
-      this._updateState({ error: `${code}: ${message}`, phase: 'disconnected' });
+      // After the join an error refuses one action and the client stays connected.
+      if (!client.isConnected) {
+        this._updateState({ error: `${code}: ${message}`, phase: 'disconnected' });
+      }
       this.emit('error', { code, message });
     };
 

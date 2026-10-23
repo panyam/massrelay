@@ -847,6 +847,21 @@ describe('CollabEngine', () => {
       expect(engine.state.error).toBe('ROOM_FULL: Room is full (10/10)');
       expect(engine.state.phase).toBe('disconnected');
     });
+
+    it('stays connected on an error after the join, and still emits it', () => {
+      const client = makeMockClient();
+      const engine = new CollabEngine({ client, timers });
+      const errors: Array<{ code?: string; message: string }> = [];
+      engine.on('error', (e) => errors.push(e));
+
+      engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Alice', metadata: { tool: 'excalidraw' } });
+      client.simulateRoomJoined({ clientId: 'c1', sessionId: 'sess1', ownerClientId: 'c1' });
+      client.simulateErrorEvent('PEER_NOT_FOUND', 'No client c9 in this room');
+
+      expect(engine.state.phase).toBe('connected');
+      expect(engine.state.error).toBe(null);
+      expect(errors).toEqual([{ code: 'PEER_NOT_FOUND', message: 'No client c9 in this room' }]);
+    });
   });
 
   /**

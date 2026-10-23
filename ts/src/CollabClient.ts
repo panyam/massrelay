@@ -12,6 +12,9 @@ export interface CollabClientOptions {
   onPeerLeft?: (clientId: string) => void;
   onError?: (error: Error) => void;
   onConnect?: (clientId: string) => void;
+  /** Called once for every connection that reached onConnect, however it
+   * ends: disconnect(), the relay closing, or the owner ending the session
+   * (before onSessionEnded). */
   onDisconnect?: () => void;
   onSessionEnded?: (reason: string) => void;
   onOwnerChanged?: (newOwnerClientId: string) => void;
@@ -24,7 +27,11 @@ export interface CollabClientOptions {
    * went to the whole room, so a receiver can refuse a room-wide message that
    * should only ever arrive addressed. */
   onAppMessage?: (kind: string, payload: Uint8Array, fromClientId: string, toClientId: string) => void;
-  /** Called when relay returns an ErrorEvent (e.g. ROOM_FULL). */
+  /** Called when the relay returns an ErrorEvent. One that arrives before the
+   * join (ROOM_FULL, ROOM_FORBIDDEN, PROTOCOL_VERSION_TOO_OLD) means the join
+   * was refused, and the client closes without calling onDisconnect. One that
+   * arrives after it (PEER_NOT_FOUND, ALREADY_JOINED) refuses that one action,
+   * and the connection stays open. */
   onErrorEvent?: (code: string, message: string) => void;
   maxRetries?: number;
   /** JWT for a relay running with auth. Sent as the `token` query parameter,
@@ -212,12 +219,13 @@ export class CollabClient {
 
     switch (event.event.case) {
       case 'error': {
-        // Graceful error from relay (e.g. ROOM_FULL, PROTOCOL_VERSION_TOO_OLD)
+        // Before the join, an error is the relay refusing it (ROOM_FULL,
+        // ROOM_FORBIDDEN, PROTOCOL_VERSION_TOO_OLD), so close. After the join
+        // it refuses one action (PEER_NOT_FOUND, ALREADY_JOINED) and the relay
+        // keeps the stream open, so we do too.
         const err = event.event.value;
         this.options.onErrorEvent?.(err.code, err.message);
-        this.explicitDisconnect = true; // Don't auto-reconnect on graceful rejection
-        this.grpc?.close();
-        this.resetState();
+        if (!this._isConnected) this.closeFromRelay();
         break;
       }
 
@@ -288,10 +296,8 @@ export class CollabClient {
         break;
 
       case 'sessionEnded':
+        this.closeFromRelay();
         this.options.onSessionEnded?.(event.event.value.reason);
-        this.explicitDisconnect = true; // Don't reconnect
-        this.grpc?.close();
-        this.resetState();
         break;
 
       case 'ownerChanged': {
@@ -329,6 +335,18 @@ export class CollabClient {
     // params after a server restart creates phantom sessions. The user can
     // re-click Share to reconnect. TODO: add smart reconnect that validates
     // the session is still alive before re-joining.
+  }
+
+  /** Closes a connection the relay ended. Fires onDisconnect if it had
+   * joined, so every onConnect is paired with exactly one onDisconnect. State
+   * is reset before close() so a synchronous onClose finds nothing to do. */
+  private closeFromRelay(): void {
+    const grpc = this.grpc;
+    const wasConnected = this._isConnected;
+    this.explicitDisconnect = true;
+    this.resetState();
+    grpc?.close();
+    if (wasConnected) this.options.onDisconnect?.();
   }
 
   private resetState(): void {

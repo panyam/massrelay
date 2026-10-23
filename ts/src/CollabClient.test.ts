@@ -79,3 +79,59 @@ describe('CollabClient logging', () => {
     }
   });
 });
+
+function trackedClient() {
+  const { client: grpc, controller } = GRPCWSClient.createMock();
+  const calls: string[] = [];
+  const close = vi.spyOn(grpc, 'close');
+  const client = new CollabClient({
+    _grpcFactory: () => grpc,
+    onConnect: () => calls.push('connect'),
+    onDisconnect: () => calls.push('disconnect'),
+    onErrorEvent: (code) => calls.push(`error:${code}`),
+    onSessionEnded: (reason) => calls.push(`ended:${reason}`),
+  });
+  client.connect('ws://relay.test', 'design:abc', 'page', {});
+  controller.simulateOpen();
+  return { client, controller, calls, close };
+}
+
+const joined = { roomJoined: { clientId: 'me', room: { sessionId: 'design:abc' } } };
+
+describe('CollabClient relay errors', () => {
+  /** @flow Page replies to an agent that already left → that reply is refused, the page stays in the room */
+  it('keeps the connection after an error that follows the join', async () => {
+    const { client, controller, calls, close } = trackedClient();
+    await Promise.resolve();
+    controller.simulateMessage(joined);
+    controller.simulateMessage({ error: { code: 'PEER_NOT_FOUND', message: 'No client agent-1 in this room' } });
+
+    expect(calls).toEqual(['connect', 'error:PEER_NOT_FOUND']);
+    expect(client.isConnected).toBe(true);
+    expect(client.clientId).toBe('me');
+    expect(close).not.toHaveBeenCalled();
+    expect(() => client.sendAppMessage('tools/result', new Uint8Array([1]))).not.toThrow();
+  });
+
+  it('closes without onDisconnect when the join itself is refused', async () => {
+    const { client, controller, calls, close } = trackedClient();
+    await Promise.resolve();
+    controller.simulateMessage({ error: { code: 'ROOM_FULL', message: 'Room is full (10/10)' } });
+
+    expect(calls).toEqual(['error:ROOM_FULL']);
+    expect(client.isConnected).toBe(false);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onDisconnect once, before onSessionEnded, when the owner ends the session', async () => {
+    const { client, controller, calls, close } = trackedClient();
+    await Promise.resolve();
+    controller.simulateMessage(joined);
+    controller.simulateMessage({ sessionEnded: { reason: 'owner stopped sharing' } });
+    controller.simulateClose();
+
+    expect(calls).toEqual(['connect', 'disconnect', 'ended:owner stopped sharing']);
+    expect(client.isConnected).toBe(false);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+});
