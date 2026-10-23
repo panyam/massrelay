@@ -100,6 +100,12 @@ client.send({
 client.disconnect();
 ```
 
+Against a relay that requires auth, pass the JWT as `token` in the options. The client sends it as the `token` query parameter on the WebSocket URL, since browsers can't set an `Authorization` header on a WebSocket upgrade. The session id is URL-escaped, so a room id may contain `/` or `:`.
+
+```typescript
+const client = new CollabClient({ token: relayJwt, onConnect: (id) => console.log(id) });
+```
+
 ---
 
 ## Architecture
@@ -160,7 +166,9 @@ GET /health
 GET /ws/v1/{session_id}/sync
 ```
 
-Upgrades to a WebSocket connection for bidirectional streaming. The `{session_id}` in the URL is informational — the actual session is determined by the `JoinRoom` action sent over the WebSocket.
+Upgrades to a WebSocket connection for bidirectional streaming. The `{session_id}` in the URL is informational — the actual session is determined by the `JoinRoom` action sent over the WebSocket. Escape it as one path segment (`encodeURIComponent`), since a session id may contain `/`.
+
+A JWT can go in the `Authorization: Bearer` header or, for browsers, the `token` query parameter (`/ws/v1/{session_id}/sync?token=<jwt>`).
 
 **Transport:** [servicekit](https://github.com/panyam/servicekit) envelope protocol. Each WebSocket frame is a JSON object:
 
@@ -362,7 +370,7 @@ A generic, application-defined message. The relay keeps no state for it and give
 | `payload` | bytes | Opaque to the relay (base64 in JSON). |
 | `toClientId` | string | Optional. When set, only that client receives the message. If it is not in the sender's room, the sender gets `ErrorEvent{PEER_NOT_FOUND}` and nothing is delivered. Empty fans out to every other peer. |
 
-Receivers read the sender from the event's `fromClientId`, which the relay sets from the sending connection, so a reply can be addressed back.
+Receivers read the sender from the event's `fromClientId`, which the relay sets from the sending connection, so a reply can be addressed back. An addressed message arrives with `toClientId` still set to the receiver's id, and a room-wide one with it empty, so a receiver can refuse a room-wide message of a kind that should only arrive addressed. `CollabClient` passes both to `onAppMessage(kind, payload, fromClientId, toClientId)`.
 
 ---
 

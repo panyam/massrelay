@@ -19,11 +19,17 @@ export interface CollabClientOptions {
   onTitleChanged?: (title: string) => void;
   /** A generic app-defined message another peer sent to the room, or to this
    * client alone. fromClientId is the sender, as stamped by the relay; it is
-   * empty for a message the relay's embedding server originated. */
-  onAppMessage?: (kind: string, payload: Uint8Array, fromClientId: string) => void;
+   * empty for a message the relay's embedding server originated. toClientId is
+   * this client's id when the message was addressed to it, and empty when it
+   * went to the whole room, so a receiver can refuse a room-wide message that
+   * should only ever arrive addressed. */
+  onAppMessage?: (kind: string, payload: Uint8Array, fromClientId: string, toClientId: string) => void;
   /** Called when relay returns an ErrorEvent (e.g. ROOM_FULL). */
   onErrorEvent?: (code: string, message: string) => void;
   maxRetries?: number;
+  /** JWT for a relay running with auth. Sent as the `token` query parameter,
+   * since browsers can't set headers on a WebSocket upgrade. */
+  token?: string;
   /** Factory for creating GRPCWSClient instances. Defaults to `() => new GRPCWSClient()`.
    *  Override in tests with `GRPCWSClient.createMock()`. */
   _grpcFactory?: () => GRPCWSClient;
@@ -156,7 +162,8 @@ export class CollabClient {
   private openWebSocket(): void {
     const resolved = resolveRelayUrl(this._relayUrl);
     const wsSessionId = this._sessionId || '_new';
-    const url = `${resolved}/ws/v1/${wsSessionId}/sync`;
+    let url = `${resolved}/ws/v1/${encodeURIComponent(wsSessionId)}/sync`;
+    if (this.options.token) url += `?token=${encodeURIComponent(this.options.token)}`;
     this.grpc = this.options._grpcFactory ? this.options._grpcFactory() : new GRPCWSClient();
 
     // GRPCWSClient.onMessage receives data already unwrapped from the
@@ -201,8 +208,6 @@ export class CollabClient {
   }
 
   private handleEvent(event: CollabEvent): void {
-    const eventCase = event.event.case;
-    console.log('[COLLAB] Received event:', eventCase ?? 'unknown', 'from:', event.fromClientId);
     this.options.onEvent?.(event);
 
     switch (event.event.case) {
@@ -306,7 +311,7 @@ export class CollabClient {
         break;
 
       case 'appMessage':
-        this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload, event.fromClientId);
+        this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload, event.fromClientId, event.event.value.toClientId);
         break;
     }
   }
