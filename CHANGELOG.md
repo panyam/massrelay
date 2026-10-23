@@ -7,10 +7,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
-- The relay binary accepts WebSockets again. `main.go` wrapped every route in
-  servicekit's `RequestLogger`, whose status recorder hides `http.Hijacker`,
-  so every `/ws/` upgrade failed with a 400. `/ws/` now bypasses the logger
-  until servicekit ships panyam/servicekit#38.
+- The relay binary accepts WebSockets again. `main.go` wraps every route in
+  servicekit's `RequestLogger`, whose status recorder hid `http.Hijacker`
+  before servicekit v0.1.7, so every `/ws/` upgrade failed with a 400.
+  servicekit goes from v0.1.3 to v0.1.7, which also brings v0.1.6's graceful
+  shutdown change (request contexts are cancelled before the drain).
 - A second `JoinRoom` on one connection gets `ErrorEvent{ALREADY_JOINED}`.
   It used to add a second client that the stream forgot, which then stayed
   in its room for good.
