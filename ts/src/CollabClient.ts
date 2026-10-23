@@ -17,8 +17,10 @@ export interface CollabClientOptions {
   onOwnerChanged?: (newOwnerClientId: string) => void;
   onCredentialsChanged?: (reason: string) => void;
   onTitleChanged?: (title: string) => void;
-  /** A generic app-defined message another peer broadcast to the room. */
-  onAppMessage?: (kind: string, payload: Uint8Array) => void;
+  /** A generic app-defined message another peer sent to the room, or to this
+   * client alone. fromClientId is the sender, as stamped by the relay; it is
+   * empty for a message the relay's embedding server originated. */
+  onAppMessage?: (kind: string, payload: Uint8Array, fromClientId: string) => void;
   /** Called when relay returns an ErrorEvent (e.g. ROOM_FULL). */
   onErrorEvent?: (code: string, message: string) => void;
   maxRetries?: number;
@@ -140,11 +142,15 @@ export class CollabClient {
     });
   }
 
-  /** Broadcast a generic app-defined message to the room (fanned out to all
-   * other peers). kind is an app-defined discriminator; payload is opaque bytes. */
-  sendAppMessage(kind: string, payload: Uint8Array): void {
+  /** Send a generic app-defined message. kind is an app-defined discriminator;
+   * payload is opaque bytes. By default it fans out to all other peers in the
+   * room; with opts.to it goes to that client alone, and the relay answers with
+   * an ErrorEvent PEER_NOT_FOUND (see onErrorEvent) if it is not in the room. */
+  sendAppMessage(kind: string, payload: Uint8Array, opts?: { to?: string }): void {
     // The JSON action encodes bytes as base64; keep the public API Uint8Array.
-    this.send({ appMessage: { kind, payload: base64Encode(payload) } });
+    const appMessage: { kind: string; payload: string; toClientId?: string } = { kind, payload: base64Encode(payload) };
+    if (opts?.to) appMessage.toClientId = opts.to;
+    this.send({ appMessage });
   }
 
   private openWebSocket(): void {
@@ -300,7 +306,7 @@ export class CollabClient {
         break;
 
       case 'appMessage':
-        this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload);
+        this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload, event.fromClientId);
         break;
     }
   }

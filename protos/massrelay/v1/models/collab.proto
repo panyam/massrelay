@@ -93,9 +93,15 @@ message SceneInitResponse {
 // room unchanged (no server-side state, no editor semantics). kind is an
 // app-defined discriminator so peers route without decoding; payload is opaque
 // bytes whose schema the application owns.
+//
+// to_client_id, when set, addresses one peer: the relay delivers to that client
+// alone and answers the sender with ErrorEvent{PEER_NOT_FOUND} if it is not in
+// the sender's room. Empty keeps the room-wide fan-out. The sender is named by
+// CollabEvent.from_client_id on delivery.
 message AppMessage {
   string kind = 1;
   bytes payload = 2;
+  string to_client_id = 3;
 }
 
 // ─── Server → Client ────────────────────────────
@@ -154,6 +160,17 @@ message PeerInfo {
   bool is_active = 5;
   bool is_owner = 6;
   map<string, string> metadata = 7;  // application-defined key-value pairs (from JoinRoom)
+  // Set by the relay from the connection's validated JWT; never from JoinRoom.
+  // Absent when the connection carried no token, so a peer can tell an
+  // anonymous peer from an authenticated one.
+  PeerIdentity identity = 8;
+}
+
+// PeerIdentity is who a peer is according to the token the relay validated for
+// its connection. Clients cannot set it.
+message PeerIdentity {
+  string subject = 1;    // JWT "sub"
+  string client_id = 2;  // JWT "client_id" (the app/host the token was minted for), if any
 }
 
 message PeerJoined {

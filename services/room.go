@@ -157,3 +157,20 @@ func (r *CollabRoom) BroadcastExcept(event *pb.CollabEvent, exceptClientId strin
 		}
 	}
 }
+
+// SendTo delivers an event to one client (non-blocking, dropped if its channel
+// is full, same as the broadcasts). Returns false if the client is not in
+// this room.
+func (r *CollabRoom) SendTo(event *pb.CollabEvent, clientId string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	c, ok := r.Clients[clientId]
+	if !ok {
+		return false
+	}
+	select {
+	case c.SendCh <- event:
+	default:
+	}
+	return true
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -488,5 +489,40 @@ func TestMultiTenantDifferentKeys(t *testing.T) {
 
 	if rrCross.Code != http.StatusUnauthorized {
 		t.Errorf("cross-key: expected 401, got %d", rrCross.Code)
+	}
+}
+
+func TestRoomsClaim(t *testing.T) {
+	ks := testKeyStore(testClientID, testSecret)
+	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{KeyStore: ks, Required: true})
+
+	cases := []struct {
+		name  string
+		claim any
+		want  []string
+	}{
+		{"absent", nil, nil},
+		{"string", "design:abc", []string{"design:abc"}},
+		{"array", []string{"design:abc", "review:*"}, []string{"design:abc", "review:*"}},
+	}
+	for _, c := range cases {
+		claims := validClaims(testClientID)
+		if c.claim != nil {
+			claims["rooms"] = c.claim
+		}
+		var got *middleware.RelayClaims
+		h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = middleware.GetRelayClaimsFromContext(r.Context())
+		})
+		req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+		req.Header.Set("Authorization", "Bearer "+mintToken(t, testSecret, claims))
+		auth.Middleware(h).ServeHTTP(httptest.NewRecorder(), req)
+
+		if got == nil {
+			t.Fatalf("%s: no claims in context", c.name)
+		}
+		if !reflect.DeepEqual(got.Rooms, c.want) {
+			t.Errorf("%s: Rooms = %#v, want %#v", c.name, got.Rooms, c.want)
+		}
 	}
 }

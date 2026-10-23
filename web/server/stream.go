@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 	"github.com/panyam/massrelay/services"
+	"github.com/panyam/massrelay/web/middleware"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -41,8 +42,17 @@ type CollabBidiStream struct {
 	messageLimiter *rate.Limiter // per-client message rate limiter
 }
 
-// NewCollabBidiStream creates a new bidi stream for the collab service.
+// NewCollabBidiStream creates a new bidi stream for the collab service. ctx is
+// the upgrade request's context; if the auth middleware validated a token on
+// it, the stream's joins carry that identity (see services.Principal).
 func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg StreamConfig) *CollabBidiStream {
+	if claims := middleware.GetRelayClaimsFromContext(ctx); claims != nil {
+		ctx = services.WithPrincipal(ctx, &services.Principal{
+			Subject:  claims.Subject,
+			ClientID: claims.ClientID,
+			Rooms:    claims.Rooms,
+		})
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	var msgLimiter *rate.Limiter
 	if cfg.MaxMessageRate > 0 {
@@ -76,6 +86,18 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 				return nil // silently drop
 			}
 		}
+	}
+
+	// The sender is this connection's own client, whatever the action claims;
+	// anything but a join before joining has no sender to be.
+	if action.GetJoin() == nil {
+		s.mu.Lock()
+		clientId := s.clientId
+		s.mu.Unlock()
+		if clientId == "" {
+			return fmt.Errorf("%T sent before joining a room", action.Action)
+		}
+		action.ClientId = clientId
 	}
 
 	resp, err := s.service.HandleAction(s.ctx, action)
