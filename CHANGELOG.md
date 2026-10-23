@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-23
+
+Security patch release. The Docker image builds again, and the binary picks
+up patched dependencies (PR 28).
+
+### Fixed
+- The Docker image builds again. The Dockerfile used `golang:1.25-alpine`
+  while `go.mod` has required Go 1.26.4 since April, so every build failed at
+  `go mod download`. It now builds with `golang:1.26-alpine` (Go 1.26.10),
+  which also carries the stdlib `net/http` and `crypto/x509` fixes.
+
+### Security
+- Go: golang.org/x/crypto v0.58.0, golang.org/x/net v0.61.0,
+  google.golang.org/grpc v1.84.0, otel v1.47.0 (prometheus exporter v0.69.0),
+  gorilla/websocket v1.5.3. Clears the Go Dependabot alerts.
+- TS (dev only): vitest 4.1.12 with vite 8, plus patched postcss, nanoid,
+  source-map-js and picomatch. `npm audit` reports 0.
+
 ## [0.2.0] - 2026-10-23
 
 Full write-up in [docs/releases/v0.2.0.md](docs/releases/v0.2.0.md).
