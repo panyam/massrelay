@@ -16,14 +16,12 @@ import (
 // RelayClaims holds the validated JWT claims relevant to the relay.
 // Parsed from oneauth's custom claims map after token validation.
 type RelayClaims struct {
-	Subject    string    // JWT "sub" claim (user ID)
-	ClientID   string    // custom "client_id" claim (host identifier)
-	Scopes     []string  // JWT "scopes" claim
-	MaxRooms   int       // custom "max_rooms" claim (0 = unlimited)
-	MaxMsgRate float64   // custom "max_msg_rate" claim (0 = unlimited)
-	Rooms      []string  // custom "rooms" claim: sessions this token may join (exact, or prefix ending in "*"); empty = any
-	ExpiresAt  time.Time // JWT "exp" claim
-	IssuedAt   time.Time // JWT "iat" claim
+	Subject   string    // JWT "sub" claim (user ID)
+	ClientID  string    // custom "client_id" claim (host identifier)
+	Scopes    []string  // JWT "scopes" claim
+	Rooms     []string  // custom "rooms" claim: sessions this token may join (exact, or prefix ending in "*"); empty = any
+	ExpiresAt time.Time // JWT "exp" claim
+	IssuedAt  time.Time // JWT "iat" claim
 }
 
 // relayContextKey is a private type for relay auth context keys.
@@ -206,12 +204,6 @@ func (a *RelayAuthenticator) buildRelayClaims(ctx context.Context, userID string
 	if custom != nil {
 		if v, ok := custom["client_id"].(string); ok {
 			claims.ClientID = v
-		}
-		if v, ok := custom["max_rooms"].(float64); ok {
-			claims.MaxRooms = int(v)
-		}
-		if v, ok := custom["max_msg_rate"].(float64); ok {
-			claims.MaxMsgRate = v
 		}
 		claims.Rooms = stringOrStrings(custom["rooms"])
 		if v, ok := custom["exp"].(float64); ok {
