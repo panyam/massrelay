@@ -1,6 +1,12 @@
 {
   "name": "@panyam/massrelay",
   "version": "0.2.3",
+  "description": "Browser client and protobuf models for the massrelay WebSocket relay",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/panyam/massrelay.git",
+    "directory": "ts"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- npm publishing goes through servicekit's shared `npm-publish.yml` with npm
+  trusted publishing, so release tags publish `@panyam/massrelay` without an
+  `NPM_TOKEN` secret.
+- `scripts/check-versions.sh` fails CI when `ts/package.json` drifts from
+  CAPABILITIES.md's version, and a publish when the tag does.
+- `ts/package.json` gains `description` and `repository`, which npm provenance
+  checks against the publishing repo.
+
 ## [0.2.3] - 2026-10-23
 
 ### Added

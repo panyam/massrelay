@@ -1,13 +1,14 @@
 name: Publish npm
 
-# Publishes ts/ as @panyam/massrelay when a release tag is pushed. The tag must
-# match ts/package.json's version, so a Go-only tag that forgot to bump the TS
-# package fails here instead of publishing the wrong thing. Run it by hand
-# (workflow_dispatch, ref = an existing tag) to publish a tag pushed before
-# this workflow existed, e.g. v0.2.1.
+# Publishes ts/ as @panyam/massrelay when a release tag is pushed, through
+# servicekit's shared workflow, which uses npm trusted publishing (no token).
+# The Go module and the TS package share one version (CAPABILITIES.md's
+# "## Version"), and scripts/check-versions.sh fails the run when the tag,
+# CAPABILITIES.md or ts/package.json disagree. Run it by
+# hand (workflow_dispatch, ref = an existing tag) to publish an older tag.
 #
-# Needs the NPM_TOKEN repository secret: an npm automation token with publish
-# rights on @panyam/massrelay.
+# npm side, once:
+#   npm trust github @panyam/massrelay --repo panyam/massrelay --file publish-npm.yml --allow-publish
 
 on:
   push:
@@ -16,10 +17,10 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write
 
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,28 +33,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
-      - name: Check the tag matches ts/package.json
-        run: |
-          want="${GITHUB_REF_NAME#v}"
-          have="$(node -p "require('./package.json').version")"
-          if [ "$want" != "$have" ]; then
-            echo "tag ${GITHUB_REF_NAME} but ts/package.json is ${have}" >&2
-            exit 1
-          fi
+      - run: ../scripts/check-versions.sh "$GITHUB_REF_NAME"
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
       - run: npm run test:interop
-      - run: npm run build
-      - run: npm run check:pack
-      - name: Publish, unless this version is already on npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          v="$(node -p "require('./package.json').version")"
-          if npm view "@panyam/massrelay@${v}" version >/dev/null 2>&1; then
-            echo "@panyam/massrelay@${v} is already published"
-            exit 0
-          fi
-          npm publish --provenance --access public
+
+  publish:
+    needs: test
+    uses: panyam/servicekit/.github/workflows/npm-publish.yml@master
+    with:
+      working-directory: ts
