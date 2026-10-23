@@ -219,6 +219,10 @@ func (s *CollabBidiStream) CloseSend() error {
 }
 
 // ─── grpc.ClientStream interface (required by servicekit) ───────
+//
+// servicekit drives the stream through Send/Recv/CloseSend only. These exist
+// to satisfy grpc.ClientStream and do nothing: no headers or trailers, and
+// SendMsg/RecvMsg are never called.
 
 func (s *CollabBidiStream) Header() (metadata.MD, error) { return nil, nil }
 func (s *CollabBidiStream) Trailer() metadata.MD          { return nil }
