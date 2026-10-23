@@ -70,7 +70,7 @@ Disabled entirely when no token is set (routes not registered).
 
 ## Security Model
 
-- No authentication — session IDs are the only access control
+- Optional JWT auth (`RELAY_AUTH_REQUIRED`, oneauth `apiauth`): token via `Authorization: Bearer` or `?token=` (browsers). A validated token sets `PeerInfo.identity` (sub, client_id), and its `rooms` claim limits which sessions it may join (`ROOM_FORBIDDEN`). Without auth, session IDs are the only access control. The relay binary has no KeyStore source yet, so it can't validate tokens (#27)
 - Optional E2EE — relay never sees plaintext; encryption is client-side
 - `BrowserId` is server-only (not in `PeerInfo`) — used for ownership transfer, not exposed to peers
 - `SessionId` is on `Room`, not `PeerInfo` — redundant per-peer

@@ -1,42 +1,14 @@
-# Next Steps
+# Next steps
 
-## Immediate
+Where each line of work left off. Work items live in GitHub issues; this file points at them.
+Maintained by /checkpoint: one thread per branch, pruned when the branch merges.
 
-- [x] Merge PR #8 (embed PeerInfo, map peers, Timestamp, typed TS)
-- [x] OTEL metrics instrumentation (PR #10)
-- [x] Security hardening (origin allowlist, conn limits, rate limiting, Guard)
-- [x] Docker packaging + production/dev compose stacks
-- [x] Deployment scripts (setup-host.sh, update-pool.sh, add-relay-dns.sh)
-- [x] Structured logging (slog + JSON stdout)
-- [x] Grafana dashboard provisioning
-- [x] Deploy first relay to IONOS VPS (relay01.excaliframe.com)
-- [x] Admin API endpoints (/admin/status, /admin/rooms) with bearer token auth
-- [x] SSH hardening in setup-host.sh (key-only, no password auth)
-- [x] AlmaLinux/Rocky support in setup-host.sh
-- [x] Namecheap DNS automation (add-relay-dns.sh)
-- [x] Local prod stack testing (make prod-up/prod-down)
-- [x] JWT auth middleware with oneauth integration (issue #12)
-- [ ] Consider embedding `*pb.Room` in `CollabRoom`
+## At a glance
 
-## Short-term
+- No open branch threads. main is at v0.2.4, released and published to npm from CI.
+- This run: converted the old checklist. Untracked items became #36 (embed `*pb.Room`), #37 (thin oneauth slice), #38 (validated reconnect), #39 (OTEL tracing); the persistent KeyStore item went onto #27. Done items dropped (git history has them).
 
-- [x] **Issue #14**: Per-subject rate limiting — `RELAY_PER_SUB_RATE` env var, `SubjectKeyFunc`, 4 new tests
-- [x] **Issue #9**: Migrate TS to canonical protobuf-es Message types with `fromJson()` at the boundary
-- [ ] **Issue #2**: Replace manual broadcast with `gocurrent.FanOut` — **blocked on [gocurrent#1](https://github.com/panyam/gocurrent/issues/1)**
-- [ ] Wire KeyStore to a persistent source (e.g., oneauth FS/GAE KeyStore)
-- [x] ~~OneAuth federated auth demo~~ — implemented in **panyam/oneauth** repo (Docker Compose + integration tests)
-- [x] Wire per-subject rate limit rejections to OTEL metrics (type=subject attribute)
-- [x] Type the `SyncAdapter` interface more strictly (`SyncConnection.peers` → `ReadonlyMap<string, PeerInfoJson>`)
-- [x] Add `tsc --noEmit` to CI
-- [x] Add PRM endpoint (RFC 9728 `/.well-known/oauth-protected-resource`) via oneauth v0.0.55
-- [x] Update all panyam/* libs to latest (oneauth v0.1.36, servicekit v0.1.3, gocurrent v0.1.1, goutils v0.1.13); absorb oneauth 0.0.x→0.1.x `apiauth`/`keys` API rewrite; Go floor now 1.26.4
-- [ ] Consider decoupling from oneauth's full module: depend only on the thin JWT-verification slice (local `TokenVerifier` interface adapting oneauth) so oneauth OAuth-server refactors stop surfacing as breaking changes here
+## Across threads
 
-## Medium-term
-
-- [ ] **Issue #4**: Client-side relay pool with health probing (relay pool manifest, latency probing, auto-reconnect)
-- [ ] **Issue #6**: Distributed relay architecture (memberlist + gRPC)
-- [ ] Auto-reconnect with session validation
-- [ ] OTEL tracing (message flow through relay — spans for join, broadcast, leave)
-- [x] Lift `web/middleware` hardening to servicekit (generic middleware in `servicekit/middleware`, relay-specific stays in `web/middleware/`)
-- [x] Migrate to servicekit `ListenAndServeGraceful` (issue #17)
+- #27 (mcpkit bridge interop against a real relay) waits on panyam/mcpkit#1581. It also needs the relay binary to get a KeyStore; today `web/server/app.go` leaves it nil, so the binary can't validate any token.
+- relay01 (relay01.excaliframe.com) is down; don't plan a deploy around it.

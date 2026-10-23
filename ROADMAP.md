@@ -30,6 +30,14 @@
 
 ## Recently Completed
 
+### App messaging, identity and the TS client (v0.2.0 to v0.2.4)
+- [x] `AppMessage` addressed to one peer (`to_client_id`), sender stamped by the relay, `PEER_NOT_FOUND` for an absent target (issue #23)
+- [x] `PeerInfo.identity` from the validated JWT, `rooms` claim restricting joins (issue #23)
+- [x] One room per connection (`ALREADY_JOINED`); unenforced `max_rooms`/`max_msg_rate` claims removed (issue #25)
+- [x] TS interop tests against the real relay binary (`make test-interop`)
+- [x] `CollabClient`: `token` option, escaped session ids, `toClientId` on `onAppMessage`, no per-event logging (issue #31); stays connected on post-join errors, `onDisconnect` paired with every `onConnect` (issue #33)
+- [x] npm package ships no tests; Go and TS share one version; publishing from CI via npm trusted publishing (servicekit's shared workflow)
+
 ### Short-term Improvements (PR #16)
 - [x] PRM endpoint (RFC 9728 `/.well-known/oauth-protected-resource`) via oneauth v0.0.55
   - Serves resource metadata for OAuth 2.0 client auto-discovery
