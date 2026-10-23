@@ -4,15 +4,10 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.4] - 2026-10-23
 
-### Changed
-- servicekit v0.1.9 (was v0.1.7), and `@panyam/servicekit-client` ^0.1.9 in
-  development. servicekit-client now shares servicekit's version, so it jumped
-  from 0.0.7 to 0.1.x; the peer range is `^0.0.7 || ^0.1.9`, since `^0.0.7`
-  alone allows only 0.0.7 and npm refuses the install next to 0.1.9.
-- `check:pack` reads npm 12's `npm pack --json` output (an object keyed by
-  package name) as well as npm 10/11's array.
+`CollabClient` stays in the room after a refused message, and the package is
+the first massrelay release published from CI.
 
 ### Fixed
 - `CollabClient` no longer closes the connection on a relay error that follows
@@ -27,6 +22,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Before, a close the relay caused skipped it.
 
 ### Changed
+- servicekit v0.1.9 (was v0.1.7), and `@panyam/servicekit-client` ^0.1.9 in
+  development. servicekit-client now shares servicekit's version, so it jumped
+  from 0.0.7 to 0.1.x; the peer range is `^0.0.7 || ^0.1.9`, since `^0.0.7`
+  alone allows only 0.0.7 and npm refuses the install next to 0.1.9.
+- `check:pack` reads npm 12's `npm pack --json` output (an object keyed by
+  package name) as well as npm 10/11's array.
 - npm publishing goes through servicekit's shared `npm-publish.yml` with npm
   trusted publishing, so release tags publish `@panyam/massrelay` without an
   `NPM_TOKEN` secret.
