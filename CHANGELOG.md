@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `CollabClient` takes a `token` option and sends it as the `token` query
+  parameter, so a browser can join a relay running with JWT auth.
+- `onAppMessage` gets a fourth argument, `toClientId`: the receiver's id for an
+  addressed message, empty for a room-wide one. Existing three-argument
+  callbacks keep working.
+
+### Fixed
+- `CollabClient` escapes the session id in the WebSocket URL. A room id with a
+  `/` in it, such as `design:demo/board.kicad_sch`, used to break the route and
+  surface only as `WebSocket error`.
+- `CollabClient` no longer `console.log`s every event. Use `onEvent` to trace.
+- The npm tarball no longer ships `dist/*.test.*`. The build uses
+  `tsconfig.build.json`, which excludes tests, and CI checks the packed file
+  list.
+
+### Changed
+- oneauth v0.3.0 (was v0.1.36). No code changes were needed, since massrelay no
+  longer uses `admin.AppQuota`. The Go floor rises to 1.26.9.
+
 ## [0.2.2] - 2026-10-23
 
 ### Fixed

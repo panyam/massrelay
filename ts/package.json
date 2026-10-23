@@ -47,11 +47,12 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:interop": "vitest run --config vitest.interop.config.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "check:pack": "node scripts/check-pack.mjs"
   },
   "files": [
     "dist"
