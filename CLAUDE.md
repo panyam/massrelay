@@ -11,6 +11,9 @@ cd ts && npm test
 
 # All tests (pre-push hook runs this)
 make tests
+
+# TS client against the real relay binary (Go + Node 22+)
+make test-interop
 ```
 
 ## Local Development
@@ -127,4 +130,5 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 - **Namecheap DNS API**: `setHosts` is replace-all — must send ALL existing records plus new ones
 - **`docker compose up -d`**: Won't reload Caddy config if only the mounted file changed — use `docker compose restart caddy`
 - **`make prod-up` before deploy**: Always test the full Caddy + relay stack locally to catch routing issues
+- **servicekit `RequestLogger` breaks WebSocket upgrades** (up to v0.1.6): its status recorder doesn't implement `http.Hijacker`, which gorilla/websocket asserts directly, so upgrades behind it fail with a 400. `main.go`'s `relayHandler` routes `/ws/` around it; remove that once servicekit#38 is released. Handler-level Go tests can't see this; `make test-interop` (real binary) and `TestRelayHandlerAcceptsWebSocket` can.
 - **oneauth 0.0.x → 0.1.x API migration** (done at massrelay v0.1.0): `apiauth.APIMiddleware.TokenQueryParam` → `LegacyQueryParamBearer`; `apiauth.GetUserIDFromAPIContext` → `GetSubjectFromAPIContext`; `keys.InMemoryKeyStore.RegisterKey(id, key, alg)` → request/response `PutKey(ctx, &keys.PutKeyRequest{Record: &keys.KeyRecord{ClientID, Key, Algorithm}})`. oneauth v0.1.36 also requires **Go 1.26.4+**.

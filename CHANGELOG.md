@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- The relay binary accepts WebSockets again. `main.go` wrapped every route in
+  servicekit's `RequestLogger`, whose status recorder hides `http.Hijacker`,
+  so every `/ws/` upgrade failed with a 400. `/ws/` now bypasses the logger
+  until servicekit ships panyam/servicekit#38.
+- A second `JoinRoom` on one connection gets `ErrorEvent{ALREADY_JOINED}`.
+  It used to add a second client that the stream forgot, which then stayed
+  in its room for good.
+
+### Removed
+- The `max_rooms` and `max_msg_rate` claims, which were parsed into
+  `RelayClaims` and never enforced (issue 25).
+
+### Added
+- `npm run test:interop` / `make test-interop`, plus a CI job, running the TS
+  client against the real relay binary.
+
 ## [0.2.0] - 2026-10-22
 
 ### Added
