@@ -33,7 +33,7 @@ type RelayApp struct {
 	Metrics       *relaytelem.Metrics
 	Guard         *middleware.Guard
 	OriginChecker *mw.OriginChecker
-	AdminToken    string // bearer token for /admin/* endpoints; empty = admin API disabled
+	AdminToken    string                             // bearer token for /admin/* endpoints; empty = admin API disabled
 	PRM           *apiauth.ProtectedResourceMetadata // RFC 9728; nil = endpoint disabled
 	mux           *http.ServeMux
 	handler       http.Handler // mux wrapped with CORS
@@ -171,11 +171,11 @@ func NewRelayApp() *RelayApp {
 	if resourceURL := os.Getenv("RELAY_RESOURCE_URL"); resourceURL != "" {
 		if authServers := os.Getenv("RELAY_AUTH_SERVERS"); authServers != "" {
 			prm = &apiauth.ProtectedResourceMetadata{
-				Resource:             resourceURL,
-				AuthorizationServers: strings.Split(authServers, ","),
-				ScopesSupported:      []string{"relay:connect", "relay:publish"},
+				Resource:              resourceURL,
+				AuthorizationServers:  strings.Split(authServers, ","),
+				ScopesSupported:       []string{"relay:connect", "relay:publish"},
 				TokenFormatsSupported: []string{"jwt"},
-				SigningAlgsSupported: []string{"HS256", "RS256", "ES256"},
+				SigningAlgsSupported:  []string{"HS256", "RS256", "ES256"},
 			}
 			slog.Info("PRM endpoint enabled", "resource", resourceURL, "path", "/.well-known/oauth-protected-resource")
 		}

@@ -37,8 +37,8 @@ type CollabBidiStream struct {
 	cancel         context.CancelFunc
 	service        *services.CollabService
 	sendCh         chan *pb.CollabEvent // events from service → WebSocket client
-	sessionId      string              // set after first JoinRoom action
-	clientId       string              // set after first JoinRoom action
+	sessionId      string               // set after first JoinRoom action
+	clientId       string               // set after first JoinRoom action
 	mu             sync.Mutex
 	messageLimiter *rate.Limiter // per-client message rate limiter
 }
@@ -225,11 +225,11 @@ func (s *CollabBidiStream) CloseSend() error {
 // SendMsg/RecvMsg are never called.
 
 func (s *CollabBidiStream) Header() (metadata.MD, error) { return nil, nil }
-func (s *CollabBidiStream) Trailer() metadata.MD          { return nil }
-func (s *CollabBidiStream) CloseSend2() error              { return s.CloseSend() }
-func (s *CollabBidiStream) Context() context.Context       { return s.ctx }
-func (s *CollabBidiStream) SendMsg(m any) error { return nil }
-func (s *CollabBidiStream) RecvMsg(m any) error { return nil }
+func (s *CollabBidiStream) Trailer() metadata.MD         { return nil }
+func (s *CollabBidiStream) CloseSend2() error            { return s.CloseSend() }
+func (s *CollabBidiStream) Context() context.Context     { return s.ctx }
+func (s *CollabBidiStream) SendMsg(m any) error          { return nil }
+func (s *CollabBidiStream) RecvMsg(m any) error          { return nil }
 
 // Verify CollabBidiStream satisfies the grpcws.BidiStream interface.
 var _ grpc.ClientStream = (*CollabBidiStream)(nil)
