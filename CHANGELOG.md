@@ -10,6 +10,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - servicekit v0.1.10 (was v0.1.9), which makes grpcws's message counters and
   ping id atomic (a data race under `-race`), and `@panyam/servicekit-client`
   ^0.1.10 in development. No API changes; the peer range is unchanged.
+- servicekit v0.1.11, a dependency patch release (grpc v1.83.2,
+  gorilla/websocket v1.5.3, x/net v0.58.0), and `@panyam/servicekit-client`
+  ^0.1.11 in development. massrelay already required these versions, so its
+  build doesn't change.
 
 ## [0.2.4] - 2026-10-23
 
