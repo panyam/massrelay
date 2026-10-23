@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/google/uuid"
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 	"github.com/panyam/massrelay/services"
 	"github.com/panyam/massrelay/web/middleware"
@@ -90,14 +91,24 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 
 	// The sender is this connection's own client, whatever the action claims;
 	// anything but a join before joining has no sender to be.
+	s.mu.Lock()
+	joinedAs := s.clientId
+	s.mu.Unlock()
 	if action.GetJoin() == nil {
-		s.mu.Lock()
-		clientId := s.clientId
-		s.mu.Unlock()
-		if clientId == "" {
+		if joinedAs == "" {
 			return fmt.Errorf("%T sent before joining a room", action.Action)
 		}
-		action.ClientId = clientId
+		action.ClientId = joinedAs
+	} else if joinedAs != "" {
+		// One room per connection: a second client here would never be
+		// cleaned up, since the stream only remembers one.
+		return s.reply(&pb.CollabEvent{
+			EventId: uuid.New().String(),
+			Event: &pb.CollabEvent_Error{Error: &pb.ErrorEvent{
+				Code:    "ALREADY_JOINED",
+				Message: "This connection is already in a room; open another connection to join a second one",
+			}},
+		})
 	}
 
 	resp, err := s.service.HandleAction(s.ctx, action)
@@ -144,13 +155,19 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 
 	// Send response event back to the client (if any)
 	if resp != nil {
-		select {
-		case s.sendCh <- resp:
-		case <-s.ctx.Done():
-			return s.ctx.Err()
-		}
+		return s.reply(resp)
 	}
 	return nil
+}
+
+// reply queues an event for this connection's client.
+func (s *CollabBidiStream) reply(event *pb.CollabEvent) error {
+	select {
+	case s.sendCh <- event:
+		return nil
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	}
 }
 
 // Recv reads the next event to send to the WebSocket client (service → WS).
