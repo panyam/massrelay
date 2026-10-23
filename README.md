@@ -438,6 +438,7 @@ Graceful error — the relay sends this instead of closing the stream, so the cl
 | `PROTOCOL_VERSION_TOO_OLD` | Encrypted room requires `protocolVersion >= 2`. |
 | `ROOM_FORBIDDEN` | The connection's token has a `rooms` claim that does not cover this session (see [Token Claims](#token-claims)). |
 | `PEER_NOT_FOUND` | An `AppMessage.toClientId` named a client that is not in the sender's room. |
+| `ALREADY_JOINED` | A second `JoinRoom` on a connection that is already in a room. One connection holds one room; open another connection for a second one. |
 
 #### SessionEnded
 

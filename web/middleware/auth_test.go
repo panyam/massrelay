@@ -65,11 +65,9 @@ var okHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetRelayClaimsFromContext(r.Context())
 	if claims != nil {
 		json.NewEncoder(w).Encode(map[string]any{
-			"subject":      claims.Subject,
-			"client_id":    claims.ClientID,
-			"max_rooms":    claims.MaxRooms,
-			"max_msg_rate": claims.MaxMsgRate,
-			"scopes":       claims.Scopes,
+			"subject":   claims.Subject,
+			"client_id": claims.ClientID,
+			"scopes":    claims.Scopes,
 		})
 	} else {
 		w.WriteHeader(http.StatusOK)
@@ -378,12 +376,6 @@ func TestClaimsRoundtrip(t *testing.T) {
 	}
 	if resp["client_id"] != "host-alpha" {
 		t.Errorf("client_id: want host-alpha, got %v", resp["client_id"])
-	}
-	if resp["max_rooms"] != float64(10) {
-		t.Errorf("max_rooms: want 10, got %v", resp["max_rooms"])
-	}
-	if resp["max_msg_rate"] != 50.0 {
-		t.Errorf("max_msg_rate: want 50, got %v", resp["max_msg_rate"])
 	}
 }
 

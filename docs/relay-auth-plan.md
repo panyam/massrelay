@@ -1,5 +1,12 @@
 # Relay Auth — Federated Authentication Plan
 
+> **Status (2026-10):** implemented, except quotas. The `max_rooms` /
+> `max_msg_rate` claims below were parsed but never enforced, and were removed
+> in issue #25. The relay's own limits (connection caps, per-IP and per-subject
+> connection rates, per-stream message rate) are server config, and which rooms
+> a token may join is the host's call through the `rooms` claim. See README
+> § Token Claims for what the relay reads today.
+
 ## Overview
 
 Massrelay currently has zero authentication. We're adding a federated JWT-based auth system where **oneauth** (`github.com/panyam/oneauth`) is embedded in both Hosts and Relays as the shared auth library.

@@ -46,6 +46,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:interop": "vitest run --config vitest.interop.config.ts",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@bufbuild/protobuf": "^2.11.0",
     "@panyam/servicekit-client": "^0.0.7",
+    "@types/node": "^22.20.5",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }

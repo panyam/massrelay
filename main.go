@@ -41,7 +41,7 @@ func main() {
 	}
 
 	// Middleware chain: recovery → request logging → mux
-	handler := mw.Recovery(mw.RequestLogger("/health")(mux))
+	handler := relayHandler(mux)
 
 	addr := fmt.Sprintf(":%d", *port)
 	srv := &http.Server{
@@ -64,4 +64,11 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("Server stopped")
+}
+
+// relayHandler wraps mux in recovery and request logging. The request
+// logger must let WebSocket upgrades hijack the connection, which servicekit
+// v0.1.7+ does; TestRelayHandlerAcceptsWebSocket guards it.
+func relayHandler(mux http.Handler) http.Handler {
+	return mw.Recovery(mw.RequestLogger("/health")(mux))
 }

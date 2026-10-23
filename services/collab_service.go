@@ -77,7 +77,7 @@ func (s *CollabService) GetOrCreateRoom(sessionId string) (*CollabRoom, bool) {
 	return room, false
 }
 
-// GetRoom returns the room for sessionId without creating.
+// GetRoomByID returns the room for sessionId without creating it.
 // Returns nil if the room does not exist.
 func (s *CollabService) GetRoomByID(sessionId string) *CollabRoom {
 	s.mu.RLock()

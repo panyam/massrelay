@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/google/uuid"
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 	"github.com/panyam/massrelay/services"
 	"github.com/panyam/massrelay/web/middleware"
@@ -36,8 +37,8 @@ type CollabBidiStream struct {
 	cancel         context.CancelFunc
 	service        *services.CollabService
 	sendCh         chan *pb.CollabEvent // events from service → WebSocket client
-	sessionId      string              // set after first JoinRoom action
-	clientId       string              // set after first JoinRoom action
+	sessionId      string               // set after first JoinRoom action
+	clientId       string               // set after first JoinRoom action
 	mu             sync.Mutex
 	messageLimiter *rate.Limiter // per-client message rate limiter
 }
@@ -90,14 +91,24 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 
 	// The sender is this connection's own client, whatever the action claims;
 	// anything but a join before joining has no sender to be.
+	s.mu.Lock()
+	joinedAs := s.clientId
+	s.mu.Unlock()
 	if action.GetJoin() == nil {
-		s.mu.Lock()
-		clientId := s.clientId
-		s.mu.Unlock()
-		if clientId == "" {
+		if joinedAs == "" {
 			return fmt.Errorf("%T sent before joining a room", action.Action)
 		}
-		action.ClientId = clientId
+		action.ClientId = joinedAs
+	} else if joinedAs != "" {
+		// One room per connection: a second client here would never be
+		// cleaned up, since the stream only remembers one.
+		return s.reply(&pb.CollabEvent{
+			EventId: uuid.New().String(),
+			Event: &pb.CollabEvent_Error{Error: &pb.ErrorEvent{
+				Code:    "ALREADY_JOINED",
+				Message: "This connection is already in a room; open another connection to join a second one",
+			}},
+		})
 	}
 
 	resp, err := s.service.HandleAction(s.ctx, action)
@@ -144,13 +155,19 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 
 	// Send response event back to the client (if any)
 	if resp != nil {
-		select {
-		case s.sendCh <- resp:
-		case <-s.ctx.Done():
-			return s.ctx.Err()
-		}
+		return s.reply(resp)
 	}
 	return nil
+}
+
+// reply queues an event for this connection's client.
+func (s *CollabBidiStream) reply(event *pb.CollabEvent) error {
+	select {
+	case s.sendCh <- event:
+		return nil
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	}
 }
 
 // Recv reads the next event to send to the WebSocket client (service → WS).
@@ -202,13 +219,17 @@ func (s *CollabBidiStream) CloseSend() error {
 }
 
 // ─── grpc.ClientStream interface (required by servicekit) ───────
+//
+// servicekit drives the stream through Send/Recv/CloseSend only. These exist
+// to satisfy grpc.ClientStream and do nothing: no headers or trailers, and
+// SendMsg/RecvMsg are never called.
 
 func (s *CollabBidiStream) Header() (metadata.MD, error) { return nil, nil }
-func (s *CollabBidiStream) Trailer() metadata.MD          { return nil }
-func (s *CollabBidiStream) CloseSend2() error              { return s.CloseSend() }
-func (s *CollabBidiStream) Context() context.Context       { return s.ctx }
-func (s *CollabBidiStream) SendMsg(m any) error { return nil }
-func (s *CollabBidiStream) RecvMsg(m any) error { return nil }
+func (s *CollabBidiStream) Trailer() metadata.MD         { return nil }
+func (s *CollabBidiStream) CloseSend2() error            { return s.CloseSend() }
+func (s *CollabBidiStream) Context() context.Context     { return s.ctx }
+func (s *CollabBidiStream) SendMsg(m any) error          { return nil }
+func (s *CollabBidiStream) RecvMsg(m any) error          { return nil }
 
 // Verify CollabBidiStream satisfies the grpcws.BidiStream interface.
 var _ grpc.ClientStream = (*CollabBidiStream)(nil)

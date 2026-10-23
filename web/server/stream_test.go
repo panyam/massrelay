@@ -178,3 +178,33 @@ func TestStreamRejectsActionsBeforeJoin(t *testing.T) {
 		t.Fatal("spoofed LeaveRoom removed another peer")
 	}
 }
+
+func TestStreamRefusesSecondJoin(t *testing.T) {
+	svc := services.NewCollabService()
+	s := streamFromRequest(t, svc, "")
+	firstId := joinStream(t, s, "room-a").GetRoomJoined().GetClientId()
+
+	if evt := joinStream(t, s, "room-b"); evt.GetError().GetCode() != "ALREADY_JOINED" {
+		t.Fatalf("expected ALREADY_JOINED for a second join, got %v", evt)
+	}
+	if svc.GetRoomByID("room-b") != nil {
+		t.Fatal("refused second join created room-b")
+	}
+
+	other := streamFromRequest(t, svc, "")
+	otherId := joinStream(t, other, "room-a").GetRoomJoined().GetClientId()
+	if err := other.Send(&pb.CollabAction{
+		Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{Kind: "k", ToClientId: firstId}},
+	}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	recvEvent(t, s) // PeerJoined other
+	if evt := recvEvent(t, s); evt.GetAppMessage() == nil || evt.GetFromClientId() != otherId {
+		t.Fatalf("first client stopped receiving after the refused join: %v", evt)
+	}
+
+	s.leaveAndCleanup("test")
+	if room := svc.GetRoomByID("room-a"); room != nil && room.Clients[firstId] != nil {
+		t.Fatal("first client left behind after its stream cleaned up")
+	}
+}
