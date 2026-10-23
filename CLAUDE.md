@@ -44,6 +44,15 @@ After regeneration, update both `gen/go/` and `ts/src/gen/`.
 
 ## Deployment Checklist
 
+### Releasing the TS package
+Bump `ts/package.json` to the release version before tagging. Pushing a `v*` tag runs
+`.github/workflows/publish-npm.yml`, which refuses a tag that doesn't match `ts/package.json`, runs
+the TS and interop tests, and publishes `@panyam/massrelay` (skipping a version already on npm).
+It needs the `NPM_TOKEN` repo secret. For a tag pushed before the workflow existed, run it by hand
+with that tag as the ref. Until 2026-10 nothing published automatically, so npm sat at 0.1.1 while
+the Go side reached v0.2.1, and mcpkit's room page client couldn't depend on the addressed
+`sendAppMessage` that 0.2.x added.
+
 ### Adding new env vars
 1. Add to `web/server/app.go` `NewRelayApp()` with `os.Getenv`
 2. Add to `deploy/production/docker-compose.yml` environment block
