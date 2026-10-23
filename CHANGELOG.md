@@ -4,6 +4,35 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+One `AppMessage` can address many peers, and the relay no longer drops
+messages without saying so (issue 43). The `AppMessage` wire format changes,
+so this needs a minor version bump.
+
+### Changed
+- **Breaking:** `AppMessage.to_client_id` (string) is replaced by
+  `to_client_ids` (repeated string) on the same field number. Each listed peer
+  in the room gets the message once, with `to_client_ids` holding only its own
+  id, so a receiver still tells addressed from room-wide and doesn't learn who
+  else was addressed. Absent ids get one `PEER_NOT_FOUND` naming them, and the
+  rest are still delivered to (before, the one absent target meant nothing was
+  delivered). `DeliverAppMessage` follows suit; its error wraps
+  `ErrPeerNotFound`.
+- `CollabClient.sendAppMessage` takes `opts.to` as a string or an array.
+  `onAppMessage` keeps its signature: `toClientId` is this client's id or empty.
+- A connection over its per-client message rate gets
+  `ErrorEvent{RATE_LIMITED}` naming the dropped `actionId`, instead of having
+  the message dropped silently.
+- A peer whose 64-event queue fills is removed from the room and sent
+  `SessionEnded{reason: "slow_consumer"}`; the other peers see `PeerLeft` with
+  that reason. Before, the relay dropped events to it and kept delivering later
+  ones, leaving gaps. Now each receiver gets an unbroken, in-order prefix of
+  each sender's messages.
+
+### Removed
+- `CollabRoom.SendTo`, replaced by `SendEach`.
+
 ## [0.2.5] - 2026-10-23
 
 Moves to servicekit v0.1.11. No API changes in the Go module or the TS package.

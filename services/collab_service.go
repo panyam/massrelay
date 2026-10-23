@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -29,9 +30,44 @@ type CollabClient struct {
 	// used for same-browser ownership transfer (server-only; not exposed on wire).
 	BrowserId string
 	// SendCh is the buffered channel (cap 64) for delivering CollabEvents to
-	// this client's WebSocket. Broadcasts use non-blocking sends — events are
-	// dropped if the channel is full.
+	// this client's WebSocket. Room sends never block: one that finds it full
+	// marks the client slow instead (see Slow).
 	SendCh chan *pb.CollabEvent
+
+	slowMu   sync.Mutex
+	slow     chan struct{}
+	slowOnce sync.Once
+}
+
+// Slow returns a channel that is closed once a room send found this client's
+// SendCh full. From then on the room delivers nothing more to it, so what the
+// client already has is an unbroken prefix of what was sent to it. Whoever
+// drains SendCh (the WebSocket stream) is expected to evict the client when
+// this fires, since anything it receives afterwards would follow a gap.
+func (c *CollabClient) Slow() <-chan struct{} {
+	return c.slowCh()
+}
+
+func (c *CollabClient) slowCh() chan struct{} {
+	c.slowMu.Lock()
+	defer c.slowMu.Unlock()
+	if c.slow == nil {
+		c.slow = make(chan struct{})
+	}
+	return c.slow
+}
+
+func (c *CollabClient) isSlow() bool {
+	select {
+	case <-c.slowCh():
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *CollabClient) markSlow() {
+	c.slowOnce.Do(func() { close(c.slowCh()) })
 }
 
 // CollabService manages rooms and peer lifecycle.
@@ -124,6 +160,17 @@ func (s *CollabService) FindSessionByHint(hint string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.hintIndex[hint]
+}
+
+// GetClient returns clientId in sessionId's room, or nil if either is not found.
+func (s *CollabService) GetClient(sessionId, clientId string) *CollabClient {
+	room := s.GetRoomByID(sessionId)
+	if room == nil {
+		return nil
+	}
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+	return room.Clients[clientId]
 }
 
 // GetClientSendCh returns the broadcast channel for a client in a room.
@@ -598,14 +645,15 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 		// server-side state and no editor semantics.
 		event.Event = &pb.CollabEvent_AppMessage{AppMessage: a.AppMessage}
 		if s.LogPayloads > 0 {
-			slog.Debug("AppMessage", "kind", a.AppMessage.GetKind(), "to", a.AppMessage.GetToClientId(), "bytes", len(a.AppMessage.GetPayload()))
+			slog.Debug("AppMessage", "kind", a.AppMessage.GetKind(), "to", a.AppMessage.GetToClientIds(), "bytes", len(a.AppMessage.GetPayload()))
 		}
-		if to := a.AppMessage.GetToClientId(); to != "" {
-			if !room.SendTo(event, to) {
-				return errorEvent("PEER_NOT_FOUND", fmt.Sprintf("No client %s in this room", to)), nil
-			}
+		if len(a.AppMessage.GetToClientIds()) > 0 {
+			missing := deliverAddressed(room, event.EventId, clientId, a.AppMessage)
 			if s.OnMessageRelay != nil {
 				s.OnMessageRelay(fmt.Sprintf("%T", action.Action))
+			}
+			if len(missing) > 0 {
+				return errorEvent("PEER_NOT_FOUND", "Not in this room: "+strings.Join(missing, ", ")), nil
 			}
 			return nil, nil
 		}
@@ -629,30 +677,53 @@ func (s *CollabService) handleBroadcast(ctx context.Context, action *pb.CollabAc
 // receivers see as from_client_id; it may be empty for a server-originated
 // message and need not be a peer in the room.
 //
-// With msg.to_client_id set, only that client receives it, and ErrPeerNotFound
-// is returned if it is not in the room. Otherwise every peer except
-// fromClientId receives it. Returns ErrRoomNotFound if the room does not exist.
+// With msg.to_client_ids set, each of those clients in the room receives it
+// once, and an error wrapping ErrPeerNotFound names any that are not (the rest
+// are still delivered to). Otherwise every peer except fromClientId receives
+// it. Returns ErrRoomNotFound if the room does not exist.
+//
+// Each receiver gets messages in the order DeliverAppMessage was called for
+// them, so callers that need ordering must not call it concurrently.
 func (s *CollabService) DeliverAppMessage(sessionId, fromClientId string, msg *pb.AppMessage) error {
 	room := s.GetRoomByID(sessionId)
 	if room == nil {
 		return ErrRoomNotFound
 	}
-	event := &pb.CollabEvent{
-		EventId:      uuid.New().String(),
-		FromClientId: fromClientId,
-		Event:        &pb.CollabEvent_AppMessage{AppMessage: msg},
-	}
-	if to := msg.GetToClientId(); to != "" {
-		if !room.SendTo(event, to) {
-			return ErrPeerNotFound
-		}
+	eventId := uuid.New().String()
+	var missing []string
+	if len(msg.GetToClientIds()) > 0 {
+		missing = deliverAddressed(room, eventId, fromClientId, msg)
 	} else {
-		room.BroadcastExcept(event, fromClientId)
+		room.BroadcastExcept(&pb.CollabEvent{
+			EventId:      eventId,
+			FromClientId: fromClientId,
+			Event:        &pb.CollabEvent_AppMessage{AppMessage: msg},
+		}, fromClientId)
 	}
 	if s.OnMessageRelay != nil {
 		s.OnMessageRelay(fmt.Sprintf("%T", &pb.CollabAction_AppMessage{}))
 	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%w: %s", ErrPeerNotFound, strings.Join(missing, ", "))
+	}
 	return nil
+}
+
+// deliverAddressed sends msg to each of its to_client_ids in room, rewriting
+// to_client_ids to just the receiver's id so no receiver learns who else was
+// addressed. Returns the ids that are not in the room.
+func deliverAddressed(room *CollabRoom, eventId, fromClientId string, msg *pb.AppMessage) []string {
+	return room.SendEach(msg.GetToClientIds(), func(to string) *pb.CollabEvent {
+		return &pb.CollabEvent{
+			EventId:      eventId,
+			FromClientId: fromClientId,
+			Event: &pb.CollabEvent_AppMessage{AppMessage: &pb.AppMessage{
+				Kind:        msg.GetKind(),
+				Payload:     msg.GetPayload(),
+				ToClientIds: []string{to},
+			}},
+		}
+	})
 }
 
 func errorEvent(code, message string) *pb.CollabEvent {

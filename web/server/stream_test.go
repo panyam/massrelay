@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -194,7 +196,7 @@ func TestStreamRefusesSecondJoin(t *testing.T) {
 	other := streamFromRequest(t, svc, "")
 	otherId := joinStream(t, other, "room-a").GetRoomJoined().GetClientId()
 	if err := other.Send(&pb.CollabAction{
-		Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{Kind: "k", ToClientId: firstId}},
+		Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{Kind: "k", ToClientIds: []string{firstId}}},
 	}); err != nil {
 		t.Fatalf("send: %v", err)
 	}
@@ -206,5 +208,87 @@ func TestStreamRefusesSecondJoin(t *testing.T) {
 	s.leaveAndCleanup("test")
 	if room := svc.GetRoomByID("room-a"); room != nil && room.Clients[firstId] != nil {
 		t.Fatal("first client left behind after its stream cleaned up")
+	}
+}
+
+func TestStreamAnswersRateLimitedInsteadOfDropping(t *testing.T) {
+	svc := services.NewCollabService()
+	s := NewCollabBidiStream(context.Background(), svc, StreamConfig{MaxMessageRate: 1})
+	t.Cleanup(s.cancel)
+	joinStream(t, s, "room-rl")
+
+	for _, id := range []string{"a1", "a2"} {
+		if err := s.Send(&pb.CollabAction{ActionId: id, Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{Kind: "k"}}}); err != nil {
+			t.Fatalf("send %s: %v", id, err)
+		}
+	}
+	evt := recvEvent(t, s)
+	if evt.GetError().GetCode() != "RATE_LIMITED" {
+		t.Fatalf("expected RATE_LIMITED for the message over the limit, got %v", evt)
+	}
+	if !strings.Contains(evt.GetError().GetMessage(), "a2") || strings.Contains(evt.GetError().GetMessage(), "a1") {
+		t.Fatalf("RATE_LIMITED should name the dropped action a2, got %q", evt.GetError().GetMessage())
+	}
+
+	// Leaving is never rate limited.
+	if err := s.Send(&pb.CollabAction{Action: &pb.CollabAction_Leave{Leave: &pb.LeaveRoom{}}}); err != nil {
+		t.Fatalf("leave: %v", err)
+	}
+	if evt := recvEvent(t, s); evt.GetPeerLeft() == nil {
+		t.Fatalf("leave over the limit should still go through, got %v", evt)
+	}
+}
+
+// A receiver that stops reading gets the sender's messages in order up to some
+// point, then SessionEnded{slow_consumer}, and is removed from the room.
+func TestStreamEvictsSlowConsumer(t *testing.T) {
+	svc := services.NewCollabService()
+	sender := streamFromRequest(t, svc, "")
+	reader := streamFromRequest(t, svc, "")
+	senderId := joinStream(t, sender, "room-slow").GetRoomJoined().GetClientId()
+	readerId := joinStream(t, reader, "room-slow").GetRoomJoined().GetClientId()
+	recvEvent(t, sender) // PeerJoined reader
+
+	// 150 overflows the reader's two 64-slot queues, while the sender's own
+	// PEER_NOT_FOUND replies after the eviction still fit in its queue.
+	const sent = 150
+	for i := 0; i < sent; i++ {
+		if err := sender.Send(&pb.CollabAction{Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{
+			Kind: strconv.Itoa(i), ToClientIds: []string{readerId},
+		}}}); err != nil {
+			t.Fatalf("send %d: %v", i, err)
+		}
+	}
+
+	next := 0
+	for {
+		evt := recvEvent(t, reader)
+		if end := evt.GetSessionEnded(); end != nil {
+			if end.GetReason() != "slow_consumer" {
+				t.Fatalf("reason = %q, want slow_consumer", end.GetReason())
+			}
+			break
+		}
+		if got := evt.GetAppMessage().GetKind(); got != strconv.Itoa(next) {
+			t.Fatalf("message %d arrived as %q: out of order or skipped", next, got)
+		}
+		next++
+	}
+	if next == 0 || next >= sent {
+		t.Fatalf("expected a strict prefix of the %d messages, got %d", sent, next)
+	}
+
+	for {
+		evt := recvEvent(t, sender)
+		if evt.GetError().GetCode() == "PEER_NOT_FOUND" {
+			continue // sends that landed after the eviction
+		}
+		if left := evt.GetPeerLeft(); left.GetClientId() != readerId || left.GetReason() != "slow_consumer" {
+			t.Fatalf("sender should see the reader leave as slow_consumer, got %v", evt)
+		}
+		break
+	}
+	if room := svc.GetRoomByID("room-slow"); room == nil || room.Clients[readerId] != nil || room.Clients[senderId] == nil {
+		t.Fatal("slow reader should be gone from the room and the sender still in it")
 	}
 }

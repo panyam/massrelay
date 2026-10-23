@@ -84,7 +84,13 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 		default:
 			if !s.messageLimiter.Allow() {
 				slog.Warn("Rate limited message", "component", "stream", "client", action.GetClientId())
-				return nil // silently drop
+				return s.reply(&pb.CollabEvent{
+					EventId: uuid.New().String(),
+					Event: &pb.CollabEvent_Error{Error: &pb.ErrorEvent{
+						Code:    "RATE_LIMITED",
+						Message: fmt.Sprintf("Dropped action %q: over %g messages/sec", action.GetActionId(), float64(s.messageLimiter.Limit())),
+					}},
+				})
 			}
 		}
 	}
@@ -126,27 +132,10 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 			s.mu.Unlock()
 			slog.Info("Client joined, starting bridge", "component", "stream", "client", rj.GetClientId(), "session", sessionId)
 
-			// Bridge: forward events from the service client's SendCh to the stream's sendCh
-			if clientCh := s.service.GetClientSendCh(sessionId, rj.GetClientId()); clientCh != nil {
-				go func() {
-					for {
-						select {
-						case event, ok := <-clientCh:
-							if !ok {
-								slog.Debug("Bridge channel closed", "component", "stream", "client", rj.GetClientId())
-								return
-							}
-							slog.Debug("Forwarding event", "component", "stream", "type", fmt.Sprintf("%T", event.Event), "client", rj.GetClientId())
-							select {
-							case s.sendCh <- event:
-							case <-s.ctx.Done():
-								return
-							}
-						case <-s.ctx.Done():
-							return
-						}
-					}
-				}()
+			// Bridge: forward events from the service client's SendCh to the
+			// stream's sendCh, until the room marks the client slow.
+			if client := s.service.GetClient(sessionId, rj.GetClientId()); client != nil {
+				go s.bridge(client)
 			} else {
 				slog.Warn("No client channel found", "component", "stream", "session", sessionId, "client", rj.GetClientId())
 			}
@@ -158,6 +147,46 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 		return s.reply(resp)
 	}
 	return nil
+}
+
+// bridge forwards client's room events to this connection in order. When the
+// room marks the client slow, it stops, takes the client out of the room and
+// ends its session with reason "slow_consumer": the client has missed a
+// message, and everything after it would arrive out of context.
+func (s *CollabBidiStream) bridge(client *services.CollabClient) {
+	slow := client.Slow()
+	for {
+		select {
+		case event, ok := <-client.SendCh:
+			if !ok {
+				slog.Debug("Bridge channel closed", "component", "stream", "client", client.ClientId)
+				return
+			}
+			slog.Debug("Forwarding event", "component", "stream", "type", fmt.Sprintf("%T", event.Event), "client", client.ClientId)
+			select {
+			case s.sendCh <- event:
+			case <-slow:
+				s.evictSlow(client.ClientId)
+				return
+			case <-s.ctx.Done():
+				return
+			}
+		case <-slow:
+			s.evictSlow(client.ClientId)
+			return
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *CollabBidiStream) evictSlow(clientId string) {
+	slog.Warn("Evicting slow consumer", "component", "stream", "client", clientId)
+	s.leaveAndCleanup("slow_consumer")
+	s.reply(&pb.CollabEvent{
+		EventId: uuid.New().String(),
+		Event:   &pb.CollabEvent_SessionEnded{SessionEnded: &pb.SessionEnded{Reason: "slow_consumer"}},
+	})
 }
 
 // reply queues an event for this connection's client.

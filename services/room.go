@@ -129,21 +129,31 @@ func (r *CollabRoom) ClientCount() int {
 	return len(r.Clients)
 }
 
-// BroadcastToAll sends an event to all clients (non-blocking).
+// deliver queues event for c without blocking. A full SendCh marks c slow,
+// and a slow client is skipped from then on, so it never receives a message
+// sent after one it missed.
+func deliver(c *CollabClient, event *pb.CollabEvent) {
+	if c.isSlow() {
+		return
+	}
+	select {
+	case c.SendCh <- event:
+	default:
+		c.markSlow()
+	}
+}
+
+// BroadcastToAll sends an event to all clients (non-blocking; see deliver).
 func (r *CollabRoom) BroadcastToAll(event *pb.CollabEvent) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, c := range r.Clients {
-		select {
-		case c.SendCh <- event:
-		default:
-			// drop if channel full — non-blocking
-		}
+		deliver(c, event)
 	}
 }
 
-// BroadcastExcept sends an event to all clients except exceptClientId.
-// Non-blocking: if a client's send channel is full, the event is silently dropped.
+// BroadcastExcept sends an event to all clients except exceptClientId
+// (non-blocking; see deliver).
 func (r *CollabRoom) BroadcastExcept(event *pb.CollabEvent, exceptClientId string) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -151,26 +161,28 @@ func (r *CollabRoom) BroadcastExcept(event *pb.CollabEvent, exceptClientId strin
 		if c.ClientId == exceptClientId {
 			continue
 		}
-		select {
-		case c.SendCh <- event:
-		default:
-		}
+		deliver(c, event)
 	}
 }
 
-// SendTo delivers an event to one client (non-blocking, dropped if its channel
-// is full, same as the broadcasts). Returns false if the client is not in
-// this room.
-func (r *CollabRoom) SendTo(event *pb.CollabEvent, clientId string) bool {
+// SendEach delivers build(id) to each client in clientIds that is in this room,
+// once per id however often it is listed (non-blocking; see deliver). Returns
+// the ids that are not in the room, in the order given.
+func (r *CollabRoom) SendEach(clientIds []string, build func(clientId string) *pb.CollabEvent) (missing []string) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	c, ok := r.Clients[clientId]
-	if !ok {
-		return false
+	seen := make(map[string]bool, len(clientIds))
+	for _, id := range clientIds {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		c, ok := r.Clients[id]
+		if !ok {
+			missing = append(missing, id)
+			continue
+		}
+		deliver(c, build(id))
 	}
-	select {
-	case c.SendCh <- event:
-	default:
-	}
-	return true
+	return missing
 }

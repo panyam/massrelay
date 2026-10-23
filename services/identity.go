@@ -8,8 +8,9 @@ import (
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
 )
 
-// ErrPeerNotFound is returned by DeliverAppMessage when to_client_id names a
-// client that is not in the room (it left, or it is in a different room).
+// ErrPeerNotFound is wrapped by DeliverAppMessage's error when to_client_ids
+// names a client that is not in the room (it left, or it is in a different
+// room). The error text lists those ids; match it with errors.Is.
 var ErrPeerNotFound = errors.New("peer not found in room")
 
 // ErrRoomNotFound is returned by DeliverAppMessage when the session has no room.

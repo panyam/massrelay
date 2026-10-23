@@ -368,9 +368,13 @@ A generic, application-defined message. The relay keeps no state for it and give
 |-------|------|-------------|
 | `kind` | string | App-defined discriminator, so peers can route without decoding the payload. |
 | `payload` | bytes | Opaque to the relay (base64 in JSON). |
-| `toClientId` | string | Optional. When set, only that client receives the message. If it is not in the sender's room, the sender gets `ErrorEvent{PEER_NOT_FOUND}` and nothing is delivered. Empty fans out to every other peer. |
+| `toClientIds` | string[] | Optional. When set, each listed client in the sender's room receives the message once. If any are not in the room, the sender gets one `ErrorEvent{PEER_NOT_FOUND}` naming them, and the rest are still delivered to. Empty fans out to every other peer. |
 
-Receivers read the sender from the event's `fromClientId`, which the relay sets from the sending connection, so a reply can be addressed back. An addressed message arrives with `toClientId` still set to the receiver's id, and a room-wide one with it empty, so a receiver can refuse a room-wide message of a kind that should only arrive addressed. `CollabClient` passes both to `onAppMessage(kind, payload, fromClientId, toClientId)`.
+Receivers read the sender from the event's `fromClientId`, which the relay sets from the sending connection, so a reply can be addressed back. An addressed message arrives with `toClientIds` holding only the receiver's own id, so it can't see who else was addressed, and a room-wide one arrives with it empty. A receiver can then refuse a room-wide message of a kind that should only arrive addressed. `CollabClient` passes both to `onAppMessage(kind, payload, fromClientId, toClientId)`, with `toClientId` the receiver's id or empty.
+
+Addressing 40 peers takes one message, and it counts once against the sender's rate limit.
+
+**Ordering.** Messages from one sender reach each receiver in the order they were sent. There is no ordering across senders: two peers sending at once may be seen in different orders by different receivers. The relay never delivers past a gap. A receiver whose 64-event queue fills is removed from the room and gets `SessionEnded{reason: "slow_consumer"}` after what it had already been sent, so it reconnects and resyncs rather than miss a message silently.
 
 ---
 
@@ -445,18 +449,21 @@ Graceful error — the relay sends this instead of closing the stream, so the cl
 | `ROOM_FULL` | Room has reached `MaxPeersPerRoom` limit. |
 | `PROTOCOL_VERSION_TOO_OLD` | Encrypted room requires `protocolVersion >= 2`. |
 | `ROOM_FORBIDDEN` | The connection's token has a `rooms` claim that does not cover this session (see [Token Claims](#token-claims)). |
-| `PEER_NOT_FOUND` | An `AppMessage.toClientId` named a client that is not in the sender's room. |
+| `PEER_NOT_FOUND` | An `AppMessage.toClientIds` named clients that are not in the sender's room. The message lists them; the others were delivered to. |
+| `RATE_LIMITED` | The connection went over its per-client message rate. The action was dropped; the message names its `actionId`. |
 | `ALREADY_JOINED` | A second `JoinRoom` on a connection that is already in a room. One connection holds one room; open another connection for a second one. |
 
-The first three answer a `JoinRoom` and mean the join was refused; `CollabClient` closes the connection after reporting them. `PEER_NOT_FOUND` and `ALREADY_JOINED` arrive after the join and refuse one action; the relay keeps the stream open, and `CollabClient` stays connected and only reports them through `onErrorEvent`.
+The first three answer a `JoinRoom` and mean the join was refused; `CollabClient` closes the connection after reporting them. `PEER_NOT_FOUND`, `RATE_LIMITED` and `ALREADY_JOINED` arrive after the join and refuse one action; the relay keeps the stream open, and `CollabClient` stays connected and only reports them through `onErrorEvent`.
 
 #### SessionEnded
 
 Broadcast when the owner disconnects and no same-browser successor exists. All remaining peers are disconnected.
 
+Also sent to a single peer that fell too far behind (its queue of undelivered events filled). That peer is removed from the room, and the others see `PeerLeft` with the same reason.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `reason` | string | Always `"owner_disconnected"`. |
+| `reason` | string | `"owner_disconnected"` (to every peer) or `"slow_consumer"` (to the one peer removed). |
 
 #### OwnerChanged
 
@@ -641,7 +648,7 @@ cfg := server.StreamConfig{
 }
 ```
 
-`JoinRoom` and `LeaveRoom` are always exempt from per-client rate limiting.
+`JoinRoom` and `LeaveRoom` are always exempt from per-client rate limiting. An action over the limit is dropped and answered with `ErrorEvent{RATE_LIMITED}` naming its `actionId`.
 
 ### Room Limits
 
@@ -1013,8 +1020,9 @@ svc.LogPayloads = 0         // 0 = disabled
 | `GetRoom(ctx, *GetRoomRequest) (*GetRoomResponse, error)` | Query room info (used by REST endpoint). |
 | `ListRooms(ctx, *ListRoomsRequest) (*ListRoomsResponse, error)` | List all active rooms. |
 | `FindSessionByHint(hint) string` | Resolve a client hint to a session ID. |
+| `GetClient(sessionId, clientId) *CollabClient` | Get a client in a room, or nil. Its `Slow()` channel closes when the room stops delivering to it; whoever drains its `SendCh` should evict it then. |
 | `GetClientSendCh(sessionId, clientId) chan *CollabEvent` | Get a client's broadcast channel. |
-| `DeliverAppMessage(sessionId, fromClientId, *AppMessage) error` | Send an `AppMessage` into a room without a socket. Honors `toClientId`; returns `ErrPeerNotFound` / `ErrRoomNotFound`. `fromClientId` may be empty for a server-originated message. |
+| `DeliverAppMessage(sessionId, fromClientId, *AppMessage) error` | Send an `AppMessage` into a room without a socket. Honors `toClientIds`, delivering to the present ones; the error wraps `ErrPeerNotFound` and names any absent, or is `ErrRoomNotFound`. `fromClientId` may be empty for a server-originated message. Call it from one goroutine per sender if receivers need that sender's order. |
 
 To attach an authenticated identity to joins made through `HandleAction`, pass a context from `services.WithPrincipal(ctx, &services.Principal{Subject, ClientID, Rooms})`. The WebSocket handler does this from the validated JWT.
 
