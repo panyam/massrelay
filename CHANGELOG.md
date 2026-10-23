@@ -6,6 +6,14 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- servicekit v0.1.9 (was v0.1.7), and `@panyam/servicekit-client` ^0.1.9 in
+  development. servicekit-client now shares servicekit's version, so it jumped
+  from 0.0.7 to 0.1.x; the peer range is `^0.0.7 || ^0.1.9`, since `^0.0.7`
+  alone allows only 0.0.7 and npm refuses the install next to 0.1.9.
+- `check:pack` reads npm 12's `npm pack --json` output (an object keyed by
+  package name) as well as npm 10/11's array.
+
 ### Fixed
 - `CollabClient` no longer closes the connection on a relay error that follows
   the join. `PEER_NOT_FOUND` (replying to a peer that already left) and
