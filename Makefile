@@ -6,7 +6,10 @@ test-go:
 
 test-ts:
 	cd ts && npm test
-	npx vitest run
+
+# TS client against the real relay binary (needs Go and Node 22+)
+test-interop:
+	cd ts && npm run test:interop
 
 ## Dev stack — relay + Grafana LGTM in Docker (for local development only)
 
