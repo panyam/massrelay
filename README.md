@@ -374,7 +374,7 @@ Receivers read the sender from the event's `fromClientId`, which the relay sets 
 
 Addressing 40 peers takes one message, and it counts once against the sender's rate limit.
 
-**Ordering.** Messages from one sender reach each receiver in the order they were sent. There is no ordering across senders: two peers sending at once may be seen in different orders by different receivers. The relay never delivers past a gap. A receiver whose 64-event queue fills is removed from the room and gets `SessionEnded{reason: "slow_consumer"}` after what it had already been sent, so it reconnects and resyncs rather than miss a message silently.
+**Ordering.** Messages from one sender reach each receiver in the order they were sent. There is no ordering across senders: two peers sending at once may be seen in different orders by different receivers. The relay never delivers past a gap. A receiver whose 64-event queue fills is removed from the room and gets `SessionEnded{reason: "slow_consumer"}` after what it had already been sent, so it reconnects and resyncs rather than miss a message silently. The relay then closes the socket (code 1000) within a couple of seconds, and drops a client whose writes stall for 10s, so a client that stopped reading doesn't hold a connection slot until the pong timeout.
 
 ---
 
@@ -1142,7 +1142,7 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 - **CORS**: Reflects allowed origins (not `*`). Disallowed origins get no CORS headers.
 - **Panic recovery**: Middleware catches handler panics, logs a stack trace, and returns HTTP 500 — keeps the server alive.
 - **Server timeouts**: `ReadHeaderTimeout` (10s, slowloris defense), `IdleTimeout` (120s), `MaxHeaderBytes` (64KB). `ReadTimeout`/`WriteTimeout` are intentionally not set to avoid killing long-lived WebSocket connections.
-- **WebSocket keepalive**: servicekit sends 30s pings with a 5-minute pong timeout to detect dead connections.
+- **WebSocket keepalive**: servicekit sends 30s pings with a 5-minute pong timeout to detect dead connections. A write that stalls for 10s (a client that stopped reading) closes the connection sooner.
 - **Zombie cleanup**: Server-side `watchClose` goroutine detects ungraceful disconnects and cleans up.
 - **Admin API**: Token-gated `/admin/*` endpoints for operational visibility (`RELAY_ADMIN_TOKEN`). Constant-time token comparison. Disabled when no token is set.
 

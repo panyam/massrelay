@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/panyam/oneauth v0.3.0
-	github.com/panyam/servicekit v0.1.11
+	github.com/panyam/servicekit v0.1.12
 	github.com/prometheus/client_golang v1.24.1
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0
