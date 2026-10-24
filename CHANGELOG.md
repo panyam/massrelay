@@ -6,6 +6,16 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `CollabClient` passes `PeerInfo.identity` to `onPeerJoined`, for peers
+  already in the room and for ones that join later (issue 42). Before, it
+  copied every other field and dropped this one, so a browser page couldn't
+  tell which peers the relay had validated a token for.
+- `CollabClient.getPeer(clientId)` returns a peer in the room, identity
+  included, so an `onAppMessage` handler can check
+  `getPeer(fromClientId)?.identity?.subject` before acting. It is cleared on
+  `peerLeft` and when the connection closes.
+
 ## [0.3.0] - 2026-10-23
 
 Full write-up in [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).

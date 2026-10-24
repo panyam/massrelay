@@ -792,7 +792,7 @@ const client = new CollabClient(options?: CollabClientOptions);
 | `onEvent` | `(event: any) => void` | Called for every event from the relay. Receives the raw protobuf JSON. |
 | `onConnect` | `(clientId: string) => void` | Fires after `RoomJoined` is received. |
 | `onDisconnect` | `() => void` | Fires on connection close (graceful or ungraceful). |
-| `onPeerJoined` | `(peer: PeerInfo) => void` | New peer joined the room. Also fires for self on connect. |
+| `onPeerJoined` | `(peer: PeerInfo) => void` | New peer joined the room. Also fires for self on connect. `peer.identity` holds the subject the relay validated from that peer's token, and is absent for anonymous peers and for self. |
 | `onPeerLeft` | `(clientId: string) => void` | Peer left the room. |
 | `onError` | `(error: Error) => void` | WebSocket-level error. |
 | `onErrorEvent` | `(code: string, message: string) => void` | Relay-sent graceful error (`ROOM_FULL`, `PROTOCOL_VERSION_TOO_OLD`). |
@@ -800,7 +800,7 @@ const client = new CollabClient(options?: CollabClientOptions);
 | `onOwnerChanged` | `(newOwnerClientId: string) => void` | Ownership transferred. |
 | `onCredentialsChanged` | `(reason: string) => void` | Session password changed. |
 | `onTitleChanged` | `(title: string) => void` | Drawing title changed. |
-| `onAppMessage` | `(kind: string, payload: Uint8Array, fromClientId: string) => void` | An `AppMessage` from another peer, or from the embedding server (empty `fromClientId`). |
+| `onAppMessage` | `(kind: string, payload: Uint8Array, fromClientId: string, toClientId: string) => void` | An `AppMessage` from another peer, or from the embedding server (empty `fromClientId`). `toClientId` is this client's id when the message was addressed to it, and empty when it went to the whole room. |
 | `maxRetries` | number | Max auto-reconnect attempts (default: `5`). Currently unused — auto-reconnect is disabled. |
 | `_grpcFactory` | `() => GRPCWSClient` | Override WebSocket client for testing. |
 
@@ -837,6 +837,19 @@ Opens a WebSocket to the relay and sends a `JoinRoom` action.
 
 Throws if already connected.
 
+**`getPeer(clientId)`**
+
+Returns the `PeerInfo` of a peer in the room (this client included), or `undefined` once it has left or the connection has closed. To act only on messages from peers the relay vouched for, check the sender's subject:
+
+```typescript
+onAppMessage: (kind, payload, from) => {
+  if (!trusted.has(client.getPeer(from)?.identity?.subject ?? '')) return;
+  // ...
+},
+```
+
+The relay delivers a peer's `peerJoined` before anything that peer sends, so the sender is always known when `onAppMessage` runs. A handler that awaits before checking should read the peer first, since it is dropped on `peerLeft`.
+
 **`disconnect()`**
 
 Sends `LeaveRoom`, closes the WebSocket, resets all state, and fires `onDisconnect`. Safe to call multiple times.
@@ -857,7 +870,7 @@ Throws if not connected.
 
 **`sendAppMessage(kind, payload, opts?)`**
 
-Sends an `AppMessage`. With `opts.to` set to a client ID, only that peer receives it; the relay answers `PEER_NOT_FOUND` through `onErrorEvent` if the peer is not in the room. Without it, every other peer receives it.
+Sends an `AppMessage`. With `opts.to` set to a client ID or an array of them, only those peers receive it, and the relay answers one `PEER_NOT_FOUND` through `onErrorEvent` naming any that are not in the room. Without it, every other peer receives it.
 
 ```typescript
 client.sendAppMessage('tools/call', bytes, { to: pageClientId });

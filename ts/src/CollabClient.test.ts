@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GRPCWSClient } from '@panyam/servicekit-client';
 import { CollabClient } from './CollabClient.js';
+import type { PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 
 async function connectedClient(received: Array<[string, Uint8Array, string, string]>) {
   const { client: grpc, controller } = GRPCWSClient.createMock();
@@ -137,5 +138,84 @@ describe('CollabClient relay errors', () => {
     expect(calls).toEqual(['connect', 'disconnect', 'ended:owner stopped sharing']);
     expect(client.isConnected).toBe(false);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+});
+
+function rosterClient() {
+  const { client: grpc, controller } = GRPCWSClient.createMock();
+  const joinedPeers: PeerInfoJson[] = [];
+  const client = new CollabClient({
+    _grpcFactory: () => grpc,
+    onPeerJoined: (peer) => joinedPeers.push(peer),
+  });
+  client.connect('ws://relay.test', 'design:abc', 'page', {});
+  controller.simulateOpen();
+  return { client, controller, joinedPeers };
+}
+
+const bridgeIdentity = { subject: 'bridge-1', clientId: 'mcpkit-host' };
+
+describe('CollabClient peer identity', () => {
+  /** @flow Page joins a room the host's bridge is already in → it can tell the bridge is relay-vouched */
+  it('passes identity to onPeerJoined for peers already in the room', async () => {
+    const { controller, joinedPeers } = rosterClient();
+    await Promise.resolve();
+    controller.simulateMessage({ roomJoined: { clientId: 'me', room: { sessionId: 'design:abc', peers: {
+      bridge: { clientId: 'bridge', username: 'host', identity: bridgeIdentity },
+      anon: { clientId: 'anon', username: 'guest' },
+    } } } });
+
+    const byId = Object.fromEntries(joinedPeers.map((p) => [p.clientId, p]));
+    expect(byId.bridge.identity).toEqual(bridgeIdentity);
+    expect(byId.anon.identity).toBeUndefined();
+    expect(byId.me.identity).toBeUndefined();
+  });
+
+  it('passes identity to onPeerJoined for a peer that joins later', async () => {
+    const { controller, joinedPeers } = rosterClient();
+    await Promise.resolve();
+    controller.simulateMessage(joined);
+    controller.simulateMessage({ peerJoined: { peer: { clientId: 'bridge', identity: bridgeIdentity } } });
+
+    expect(joinedPeers.at(-1)).toMatchObject({ clientId: 'bridge', identity: bridgeIdentity });
+  });
+
+  it('looks a sender up by client id until it leaves', async () => {
+    const { client, controller } = rosterClient();
+    await Promise.resolve();
+    controller.simulateMessage({ roomJoined: { clientId: 'me', room: { sessionId: 'design:abc', peers: {
+      anon: { clientId: 'anon' },
+    } } } });
+    controller.simulateMessage({ peerJoined: { peer: { clientId: 'bridge', identity: bridgeIdentity } } });
+
+    expect(client.getPeer('bridge')?.identity?.subject).toBe('bridge-1');
+    expect(client.getPeer('anon')?.identity?.subject).toBeUndefined();
+    expect(client.getPeer('me')?.clientId).toBe('me');
+    expect(client.getPeer('nobody')).toBeUndefined();
+
+    controller.simulateMessage({ peerLeft: { clientId: 'bridge' } });
+    expect(client.getPeer('bridge')).toBeUndefined();
+  });
+
+  it('keeps isOwner current in the roster when ownership moves', async () => {
+    const { client, controller } = rosterClient();
+    await Promise.resolve();
+    controller.simulateMessage({ roomJoined: { clientId: 'me', room: { sessionId: 'design:abc', peers: {
+      bridge: { clientId: 'bridge', isOwner: true },
+    } } } });
+    controller.simulateMessage({ ownerChanged: { newOwnerClientId: 'me' } });
+
+    expect(client.getPeer('bridge')?.isOwner).toBeFalsy();
+    expect(client.getPeer('me')?.isOwner).toBe(true);
+  });
+
+  it('forgets the roster when the connection closes', async () => {
+    const { client, controller } = rosterClient();
+    await Promise.resolve();
+    controller.simulateMessage(joined);
+    controller.simulateMessage({ peerJoined: { peer: { clientId: 'bridge', identity: bridgeIdentity } } });
+    controller.simulateClose();
+
+    expect(client.getPeer('bridge')).toBeUndefined();
   });
 });
