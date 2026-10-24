@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -77,6 +78,23 @@ func recvEvent(t *testing.T, s *CollabBidiStream) *pb.CollabEvent {
 		return evt
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for event")
+		return nil
+	}
+}
+
+// recvErr calls Recv the way servicekit does and returns its error.
+func recvErr(t *testing.T, s *CollabBidiStream) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.Recv()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for Recv to return")
 		return nil
 	}
 }
@@ -266,6 +284,9 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 		if end := evt.GetSessionEnded(); end != nil {
 			if end.GetReason() != "slow_consumer" {
 				t.Fatalf("reason = %q, want slow_consumer", end.GetReason())
+			}
+			if err := recvErr(t, reader); err != io.EOF {
+				t.Fatalf("Recv after slow_consumer = %v, want io.EOF so servicekit closes the socket", err)
 			}
 			break
 		}

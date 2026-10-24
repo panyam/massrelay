@@ -461,7 +461,7 @@ For local/dev with `RELAY_DOMAIN=localhost`, Caddy serves a self-signed cert.
 | Read header timeout | hardcoded | 10s (slowloris defense) |
 | Idle timeout | hardcoded | 120s |
 | Max header size | hardcoded | 64 KB |
-| WebSocket keepalive | servicekit | 30s ping, 5min pong timeout |
+| WebSocket keepalive | servicekit | 30s ping, 5min pong timeout, 10s write timeout |
 
 ### Origin Allowlist
 

@@ -6,6 +6,28 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- servicekit v0.1.12 (was v0.1.11), and `@panyam/servicekit-client` ^0.1.12
+  in development; the peer range is unchanged. Besides the options below,
+  v0.1.12 ends a server connection as soon as the client closes cleanly
+  (before, it lingered until the pong timeout) and fixes a browser bundle of
+  servicekit-client that imported nothing.
+
+### Fixed
+- An evicted slow consumer's socket is closed by the relay (issue 46). Its
+  stream ends after `SessionEnded{slow_consumer}`, and the WebSocket handler
+  now sets servicekit's `CloseOnStreamEnd`, so the client gets a 1000 close
+  within the 2s grace period. Before, a client that wasn't reading held its
+  socket, and one of the `RELAY_MAX_CONNECTIONS` slots, for up to the 5 min
+  pong timeout.
+- Writes to a client time out after 10s (`StreamConfig.WriteTimeout`), which
+  closes the connection. A client that stopped reading entirely used to block
+  its writer, and with it the eviction that should have removed it.
+- An evicted client gets the events it already had queued before
+  `SessionEnded`. Depending on goroutine scheduling, the relay could evict it
+  with none of them sent, which also made `TestStreamEvictsSlowConsumer` fail
+  about half the time on a single CPU (and on CI).
+
 ### Added
 - `CollabClient` passes `PeerInfo.identity` to `onPeerJoined`, for peers
   already in the room and for ones that join later (issue 42). Before, it

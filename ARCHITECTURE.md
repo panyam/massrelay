@@ -81,7 +81,7 @@ Disabled entirely when no token is set (routes not registered).
 - **Trusted proxy**: `RELAY_TRUSTED_PROXIES` controls which proxies can set `X-Forwarded-For`; prevents IP spoofing to bypass rate limits
 - **Panic recovery**: catches handler panics, logs stack trace, returns 500 (keeps server alive)
 - **Server timeouts**: `ReadHeaderTimeout` (10s, slowloris defense), `IdleTimeout` (120s), `MaxHeaderBytes` (64KB)
-- **WebSocket keepalive**: servicekit provides 30s ping / 5min pong timeout (detects dead connections)
+- **WebSocket keepalive**: servicekit provides 30s ping / 5min pong timeout (detects dead connections), plus a 10s write timeout that drops a client that stopped reading. When a stream ends (slow-consumer eviction, `end_send`) the relay closes the socket (`CloseOnStreamEnd`).
 
 ## Observability (OpenTelemetry)
 

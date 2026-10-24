@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
@@ -20,6 +21,12 @@ import (
 type StreamConfig struct {
 	MaxMessageRate float64 // messages/sec per client (0 = unlimited, default 30)
 	MaxMessageSize int     // max message payload in bytes (0 = unlimited, default 1MB)
+
+	// WriteTimeout bounds each WebSocket write. A client that stops reading
+	// fills its TCP window, its writes time out, and servicekit closes the
+	// socket, which unblocks an eviction stuck behind that client's queue.
+	// 0 means no deadline, leaving it to the 5 min pong timeout.
+	WriteTimeout time.Duration
 }
 
 // DefaultStreamConfig returns sensible defaults.
@@ -27,6 +34,7 @@ func DefaultStreamConfig() StreamConfig {
 	return StreamConfig{
 		MaxMessageRate: 30,
 		MaxMessageSize: 1 << 20, // 1MB
+		WriteTimeout:   10 * time.Second,
 	}
 }
 
@@ -37,8 +45,10 @@ type CollabBidiStream struct {
 	cancel         context.CancelFunc
 	service        *services.CollabService
 	sendCh         chan *pb.CollabEvent // events from service → WebSocket client
-	sessionId      string               // set after first JoinRoom action
-	clientId       string               // set after first JoinRoom action
+	ended          chan struct{}        // closed once the relay ends this stream (eviction)
+	endOnce        sync.Once
+	sessionId      string // set after first JoinRoom action
+	clientId       string // set after first JoinRoom action
 	mu             sync.Mutex
 	messageLimiter *rate.Limiter // per-client message rate limiter
 }
@@ -64,6 +74,7 @@ func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg S
 		cancel:         cancel,
 		service:        svc,
 		sendCh:         make(chan *pb.CollabEvent, 64),
+		ended:          make(chan struct{}),
 		messageLimiter: msgLimiter,
 	}
 	// Watch for context cancellation (WebSocket close) and clean up the client.
@@ -166,13 +177,13 @@ func (s *CollabBidiStream) bridge(client *services.CollabClient) {
 			select {
 			case s.sendCh <- event:
 			case <-slow:
-				s.evictSlow(client.ClientId)
+				s.evictSlow(client, event)
 				return
 			case <-s.ctx.Done():
 				return
 			}
 		case <-slow:
-			s.evictSlow(client.ClientId)
+			s.evictSlow(client, nil)
 			return
 		case <-s.ctx.Done():
 			return
@@ -180,13 +191,39 @@ func (s *CollabBidiStream) bridge(client *services.CollabClient) {
 	}
 }
 
-func (s *CollabBidiStream) evictSlow(clientId string) {
-	slog.Warn("Evicting slow consumer", "component", "stream", "client", clientId)
+// evictSlow passes on what the client already had queued, starting with the
+// event the bridge was holding (if any), as far as this connection's queue
+// has room, then ends its session. Those events came before the one the room
+// dropped, so they are still an unbroken prefix; without this, a bridge that
+// hadn't run yet would evict with nothing sent. It stops at the first event
+// that doesn't fit, so nothing after a skipped one goes out.
+func (s *CollabBidiStream) evictSlow(client *services.CollabClient, held *pb.CollabEvent) {
+	slog.Warn("Evicting slow consumer", "component", "stream", "client", client.ClientId)
+forward:
+	for event := held; ; event = nil {
+		if event == nil {
+			select {
+			case e, ok := <-client.SendCh:
+				if !ok {
+					break forward
+				}
+				event = e
+			default:
+				break forward
+			}
+		}
+		select {
+		case s.sendCh <- event:
+		default:
+			break forward
+		}
+	}
 	s.leaveAndCleanup("slow_consumer")
 	s.reply(&pb.CollabEvent{
 		EventId: uuid.New().String(),
 		Event:   &pb.CollabEvent_SessionEnded{SessionEnded: &pb.SessionEnded{Reason: "slow_consumer"}},
 	})
+	s.endOnce.Do(func() { close(s.ended) })
 }
 
 // reply queues an event for this connection's client.
@@ -200,6 +237,8 @@ func (s *CollabBidiStream) reply(event *pb.CollabEvent) error {
 }
 
 // Recv reads the next event to send to the WebSocket client (service → WS).
+// Once the relay has ended the stream it drains what is queued, SessionEnded
+// last, then returns io.EOF so servicekit closes the socket.
 func (s *CollabBidiStream) Recv() (*pb.CollabEvent, error) {
 	select {
 	case event, ok := <-s.sendCh:
@@ -207,6 +246,15 @@ func (s *CollabBidiStream) Recv() (*pb.CollabEvent, error) {
 			return nil, io.EOF
 		}
 		return event, nil
+	case <-s.ended:
+		select {
+		case event, ok := <-s.sendCh:
+			if ok {
+				return event, nil
+			}
+		default:
+		}
+		return nil, io.EOF
 	case <-s.ctx.Done():
 		return nil, s.ctx.Err()
 	}

@@ -40,6 +40,11 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 		},
 		func() *pb.CollabAction { return &pb.CollabAction{} },
 	)
+	// Close the socket when a stream ends (an eviction, or the client's
+	// end_send) instead of leaving it to the pong timeout, and drop a client
+	// whose writes stall.
+	wsHandler.CloseOnStreamEnd = true
+	wsHandler.WriteTimeout = streamCfg.WriteTimeout
 	// WebSocket handler with metrics, wrapped by Guard (origin + rate limit + conn limit)
 	rawWSHandler := gohttp.WSServe(wsHandler, nil)
 	metrics := h.app.Metrics
