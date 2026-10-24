@@ -1,6 +1,6 @@
 {
   "name": "@panyam/massrelay",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Browser client and protobuf models for the massrelay WebSocket relay",
   "repository": {
     "type": "git",

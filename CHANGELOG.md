@@ -6,15 +6,31 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-24
+
+A browser page can see which peers the relay validated a token for, and the
+relay now closes an evicted slow consumer's socket instead of leaving it to
+the pong timeout. No breaking changes.
+
+### Added
+- `CollabClient` passes `PeerInfo.identity` to `onPeerJoined`, for peers
+  already in the room and for ones that join later (issue 42, PR 48). Before, it
+  copied every other field and dropped this one, so a browser page couldn't
+  tell which peers the relay had validated a token for.
+- `CollabClient.getPeer(clientId)` returns a peer in the room, identity
+  included, so an `onAppMessage` handler can check
+  `getPeer(fromClientId)?.identity?.subject` before acting. It is cleared on
+  `peerLeft` and when the connection closes.
+
 ### Changed
 - servicekit v0.1.12 (was v0.1.11), and `@panyam/servicekit-client` ^0.1.12
   in development; the peer range is unchanged. Besides the options below,
   v0.1.12 ends a server connection as soon as the client closes cleanly
   (before, it lingered until the pong timeout) and fixes a browser bundle of
-  servicekit-client that imported nothing.
+  servicekit-client that imported nothing (PR 49).
 
 ### Fixed
-- An evicted slow consumer's socket is closed by the relay (issue 46). Its
+- An evicted slow consumer's socket is closed by the relay (issue 46, PR 49). Its
   stream ends after `SessionEnded{slow_consumer}`, and the WebSocket handler
   now sets servicekit's `CloseOnStreamEnd`, so the client gets a 1000 close
   within the 2s grace period. Before, a client that wasn't reading held its
@@ -27,16 +43,6 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `SessionEnded`. Depending on goroutine scheduling, the relay could evict it
   with none of them sent, which also made `TestStreamEvictsSlowConsumer` fail
   about half the time on a single CPU (and on CI).
-
-### Added
-- `CollabClient` passes `PeerInfo.identity` to `onPeerJoined`, for peers
-  already in the room and for ones that join later (issue 42). Before, it
-  copied every other field and dropped this one, so a browser page couldn't
-  tell which peers the relay had validated a token for.
-- `CollabClient.getPeer(clientId)` returns a peer in the room, identity
-  included, so an `onAppMessage` handler can check
-  `getPeer(fromClientId)?.identity?.subject` before acting. It is cleared on
-  `peerLeft` and when the connection closes.
 
 ## [0.3.0] - 2026-10-23
 
