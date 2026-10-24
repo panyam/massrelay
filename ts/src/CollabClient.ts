@@ -2,12 +2,16 @@ import { GRPCWSClient } from '@panyam/servicekit-client';
 import { fromJson, type JsonValue } from '@bufbuild/protobuf';
 import { base64Encode } from '@bufbuild/protobuf/wire';
 import type { CollabActionJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
-import type { CollabEvent } from './gen/massrelay/v1/models/collab_pb.js';
+import type { CollabEvent, PeerInfo } from './gen/massrelay/v1/models/collab_pb.js';
 import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
 import { resolveRelayUrl } from './url-params.js';
 
 export interface CollabClientOptions {
   onEvent?: (event: CollabEvent) => void;
+  /** Called for this client and each peer already in the room on join, then
+   * for each peer that joins later. peer.identity is set when the relay
+   * validated a token for that peer's connection, and absent for anonymous
+   * peers and for this client itself. */
   onPeerJoined?: (peer: PeerInfoJson) => void;
   onPeerLeft?: (clientId: string) => void;
   onError?: (error: Error) => void;
@@ -64,6 +68,7 @@ export class CollabClient {
   private _encrypted: boolean = false;
   private _maxPeers: number = 0;
   private _roomEncrypted: boolean = false;
+  private peers = new Map<string, PeerInfoJson>();
   /** Callback options — public so CollabEngine can wire callbacks after construction. */
   options: CollabClientOptions;
   private retryCount: number = 0;
@@ -85,6 +90,17 @@ export class CollabClient {
   get maxPeers(): number { return this._maxPeers; }
   get roomEncrypted(): boolean { return this._roomEncrypted; }
   get title(): string { return this._title; }
+
+  /** The peer with this client id while it is in the room, including this
+   * client itself, or undefined. identity is what the relay validated from the
+   * peer's token, so a page can check `getPeer(fromClientId)?.identity?.subject`
+   * before acting on an AppMessage. The relay delivers a peer's peerJoined
+   * before anything it sends, so the sender is always here when onAppMessage
+   * runs. It is gone after peerLeft, so a handler that awaits before checking
+   * should read it first. Cleared when the connection closes. */
+  getPeer(clientId: string): PeerInfoJson | undefined {
+    return this.peers.get(clientId);
+  }
 
   connect(relayUrl: string, sessionId: string, username: string, metadata: Record<string, string>, isOwner: boolean = false, browserId: string = '', clientHint: string = '', encrypted: boolean = false, title: string = ''): void {
     if (this._isConnected) {
@@ -249,8 +265,10 @@ export class CollabClient {
         this.retryCount = 0;
         this.options.onConnect?.(this._clientId);
 
-        // Add self as a peer (server doesn't include joining client in peers list)
-        this.options.onPeerJoined?.({
+        // Add self as a peer (server doesn't include joining client in peers list).
+        // RoomJoined carries no PeerInfo for the joiner, so self has no identity.
+        this.peers.clear();
+        this.addPeer({
           clientId: this._clientId,
           username: this._username,
           avatarUrl: '',
@@ -262,16 +280,7 @@ export class CollabClient {
         // Add existing peers already in the room (map keyed by clientId)
         if (room?.peers) {
           for (const peer of Object.values(room.peers)) {
-            // Convert PeerInfo Message to PeerInfoJson for callbacks
-            this.options.onPeerJoined?.({
-              clientId: peer.clientId,
-              username: peer.username,
-              avatarUrl: peer.avatarUrl,
-              clientType: peer.clientType,
-              isActive: peer.isActive,
-              isOwner: peer.isOwner,
-              metadata: peer.metadata,
-            });
+            this.addPeer(peerToJson(peer));
           }
         }
         break;
@@ -280,15 +289,7 @@ export class CollabClient {
       case 'peerJoined': {
         const peer = event.event.value.peer;
         if (peer) {
-          this.options.onPeerJoined?.({
-            clientId: peer.clientId,
-            username: peer.username,
-            avatarUrl: peer.avatarUrl,
-            clientType: peer.clientType,
-            isActive: peer.isActive,
-            isOwner: peer.isOwner,
-            metadata: peer.metadata,
-          });
+          this.addPeer(peerToJson(peer));
         } else {
           this.options.onPeerJoined?.({});
         }
@@ -296,6 +297,7 @@ export class CollabClient {
       }
 
       case 'peerLeft':
+        this.peers.delete(event.event.value.clientId);
         this.options.onPeerLeft?.(event.event.value.clientId);
         break;
 
@@ -307,6 +309,9 @@ export class CollabClient {
       case 'ownerChanged': {
         const newOwnerId = event.event.value.newOwnerClientId;
         this._isOwner = newOwnerId === this._clientId;
+        for (const [id, p] of this.peers) {
+          this.peers.set(id, { ...p, isOwner: id === newOwnerId });
+        }
         this.options.onOwnerChanged?.(newOwnerId);
         break;
       }
@@ -330,6 +335,7 @@ export class CollabClient {
     const wasConnected = this._isConnected;
     this._isConnected = false;
     this._isConnecting = false;
+    this.peers.clear();
 
     if (wasConnected) {
       this.options.onDisconnect?.();
@@ -358,6 +364,28 @@ export class CollabClient {
     this._isConnecting = false;
     this._clientId = '';
     this._isOwner = false;
+    this.peers.clear();
     this.grpc = null;
   }
+
+  private addPeer(peer: PeerInfoJson): void {
+    if (peer.clientId) this.peers.set(peer.clientId, peer);
+    this.options.onPeerJoined?.(peer);
+  }
+}
+
+function peerToJson(peer: PeerInfo): PeerInfoJson {
+  const json: PeerInfoJson = {
+    clientId: peer.clientId,
+    username: peer.username,
+    avatarUrl: peer.avatarUrl,
+    clientType: peer.clientType,
+    isActive: peer.isActive,
+    isOwner: peer.isOwner,
+    metadata: peer.metadata,
+  };
+  if (peer.identity) {
+    json.identity = { subject: peer.identity.subject, clientId: peer.identity.clientId };
+  }
+  return json;
 }
