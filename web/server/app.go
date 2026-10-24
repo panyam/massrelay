@@ -53,6 +53,7 @@ type RelayApp struct {
 //	RELAY_MAX_CONNECTIONS=N     — max concurrent WebSocket connections (0 = unlimited, default 500)
 //	RELAY_GLOBAL_RATE=N         — max WebSocket connections/sec globally (default 100)
 //	RELAY_PER_IP_RATE=N         — max WebSocket connections/sec per IP (default 5)
+//	RELAY_PER_IP_BURST=N        — connections one IP may open at once (default max(3, RELAY_PER_IP_RATE))
 //	RELAY_PER_SUB_RATE=N        — max WebSocket connections/sec per subject (0 = disabled, default 0)
 //	RELAY_ADMIN_TOKEN=...       — bearer token for /admin/* endpoints (required to enable admin API)
 //	RELAY_AUTH_REQUIRED=true    — reject unauthenticated WebSocket connections (default false)
@@ -106,6 +107,15 @@ func NewRelayApp() *RelayApp {
 	if v := os.Getenv("RELAY_PER_IP_RATE"); v != "" {
 		if n, err := strconv.ParseFloat(v, 64); err == nil {
 			rlCfg.PerKeyPerSec = n
+		}
+	}
+	// Several tabs of one browser connect together (a session restore, a
+	// bridge opening pages), and CollabClient does not retry a rejected
+	// upgrade, so the burst keeps up with the rate unless set explicitly.
+	rlCfg.PerKeyBurst = max(rlCfg.PerKeyBurst, int(rlCfg.PerKeyPerSec))
+	if v := os.Getenv("RELAY_PER_IP_BURST"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			rlCfg.PerKeyBurst = n
 		}
 	}
 	ipRateLimiter := mw.NewRateLimiter(rlCfg)

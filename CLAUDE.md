@@ -99,6 +99,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 | `RELAY_MAX_CONNECTIONS` | Max concurrent WebSocket connections | 500 |
 | `RELAY_GLOBAL_RATE` | Global connections/sec | 100 |
 | `RELAY_PER_IP_RATE` | Per-IP connections/sec | 5 |
+| `RELAY_PER_IP_BURST` | Connections one IP may open at once | max(3, rate) |
 | `RELAY_PER_SUB_RATE` | Per-subject connections/sec (requires auth) | 0 (disabled) |
 | `RELAY_LOG_PAYLOADS` | Log first N chars of payloads | 0 (off) |
 | `RELAY_AUTH_REQUIRED` | Reject unauthenticated WebSocket connections | false |

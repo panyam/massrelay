@@ -8,7 +8,15 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 One `AppMessage` can address many peers, and the relay no longer drops
 messages without saying so (issue 43). The `AppMessage` wire format changes,
-so this needs a minor version bump.
+so this needs a minor version bump. One IP can also open more connections at
+once (issue 45).
+
+### Added
+- `RELAY_PER_IP_BURST` sets how many connections one IP may open at once
+  (issue 45). It defaults to max(3, `RELAY_PER_IP_RATE`), so the production
+  default moves from 3 to 5 and raising the rate raises the burst. Before, the
+  burst was always 3, so the fourth tab of a browser restoring a session was
+  refused with a 429, and `CollabClient` doesn't retry.
 
 ### Changed
 - **Breaking:** `AppMessage.to_client_id` (string) is replaced by

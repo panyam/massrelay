@@ -75,9 +75,6 @@
 
 ## Next Up
 
-### Issue #2: Use gocurrent.FanOut for room broadcasting
-- Replace manual `BroadcastToAll`/`BroadcastExcept` with `gocurrent.FanOut`
-
 ### Issue #4: Relay Pool (client-side)
 - Client-side relay selection, health probing, auto-reconnect
 
