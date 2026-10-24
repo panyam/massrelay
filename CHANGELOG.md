@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- servicekit v0.2.0 (was v0.1.12), and `@panyam/servicekit-client` ^0.2.0 in
+  development. The peer range widens to `^0.0.7 || ^0.1.9 || ^0.2.0`, so an
+  app on servicekit-client 0.2.x no longer gets a peer warning. massrelay used
+  none of the APIs v0.2.0 renamed or moved, so nothing else changes, and the
+  TS client is the same apart from its version.
+
 ## [0.3.1] - 2026-10-24
 
 A browser page can see which peers the relay validated a token for, and the
