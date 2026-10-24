@@ -1,7 +1,7 @@
 # MassRelay
 
 ## Version
-0.2.5
+0.3.0
 
 ## Provides
 - websocket-relay: Stateless WebSocket relay for real-time collaboration

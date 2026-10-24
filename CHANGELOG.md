@@ -6,6 +6,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-23
+
+Full write-up in [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
+
 One `AppMessage` can address many peers, and the relay no longer drops
 messages without saying so (issue 43). The `AppMessage` wire format changes,
 so this needs a minor version bump. One IP can also open more connections at
