@@ -97,8 +97,8 @@ describe('AppMessage against a real relay', () => {
   it("keeps one sender's messages in order at every receiver", async () => {
     const room = `design:${crypto.randomUUID()}`;
     const bridge = await join(room, 'bridge');
-    const pages: Peer[] = [];
-    for (let i = 1; i <= 5; i++) pages.push(await join(room, `page${i}`));
+    // All five at once, as a bridge opening pages would (issue 45).
+    const pages = await Promise.all([1, 2, 3, 4, 5].map((i) => join(room, `page${i}`)));
     const to = pages.map((p) => p.clientId);
 
     // Batch A: one message per page, then batch B: one multi-peer message per round.

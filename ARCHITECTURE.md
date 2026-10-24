@@ -77,7 +77,7 @@ Disabled entirely when no token is set (routes not registered).
 - **Origin allowlist** for WebSocket and CORS (`RELAY_ALLOWED_ORIGINS`)
 - **CORS**: reflects allowed origins instead of `Access-Control-Allow-Origin: *`; disallowed origins get no CORS headers
 - **Connection limits** (`RELAY_MAX_CONNECTIONS`, default 500)
-- **Rate limiting**: global (`RELAY_GLOBAL_RATE`, default 100/s), per-IP (`RELAY_PER_IP_RATE`, default 5/s), per-client messages (30/s)
+- **Rate limiting**: global (`RELAY_GLOBAL_RATE`, default 100/s), per-IP (`RELAY_PER_IP_RATE`, default 5/s, burst `RELAY_PER_IP_BURST`, default the rate), per-client messages (30/s)
 - **Trusted proxy**: `RELAY_TRUSTED_PROXIES` controls which proxies can set `X-Forwarded-For`; prevents IP spoofing to bypass rate limits
 - **Panic recovery**: catches handler panics, logs stack trace, returns 500 (keeps server alive)
 - **Server timeouts**: `ReadHeaderTimeout` (10s, slowloris defense), `IdleTimeout` (120s), `MaxHeaderBytes` (64KB)

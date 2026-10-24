@@ -450,7 +450,8 @@ For local/dev with `RELAY_DOMAIN=localhost`, Caddy serves a self-signed cert.
 |------------|--------|---------|
 | Global rate limit | `RELAY_GLOBAL_RATE` | 100 conn/sec |
 | Per-IP rate limit | `RELAY_PER_IP_RATE` | 5 conn/sec |
-| Per-client messages | hardcoded | 30 msg/sec |
+| Per-IP burst | `RELAY_PER_IP_BURST` | max(3, per-IP rate) |
+| Per-client messages | hardcoded | 30 msg/sec (over the limit gets `RATE_LIMITED`) |
 | Max connections | `RELAY_MAX_CONNECTIONS` | 500 |
 | Max peers per room | `MaxPeersPerRoom` | 10 |
 | Max message size | hardcoded | 1 MB |

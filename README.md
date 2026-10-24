@@ -183,8 +183,8 @@ The inner `data` field contains `CollabAction` (client→server) or `CollabEvent
 | Level | Limit | Behavior |
 |-------|-------|----------|
 | Global connections | 100/sec | HTTP 429 before WS upgrade |
-| Per-IP connections | 5/sec, burst 3 | HTTP 429 before WS upgrade |
-| Per-client messages | 30/sec | Silently dropped (join/leave exempt) |
+| Per-IP connections | 5/sec, burst 5 | HTTP 429 before WS upgrade |
+| Per-client messages | 30/sec | Dropped and answered with `ErrorEvent{RATE_LIMITED}` (join/leave exempt) |
 
 **Message size limit:** 1 MB per message.
 
@@ -626,17 +626,15 @@ Owner disconnects                 Relay                    Remaining peers
 
 ### Rate Limiting
 
-Connection-level rate limits are configured via `RateLimitConfig`:
+Connection-level rate limits apply before the WebSocket upgrade, and a rejected connection gets HTTP 429. `NewRelayApp` reads them from the environment:
 
-```go
-app := server.NewRelayApp()
-app.RateLimit = server.RateLimitConfig{
-    GlobalConnPerSec: 100,          // Max WebSocket connections/sec globally
-    PerIPConnPerSec:  5,            // Max connections/sec per IP address
-    PerIPBurst:       3,            // Burst allowance per IP
-    IPLimiterTTL:     5 * time.Minute, // Cleanup interval for stale per-IP limiters
-}
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELAY_GLOBAL_RATE` | 100 | Max WebSocket connections/sec across all clients |
+| `RELAY_PER_IP_RATE` | 5 | Max WebSocket connections/sec per client IP |
+| `RELAY_PER_IP_BURST` | max(3, `RELAY_PER_IP_RATE`) | Connections one IP may open at once |
+
+The burst is what a browser restoring several tabs, or a bridge opening pages, runs into. `CollabClient` doesn't retry a rejected upgrade, so a tab turned away stays disconnected. Raising `RELAY_PER_IP_RATE` raises the burst with it; set `RELAY_PER_IP_BURST` to decouple them.
 
 Per-client message rate limiting (applied after WebSocket upgrade):
 

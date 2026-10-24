@@ -255,3 +255,41 @@ func TestWSEndpoint_NoUpgrade(t *testing.T) {
 		t.Fatal("expected non-200 for non-WS request to WS endpoint")
 	}
 }
+
+// count429 sends n WebSocket-path requests from one IP at once and counts how
+// many the IP rate limiter turned away before the upgrade.
+func count429(t *testing.T, app *RelayApp, n int) int {
+	t.Helper()
+	limited := 0
+	for i := 0; i < n; i++ {
+		req := httptest.NewRequest("GET", "/ws/v1/test-session/sync", nil)
+		req.RemoteAddr = "192.0.2.7:4000"
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			limited++
+		}
+	}
+	return limited
+}
+
+func TestPerIPBurstFollowsRate(t *testing.T) {
+	t.Setenv("RELAY_PER_IP_RATE", "6")
+	if got := count429(t, newTestApp(t), 6); got != 0 {
+		t.Fatalf("6 tabs opening at once at RELAY_PER_IP_RATE=6: %d rejected, want 0", got)
+	}
+}
+
+func TestPerIPBurstDefaultIsFive(t *testing.T) {
+	if got := count429(t, newTestApp(t), 6); got != 1 {
+		t.Fatalf("default per-IP burst: %d of 6 rejected, want 1", got)
+	}
+}
+
+func TestPerIPBurstOverride(t *testing.T) {
+	t.Setenv("RELAY_PER_IP_RATE", "1000")
+	t.Setenv("RELAY_PER_IP_BURST", "2")
+	if got := count429(t, newTestApp(t), 3); got != 1 {
+		t.Fatalf("RELAY_PER_IP_BURST=2: %d of 3 rejected, want 1", got)
+	}
+}
