@@ -177,13 +177,13 @@ func (s *CollabBidiStream) bridge(client *services.CollabClient) {
 			select {
 			case s.sendCh <- event:
 			case <-slow:
-				s.evictSlow(client.ClientId)
+				s.evictSlow(client, event)
 				return
 			case <-s.ctx.Done():
 				return
 			}
 		case <-slow:
-			s.evictSlow(client.ClientId)
+			s.evictSlow(client, nil)
 			return
 		case <-s.ctx.Done():
 			return
@@ -191,8 +191,33 @@ func (s *CollabBidiStream) bridge(client *services.CollabClient) {
 	}
 }
 
-func (s *CollabBidiStream) evictSlow(clientId string) {
-	slog.Warn("Evicting slow consumer", "component", "stream", "client", clientId)
+// evictSlow passes on what the client already had queued, starting with the
+// event the bridge was holding (if any), as far as this connection's queue
+// has room, then ends its session. Those events came before the one the room
+// dropped, so they are still an unbroken prefix; without this, a bridge that
+// hadn't run yet would evict with nothing sent. It stops at the first event
+// that doesn't fit, so nothing after a skipped one goes out.
+func (s *CollabBidiStream) evictSlow(client *services.CollabClient, held *pb.CollabEvent) {
+	slog.Warn("Evicting slow consumer", "component", "stream", "client", client.ClientId)
+forward:
+	for event := held; ; event = nil {
+		if event == nil {
+			select {
+			case e, ok := <-client.SendCh:
+				if !ok {
+					break forward
+				}
+				event = e
+			default:
+				break forward
+			}
+		}
+		select {
+		case s.sendCh <- event:
+		default:
+			break forward
+		}
+	}
 	s.leaveAndCleanup("slow_consumer")
 	s.reply(&pb.CollabEvent{
 		EventId: uuid.New().String(),

@@ -23,6 +23,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Writes to a client time out after 10s (`StreamConfig.WriteTimeout`), which
   closes the connection. A client that stopped reading entirely used to block
   its writer, and with it the eviction that should have removed it.
+- An evicted client gets the events it already had queued before
+  `SessionEnded`. Depending on goroutine scheduling, the relay could evict it
+  with none of them sent, which also made `TestStreamEvictsSlowConsumer` fail
+  about half the time on a single CPU (and on CI).
 
 ### Added
 - `CollabClient` passes `PeerInfo.identity` to `onPeerJoined`, for peers
