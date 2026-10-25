@@ -117,6 +117,10 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 | `NAMECHEAP_API_KEY` | Namecheap API key |
 | `NAMECHEAP_CLIENT_IP` | Your whitelisted IP (`curl -s4 ifconfig.me`) |
 
+## Issues and missions
+
+Two missions are active: #53 (auth works on a deployed relay binary, `mission_deployed_auth`) and #54 (a client rejoins on its own after an eviction or relay restart, `mission_resilient_client`). `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
+
 ## Code Conventions
 
 - **Structured logging**: Use `slog.Info`/`Warn`/`Error`/`Debug` with `"component"` key for Loki filtering
