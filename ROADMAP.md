@@ -22,13 +22,13 @@
 - [x] Ownership transfer (same-browser tab via `browserId`)
 - [x] Payload logging for E2EE debugging
 
-## In Progress
-
-### Issue #3: CollabClient proto alignment
-- PR #8 addresses this — embed PeerInfo, typed TS, map peers, Timestamp
-- Remaining: consider embedding `*pb.Room` in `CollabRoom` (now more viable with map peers + Timestamp)
-
 ## Recently Completed
+
+### Slow consumers and the peer roster (v0.3.0 to v0.3.2)
+- [x] An evicted slow consumer's socket is closed by the relay (`CloseOnStreamEnd`), and a client that stopped reading is dropped after a 10s write timeout (issue #46, servicekit v0.1.12)
+- [x] `CollabClient.getPeer(clientId)` keeps the room roster on the client (issue #42)
+- [x] Interop tests for slow-consumer eviction as the TS client sees it (issue #50)
+- [x] servicekit v0.2.0, `@panyam/servicekit-client` ^0.2.0
 
 ### App messaging, identity and the TS client (v0.2.0 to v0.2.4)
 - [x] `AppMessage` addressed to one peer (`to_client_id`), sender stamped by the relay, `PEER_NOT_FOUND` for an absent target (issue #23)

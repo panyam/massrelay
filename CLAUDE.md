@@ -133,7 +133,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 - CORS middleware reuses same `OriginChecker` as WebSocket guard
 - Admin endpoints gated by bearer token with constant-time comparison
 - Caddy handles TLS (auto Let's Encrypt) and reverse-proxies to relay on port 8787
-- WebSocket keepalive (30s ping, 5min pong) handled by servicekit — don't set `ReadTimeout`/`WriteTimeout` on `http.Server`
+- WebSocket keepalive (30s ping, 5min pong) handled by servicekit — don't set `ReadTimeout`/`WriteTimeout` on `http.Server`. The per-write timeout (`StreamConfig.WriteTimeout`, 10s) and `CloseOnStreamEnd` go on the grpcws handler in `web/server/api.go` instead
 - **Graceful shutdown** uses `servicekit/http.ListenAndServeGraceful` — no manual `signal.Notify`/`srv.Shutdown` boilerplate needed
 - **oneauth surface is deliberately thin**: massrelay imports only `oneauth/apiauth` (the JWT-validating `APIMiddleware` + context accessors `GetSubjectFromAPIContext`/`GetScopesFromAPIContext`/`GetCustomClaimsFromContext`) and `oneauth/keys` (`KeyLookup`/`InMemoryKeyStore` for per-`client_id` key resolution). It does not use oneauth's OAuth-server surface. `web/middleware/auth.go` wraps these into `RelayAuthenticator`; `guard.go` composes it into the WebSocket Guard chain. Because massrelay rides oneauth's larger module, oneauth's periodic API refactors (e.g. the 0.0.x→0.1.x `apiauth`/`keys` rewrite) surface here as breaking changes — see Known Gotchas.
 
