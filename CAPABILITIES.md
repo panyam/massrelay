@@ -39,7 +39,7 @@ Requires Go 1.26.9+ (oneauth v0.3.0 minimum).
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/massrelay v0.3.2
+require github.com/panyam/massrelay v0.3.3
 
 // Local development
 replace github.com/panyam/massrelay => ~/newstack/massrelay
