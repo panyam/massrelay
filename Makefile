@@ -11,6 +11,10 @@ test-ts:
 test-interop:
 	cd ts && npm run test:interop
 
+# Mission #53's exercise: auth on the relay binary (allowed room, off-claim room, no token)
+exercise-auth:
+	cd ts && npm run exercise -- exercise/auth.exercise.ts
+
 ## Dev stack — relay + Grafana LGTM in Docker (for local development only)
 
 dev-up: ## Build and start relay + Grafana LGTM stack

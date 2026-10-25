@@ -49,3 +49,5 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit -p tsconfig.interop.json
       - run: npm run test:interop
+      - name: Mission exercises
+        run: npm run exercise

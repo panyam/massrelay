@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/panyam/oneauth/apiauth"
-	"github.com/panyam/oneauth/keys"
 	mw "github.com/panyam/servicekit/middleware"
 
 	relaytelem "github.com/panyam/massrelay/otel"
@@ -37,9 +36,13 @@ type RelayApp struct {
 	PRM           *apiauth.ProtectedResourceMetadata // RFC 9728; nil = endpoint disabled
 	mux           *http.ServeMux
 	handler       http.Handler // mux wrapped with CORS
+	initErr       error        // a config error NewRelayApp found; Init returns it
 }
 
-// NewRelayApp creates a new RelayApp.
+// NewRelayApp creates a new RelayApp. A config error, such as
+// RELAY_AUTH_REQUIRED=true with no signing keys (ErrAuthRequiredNoKeys) or
+// an unreadable keys file, is returned by Init rather than here, so callers
+// must check Init's error before serving.
 //
 // Environment variables:
 //
@@ -58,6 +61,8 @@ type RelayApp struct {
 //	RELAY_ADMIN_TOKEN=...       — bearer token for /admin/* endpoints (required to enable admin API)
 //	RELAY_AUTH_REQUIRED=true    — reject unauthenticated WebSocket connections (default false)
 //	RELAY_AUTH_ISSUER=...       — expected JWT issuer claim (optional)
+//	RELAY_AUTH_KEYS_FILE=...    — JSON file of signing keys per client_id (see AuthKey)
+//	RELAY_AUTH_JWKS_URL=...     — JWKS endpoint to fetch signing keys from (instead of a keys file)
 //	RELAY_RESOURCE_URL=...      — resource server base URL for RFC 9728 PRM (e.g. "https://relay.example.com")
 //	RELAY_AUTH_SERVERS=...      — comma-separated trusted authorization server URLs for PRM
 func NewRelayApp() *RelayApp {
@@ -134,12 +139,12 @@ func NewRelayApp() *RelayApp {
 	}
 
 	// JWT authentication (optional — nil KeyStore means auth disabled)
-	var authKeyStore keys.KeyLookup
-	// TODO: populate KeyStore from a persistent source (e.g., oneauth FS/GAE KeyStore)
-	// For now, the KeyStore remains nil unless set programmatically.
-
+	authKeyStore, keySource, initErr := authKeyStoreFromEnv()
 	authRequired := os.Getenv("RELAY_AUTH_REQUIRED") == "true"
 	authIssuer := os.Getenv("RELAY_AUTH_ISSUER")
+	if initErr == nil && authRequired && authKeyStore == nil {
+		initErr = ErrAuthRequiredNoKeys
+	}
 
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{
 		KeyStore:        authKeyStore,
@@ -148,7 +153,7 @@ func NewRelayApp() *RelayApp {
 		TokenQueryParam: "token",
 	})
 	if auth != nil {
-		slog.Info("Auth middleware enabled", "required", authRequired, "issuer", authIssuer)
+		slog.Info("Auth middleware enabled", "required", authRequired, "issuer", authIssuer, "keys", keySource)
 	}
 
 	// Build Guard: origin → IP rate limit → auth → subject rate limit → conn limit
@@ -199,6 +204,7 @@ func NewRelayApp() *RelayApp {
 		AdminToken:    adminToken,
 		PRM:           prm,
 		mux:           http.NewServeMux(),
+		initErr:       initErr,
 	}
 
 	// Wire service callbacks to OTEL metrics
@@ -220,8 +226,12 @@ func NewRelayApp() *RelayApp {
 	return app
 }
 
-// Init sets up routes and wraps with CORS.
+// Init sets up routes and wraps with CORS. It returns the config error
+// NewRelayApp found, if any, and the app must not serve after one.
 func (a *RelayApp) Init() error {
+	if a.initErr != nil {
+		return a.initErr
+	}
 	h := NewApiHandler(a)
 	h.SetupRoutes(a.mux)
 	// Wrap mux with CORS middleware (uses same origin checker as WebSocket guard)
