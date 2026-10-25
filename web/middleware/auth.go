@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/panyam/oneauth/apiauth"
 	"github.com/panyam/oneauth/keys"
 )
@@ -180,7 +182,7 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 				return
 			}
 
-			claims := a.buildRelayClaims(r.Context(), userID)
+			claims := a.buildRelayClaims(r, userID)
 			ctx := context.WithValue(r.Context(), contextKeyRelayClaims, claims)
 			r = r.WithContext(ctx)
 
@@ -193,8 +195,11 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 	}))
 }
 
-// buildRelayClaims extracts RelayClaims from oneauth's context values.
-func (a *RelayAuthenticator) buildRelayClaims(ctx context.Context, userID string) *RelayClaims {
+// buildRelayClaims extracts RelayClaims from oneauth's context values, and
+// exp/iat from the token itself: oneauth's custom claims leave out the
+// standard ones, and it has no accessor for them.
+func (a *RelayAuthenticator) buildRelayClaims(r *http.Request, userID string) *RelayClaims {
+	ctx := r.Context()
 	claims := &RelayClaims{
 		Subject: userID,
 		Scopes:  apiauth.GetScopesFromAPIContext(ctx),
@@ -206,15 +211,39 @@ func (a *RelayAuthenticator) buildRelayClaims(ctx context.Context, userID string
 			claims.ClientID = v
 		}
 		claims.Rooms = stringOrStrings(custom["rooms"])
-		if v, ok := custom["exp"].(float64); ok {
-			claims.ExpiresAt = time.Unix(int64(v), 0)
-		}
-		if v, ok := custom["iat"].(float64); ok {
-			claims.IssuedAt = time.Unix(int64(v), 0)
-		}
 	}
-
+	claims.ExpiresAt, claims.IssuedAt = a.tokenTimes(r)
 	return claims
+}
+
+// tokenTimes reads exp and iat from the request's token. oneauth has already
+// verified it by the time this runs, so it's decoded without checking the
+// signature again. It looks where oneauth does: the Authorization header
+// first, then the query parameter. An API key or an unparseable token gives
+// zero times.
+func (a *RelayAuthenticator) tokenTimes(r *http.Request) (exp, iat time.Time) {
+	raw := ""
+	if h := r.Header.Get("Authorization"); h != "" {
+		if _, tok, ok := strings.Cut(h, " "); ok {
+			raw = strings.TrimSpace(tok)
+		}
+	} else if a.config.TokenQueryParam != "" {
+		raw = r.URL.Query().Get(a.config.TokenQueryParam)
+	}
+	if raw == "" {
+		return
+	}
+	var mc jwt.MapClaims
+	if _, _, err := jwt.NewParser().ParseUnverified(raw, &mc); err != nil {
+		return
+	}
+	if t, err := mc.GetExpirationTime(); err == nil && t != nil {
+		exp = t.Time
+	}
+	if t, err := mc.GetIssuedAt(); err == nil && t != nil {
+		iat = t.Time
+	}
+	return
 }
 
 // stringOrStrings reads a claim that may be a single string or a JSON array of

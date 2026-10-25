@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -165,4 +166,56 @@ func TestLoadAuthKeysFileRejectsBadEntries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCloseStopsJWKSRefresh(t *testing.T) {
+	_, pubPEM, err := utils.GenerateRSAKeyPair(2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuerKeys := keys.NewInMemoryKeyStore()
+	issuerKeys.PutKey(context.Background(), &keys.PutKeyRequest{Record: &keys.KeyRecord{ClientID: "app", Key: pubPEM, Algorithm: "RS256"}})
+	var hits atomic.Int64
+	jwksHandler := &keys.JWKSHandler{KeyStore: issuerKeys}
+	jwks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		jwksHandler.ServeHTTP(w, r)
+	}))
+	defer jwks.Close()
+
+	oldInterval, oldGap := jwksRefreshInterval, jwksMinRefreshGap
+	jwksRefreshInterval, jwksMinRefreshGap = 20*time.Millisecond, 0
+	t.Cleanup(func() { jwksRefreshInterval, jwksMinRefreshGap = oldInterval, oldGap })
+	t.Setenv("RELAY_AUTH_JWKS_URL", jwks.URL+"/.well-known/jwks.json")
+	app := NewRelayApp()
+	if err := app.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for hits.Load() < 3 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if hits.Load() < 3 {
+		t.Fatalf("JWKS fetched %d times in 2s, want the background refresh running", hits.Load())
+	}
+	app.Close()
+	app.Close()
+	time.Sleep(30 * time.Millisecond) // let a refresh already in flight finish
+	stopped := hits.Load()
+	time.Sleep(150 * time.Millisecond)
+	if got := hits.Load(); got != stopped {
+		t.Fatalf("JWKS fetched %d more times after Close", got-stopped)
+	}
+}
+
+func TestCloseWithoutJWKS(t *testing.T) {
+	app := NewRelayApp()
+	app.Close()
+	t.Setenv("RELAY_AUTH_REQUIRED", "true")
+	failed := NewRelayApp()
+	if failed.Init() == nil {
+		t.Fatal("expected Init to fail")
+	}
+	failed.Close()
 }

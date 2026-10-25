@@ -266,6 +266,7 @@ Sent once after WebSocket connection to join or create a session.
 | `protocolVersion` | int32 | `1` | Client protocol version. Must be `2` to join encrypted rooms. |
 | `encrypted` | bool | `false` | Owner declares room as encrypted (E2EE). |
 | `title` | string | | Drawing title. Relay stores and echoes to joiners. |
+| `mustExist` | bool | `false` | Join only a room the relay already has, and get `ErrorEvent{ROOM_NOT_FOUND}` otherwise instead of creating it. `CollabClient` sets it on a rejoin. Relays before 0.4 ignore it. |
 
 **Session resolution order:**
 1. If `sessionId` is provided, use it directly.
@@ -450,6 +451,7 @@ Graceful error — the relay sends this instead of closing the stream, so the cl
 | `ROOM_FULL` | Room has reached `MaxPeersPerRoom` limit. |
 | `PROTOCOL_VERSION_TOO_OLD` | Encrypted room requires `protocolVersion >= 2`. |
 | `ROOM_FORBIDDEN` | The connection's token has a `rooms` claim that does not cover this session (see [Token Claims](#token-claims)). |
+| `ROOM_NOT_FOUND` | The join set `mustExist` and the relay has no room with that session ID. |
 | `PEER_NOT_FOUND` | An `AppMessage.toClientIds` named clients that are not in the sender's room. The message lists them; the others were delivered to. |
 | `RATE_LIMITED` | The connection went over its per-client message rate. The action was dropped; the message names its `actionId`. |
 | `ALREADY_JOINED` | A second `JoinRoom` on a connection that is already in a room. One connection holds one room; open another connection for a second one. |
@@ -464,7 +466,7 @@ Also sent to a single peer that fell too far behind (its queue of undelivered ev
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `reason` | string | `"owner_disconnected"` (to every peer) or `"slow_consumer"` (to the one peer removed). |
+| `reason` | string | `"owner_disconnected"` (to every peer), `"slow_consumer"` (to the one peer removed), or `"token_expired"` (to a peer whose token's `exp` passed). |
 
 #### OwnerChanged
 
@@ -751,6 +753,8 @@ Besides `sub`, the relay reads these from a validated JWT:
 
 `sub` and `client_id` become the joining peer's `PeerInfo.identity`. An app can mint a token with `"rooms": "design:abc"` so a page can only join the room for the resource it shows.
 
+A connection lasts as long as its token. When `exp` passes, the relay takes the peer out of its room, sends it `SessionEnded{reason: "token_expired"}`, and closes the socket. A `CollabClient` with `getToken` set reconnects on a fresh token; one with only `token` reports `onSessionEnded('token_expired')`.
+
 ---
 
 ## Embedding in Another Server
@@ -914,9 +918,9 @@ client.sendAppMessage('tools/call', bytes, { to: pageClientId });
 
 #### Reconnect
 
-A client that has joined once reconnects when its socket closes without `disconnect()`, or when the relay evicts it as a slow consumer (`SessionEnded{slow_consumer}`, which then doesn't reach `onSessionEnded`). Each attempt waits (`retryDelayMs`, doubling), then asks the relay `GET /api/v1/rooms/{sessionId}`:
+A client that has joined once reconnects when its socket closes without `disconnect()`, when the relay evicts it as a slow consumer (`SessionEnded{slow_consumer}`), or when its token expires and it has `getToken` to get another (`SessionEnded{token_expired}`). Those two don't reach `onSessionEnded`. Each attempt waits (`retryDelayMs`, doubling), then asks the relay `GET /api/v1/rooms/{sessionId}`:
 
-- **200**: it rejoins the same `sessionId`, and `onConnect` fires with a new `clientId`. Other peers see a `peerLeft` for the old id and a `peerJoined` for the new one.
+- **200**: it rejoins the same `sessionId` with `mustExist` set, and `onConnect` fires with a new `clientId`. Other peers see a `peerLeft` for the old id and a `peerJoined` for the new one. If the room went away between the check and the join, the relay answers `ROOM_NOT_FOUND` and the client ends with `onSessionEnded('session_gone')`.
 - **404**: it stops with `onSessionEnded('session_gone')`. This is what a relay restart looks like, and checking first is what keeps a reconnecting client from recreating the room empty.
 - **Anything else, or the relay unreachable**: it tries again, until `maxRetries` attempts, then `onSessionEnded('reconnect_failed')`.
 

@@ -518,3 +518,38 @@ func TestRoomsClaim(t *testing.T) {
 		}
 	}
 }
+
+// exp and iat are standard claims, which oneauth leaves out of the custom
+// claims, so RelayClaims reads them from the token, from either place it
+// can arrive.
+func TestRelayClaimsCarryTokenTimes(t *testing.T) {
+	ks := testKeyStore(testClientID, testSecret)
+	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{KeyStore: ks, Required: true, TokenQueryParam: "token"})
+	exp := time.Now().Add(42 * time.Minute).Truncate(time.Second)
+	iat := time.Now().Add(-time.Minute).Truncate(time.Second)
+	claims := validClaims(testClientID)
+	claims["exp"] = exp.Unix()
+	claims["iat"] = iat.Unix()
+	delete(claims, "iss")
+	tok := mintToken(t, testSecret, claims)
+
+	for name, req := range map[string]*http.Request{
+		"header": func() *http.Request {
+			r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+			r.Header.Set("Authorization", "Bearer "+tok)
+			return r
+		}(),
+		"query": httptest.NewRequest(http.MethodGet, "/ws?token="+tok, nil),
+	} {
+		var got *middleware.RelayClaims
+		auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = middleware.GetRelayClaimsFromContext(r.Context())
+		})).ServeHTTP(httptest.NewRecorder(), req)
+		if got == nil {
+			t.Fatalf("%s: no claims", name)
+		}
+		if !got.ExpiresAt.Equal(exp) || !got.IssuedAt.Equal(iat) {
+			t.Errorf("%s: ExpiresAt=%v IssuedAt=%v, want %v and %v", name, got.ExpiresAt, got.IssuedAt, exp, iat)
+		}
+	}
+}

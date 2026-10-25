@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/panyam/oneauth/apiauth"
 	mw "github.com/panyam/servicekit/middleware"
@@ -37,6 +38,8 @@ type RelayApp struct {
 	mux           *http.ServeMux
 	handler       http.Handler // mux wrapped with CORS
 	initErr       error        // a config error NewRelayApp found; Init returns it
+	stopKeys      func()       // stops the JWKS refresh; nil without one
+	closeOnce     sync.Once
 }
 
 // NewRelayApp creates a new RelayApp. A config error, such as
@@ -139,7 +142,7 @@ func NewRelayApp() *RelayApp {
 	}
 
 	// JWT authentication (optional — nil KeyStore means auth disabled)
-	authKeyStore, keySource, initErr := authKeyStoreFromEnv()
+	authKeyStore, keySource, stopKeys, initErr := authKeyStoreFromEnv()
 	authRequired := os.Getenv("RELAY_AUTH_REQUIRED") == "true"
 	authIssuer := os.Getenv("RELAY_AUTH_ISSUER")
 	if initErr == nil && authRequired && authKeyStore == nil {
@@ -205,6 +208,7 @@ func NewRelayApp() *RelayApp {
 		PRM:           prm,
 		mux:           http.NewServeMux(),
 		initErr:       initErr,
+		stopKeys:      stopKeys,
 	}
 
 	// Wire service callbacks to OTEL metrics
@@ -237,6 +241,17 @@ func (a *RelayApp) Init() error {
 	// Wrap mux with CORS middleware (uses same origin checker as WebSocket guard)
 	a.handler = mw.CORS(a.OriginChecker)(a.mux)
 	return nil
+}
+
+// Close stops background work the app started: the RELAY_AUTH_JWKS_URL key
+// refresh. Call it once the server has stopped serving. Safe to call more
+// than once, and on an app whose Init failed.
+func (a *RelayApp) Close() {
+	a.closeOnce.Do(func() {
+		if a.stopKeys != nil {
+			a.stopKeys()
+		}
+	})
 }
 
 // ServeHTTP implements http.Handler.

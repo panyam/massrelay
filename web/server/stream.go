@@ -45,19 +45,23 @@ type CollabBidiStream struct {
 	cancel         context.CancelFunc
 	service        *services.CollabService
 	sendCh         chan *pb.CollabEvent // events from service → WebSocket client
-	ended          chan struct{}        // closed once the relay ends this stream (eviction)
+	ended          chan struct{}        // closed once the relay ends this stream (eviction, token expiry)
 	endOnce        sync.Once
-	sessionId      string // set after first JoinRoom action
-	clientId       string // set after first JoinRoom action
+	expiry         *time.Timer // ends the stream at the token's exp; nil without one
+	sessionId      string      // set after first JoinRoom action
+	clientId       string      // set after first JoinRoom action
 	mu             sync.Mutex
 	messageLimiter *rate.Limiter // per-client message rate limiter
 }
 
 // NewCollabBidiStream creates a new bidi stream for the collab service. ctx is
 // the upgrade request's context; if the auth middleware validated a token on
-// it, the stream's joins carry that identity (see services.Principal).
+// it, the stream's joins carry that identity (see services.Principal), and
+// the stream ends with SessionEnded{token_expired} when the token's exp
+// passes, so a connection never outlives the token that opened it.
 func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg StreamConfig) *CollabBidiStream {
-	if claims := middleware.GetRelayClaimsFromContext(ctx); claims != nil {
+	claims := middleware.GetRelayClaimsFromContext(ctx)
+	if claims != nil {
 		ctx = services.WithPrincipal(ctx, &services.Principal{
 			Subject:  claims.Subject,
 			ClientID: claims.ClientID,
@@ -76,6 +80,12 @@ func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg S
 		sendCh:         make(chan *pb.CollabEvent, 64),
 		ended:          make(chan struct{}),
 		messageLimiter: msgLimiter,
+	}
+	if claims != nil && !claims.ExpiresAt.IsZero() {
+		s.expiry = time.AfterFunc(time.Until(claims.ExpiresAt), func() {
+			slog.Info("Token expired, ending stream", "component", "stream", "sub", claims.Subject)
+			s.endSession("token_expired")
+		})
 	}
 	// Watch for context cancellation (WebSocket close) and clean up the client.
 	// BidiStreamConn.OnClose() cancels the context but does NOT call CloseSend(),
@@ -218,12 +228,22 @@ forward:
 			break forward
 		}
 	}
-	s.leaveAndCleanup("slow_consumer")
-	s.reply(&pb.CollabEvent{
-		EventId: uuid.New().String(),
-		Event:   &pb.CollabEvent_SessionEnded{SessionEnded: &pb.SessionEnded{Reason: "slow_consumer"}},
+	s.endSession("slow_consumer")
+}
+
+// endSession takes this connection's client out of its room, queues
+// SessionEnded{reason} after whatever is already queued, and ends the stream
+// so Recv drains and returns io.EOF. Only the first call does anything, so an
+// eviction and an expiry racing send one SessionEnded.
+func (s *CollabBidiStream) endSession(reason string) {
+	s.endOnce.Do(func() {
+		s.leaveAndCleanup(reason)
+		s.reply(&pb.CollabEvent{
+			EventId: uuid.New().String(),
+			Event:   &pb.CollabEvent_SessionEnded{SessionEnded: &pb.SessionEnded{Reason: reason}},
+		})
+		close(s.ended)
 	})
-	s.endOnce.Do(func() { close(s.ended) })
 }
 
 // reply queues an event for this connection's client.
@@ -285,6 +305,9 @@ func (s *CollabBidiStream) leaveAndCleanup(reason string) {
 // watchClose waits for context cancellation (WebSocket drop) and cleans up.
 func (s *CollabBidiStream) watchClose() {
 	<-s.ctx.Done()
+	if s.expiry != nil {
+		s.expiry.Stop()
+	}
 	s.leaveAndCleanup("connection closed")
 }
 

@@ -415,3 +415,42 @@ func TestFindRoomForClient(t *testing.T) {
 		t.Fatal("expected nil for unknown client")
 	}
 }
+
+func mustExistJoin(sessionId string) *pb.CollabAction {
+	return &pb.CollabAction{Action: &pb.CollabAction_Join{Join: &pb.JoinRoom{
+		SessionId: sessionId, Username: "rejoiner", MustExist: true,
+	}}}
+}
+
+// A rejoin to a room the relay no longer has is refused rather than
+// recreating it empty under the old name.
+func TestJoinRoom_MustExistRefusesMissingRoom(t *testing.T) {
+	svc := NewCollabService()
+	created := 0
+	svc.OnRoomCreated = func() { created++ }
+	event, err := svc.HandleAction(context.Background(), mustExistJoin("gone"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code := event.GetError().GetCode(); code != "ROOM_NOT_FOUND" {
+		t.Fatalf("got %v, want ErrorEvent ROOM_NOT_FOUND", event)
+	}
+	if svc.GetRoomByID("gone") != nil || created != 0 {
+		t.Fatal("must_exist join created the room")
+	}
+}
+
+func TestJoinRoom_MustExistJoinsExistingRoom(t *testing.T) {
+	svc := NewCollabService()
+	ctx := context.Background()
+	if _, err := joinAsFollower(svc, ctx, "here", "Alice", ""); err != nil {
+		t.Fatal(err)
+	}
+	event, err := svc.HandleAction(ctx, mustExistJoin("here"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rj := event.GetRoomJoined(); rj == nil || len(rj.GetRoom().GetPeers()) != 1 {
+		t.Fatalf("got %v, want RoomJoined with Alice already there", event)
+	}
+}

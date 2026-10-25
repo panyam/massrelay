@@ -289,6 +289,7 @@ type JoinRoom struct {
 	ProtocolVersion int32                  `protobuf:"varint,9,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"` // client protocol version (current = 2, legacy implicit = 1)
 	Encrypted       bool                   `protobuf:"varint,10,opt,name=encrypted,proto3" json:"encrypted,omitempty"`                                   // owner declares room as encrypted (password-based E2EE)
 	Title           string                 `protobuf:"bytes,11,opt,name=title,proto3" json:"title,omitempty"`                                            // document/session title (owner sends, relay echoes to joiners)
+	MustExist       bool                   `protobuf:"varint,12,opt,name=must_exist,json=mustExist,proto3" json:"must_exist,omitempty"`                  // join only a room that already exists; ErrorEvent ROOM_NOT_FOUND otherwise (a reconnect sets it)
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -398,6 +399,13 @@ func (x *JoinRoom) GetTitle() string {
 		return x.Title
 	}
 	return ""
+}
+
+func (x *JoinRoom) GetMustExist() bool {
+	if x != nil {
+		return x.MustExist
+	}
+	return false
 }
 
 type LeaveRoom struct {
@@ -2130,7 +2138,7 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\rtitle_changed\x18\x13 \x01(\v2!.massrelay.v1.models.TitleChangedH\x00R\ftitleChanged\x12B\n" +
 	"\vapp_message\x18\x14 \x01(\v2\x1f.massrelay.v1.models.AppMessageH\x00R\n" +
 	"appMessageB\b\n" +
-	"\x06action\"\xc5\x03\n" +
+	"\x06action\"\xe4\x03\n" +
 	"\bJoinRoom\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1a\n" +
@@ -2148,7 +2156,9 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x10protocol_version\x18\t \x01(\x05R\x0fprotocolVersion\x12\x1c\n" +
 	"\tencrypted\x18\n" +
 	" \x01(\bR\tencrypted\x12\x14\n" +
-	"\x05title\x18\v \x01(\tR\x05title\x1a;\n" +
+	"\x05title\x18\v \x01(\tR\x05title\x12\x1d\n" +
+	"\n" +
+	"must_exist\x18\f \x01(\bR\tmustExist\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"#\n" +

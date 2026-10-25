@@ -425,6 +425,61 @@ describe('CollabClient reconnect', () => {
     ]);
   });
 
+  it('asks a rejoin to join only an existing room', async () => {
+    const { client, sockets } = reconnectingClient({ rooms: [200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(100);
+    await openAndJoin(sockets[1].controller, 'me-2');
+
+    expect(joinOf(sockets[0].controller)).toMatchObject({ mustExist: false });
+    expect(joinOf(sockets[1].controller)).toMatchObject({ mustExist: true });
+  });
+
+  /** @flow The room's last peer leaves between the room check and the rejoin → the relay refuses it, and the app hears the session is gone */
+  it('ends with session_gone when the rejoin finds no room', async () => {
+    const { client, sockets, calls } = reconnectingClient({ rooms: [200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(100);
+    sockets[1].controller.simulateOpen();
+    await vi.advanceTimersByTimeAsync(0);
+    sockets[1].controller.simulateMessage({ error: { code: 'ROOM_NOT_FOUND', message: 'No room design:abc on this relay' } });
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'error:ROOM_NOT_FOUND', 'ended:session_gone']);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('ends with token_expired when it has no way to get a fresh token', async () => {
+    const { client, sockets, calls, fetched } = reconnectingClient({ rooms: [200], options: { token: 'static' } });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+    sockets[0].controller.simulateMessage({ sessionEnded: { reason: 'token_expired' } });
+    sockets[0].controller.simulateClose();
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(fetched).toEqual([]);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'ended:token_expired']);
+  });
+
+  /** @flow The relay ends a connection at its token's exp → a client with getToken rejoins on a fresh token */
+  it('reconnects on a fresh token after token_expired with getToken', async () => {
+    let n = 0;
+    const { client, sockets, calls } = reconnectingClient({ rooms: [200], options: { getToken: () => `tok-${++n}` } });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await openAndJoin(sockets[0].controller, 'me-1');
+    sockets[0].controller.simulateMessage({ sessionEnded: { reason: 'token_expired' } });
+    await vi.advanceTimersByTimeAsync(100);
+    await openAndJoin(sockets[1].controller, 'me-2');
+
+    expect(sockets[1].url).toBe('ws://relay.test/ws/v1/design%3Aabc/sync?token=tok-2');
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'connect:me-2']);
+  });
+
   it('counts a getToken failure as a failed attempt', async () => {
     let fail = false;
     const errors: string[] = [];

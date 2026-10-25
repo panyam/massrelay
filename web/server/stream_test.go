@@ -313,3 +313,55 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 		t.Fatal("slow reader should be gone from the room and the sender still in it")
 	}
 }
+
+// A connection never outlives its token: at exp the client leaves its room,
+// gets SessionEnded{token_expired}, and the stream ends.
+func TestStreamEndsWhenTokenExpires(t *testing.T) {
+	svc := services.NewCollabService()
+	peer := streamFromRequest(t, svc, "")
+	joinStream(t, peer, "room-exp")
+	authed := streamFromRequest(t, svc, mintStreamToken(t, jwt.MapClaims{"exp": time.Now().Add(1500 * time.Millisecond).Unix()}))
+	authedId := joinStream(t, authed, "room-exp").GetRoomJoined().GetClientId()
+	recvEvent(t, peer) // PeerJoined authed
+
+	var end *pb.SessionEnded
+	select {
+	case evt := <-authed.sendCh:
+		end = evt.GetSessionEnded()
+	case <-time.After(3 * time.Second):
+		t.Fatal("stream still open 3s after a token that expired within 1.5s")
+	}
+	if end.GetReason() != "token_expired" {
+		t.Fatalf("got %v, want SessionEnded{token_expired}", end)
+	}
+	if err := recvErr(t, authed); err != io.EOF {
+		t.Fatalf("Recv after token_expired = %v, want io.EOF so servicekit closes the socket", err)
+	}
+	if left := recvEvent(t, peer).GetPeerLeft(); left.GetClientId() != authedId {
+		t.Fatalf("peer saw %v, want PeerLeft for %s", left, authedId)
+	}
+}
+
+func TestStreamWithoutTokenHasNoExpiry(t *testing.T) {
+	svc := services.NewCollabService()
+	if s := streamFromRequest(t, svc, ""); s.expiry != nil {
+		t.Fatal("an anonymous stream got an expiry timer")
+	}
+	if s := streamFromRequest(t, svc, mintStreamToken(t, nil)); s.expiry == nil {
+		t.Fatal("a stream with an exp claim got no expiry timer")
+	}
+}
+
+// An eviction and an expiry ending the same stream send one SessionEnded.
+func TestStreamEndsOnce(t *testing.T) {
+	s := streamFromRequest(t, services.NewCollabService(), "")
+	joinStream(t, s, "room-once")
+	s.endSession("slow_consumer")
+	s.endSession("token_expired")
+	if end := recvEvent(t, s).GetSessionEnded(); end.GetReason() != "slow_consumer" {
+		t.Fatalf("first event %v, want SessionEnded{slow_consumer}", end)
+	}
+	if err := recvErr(t, s); err != io.EOF {
+		t.Fatalf("Recv after the end = %v, want io.EOF", err)
+	}
+}

@@ -7,14 +7,21 @@ import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
 import { resolveRelayUrl } from './url-params.js';
 
 export interface CollabClientOptions {
+  /** Every event from the relay, before the client handles it. */
   onEvent?: (event: CollabEvent) => void;
   /** Called for this client and each peer already in the room on join, then
    * for each peer that joins later. peer.identity is set when the relay
    * validated a token for that peer's connection, and absent for anonymous
    * peers and for this client itself. */
   onPeerJoined?: (peer: PeerInfoJson) => void;
+  /** A peer left the room, including this client's own old id after a
+   * reconnect rejoins under a new one. */
   onPeerLeft?: (clientId: string) => void;
+  /** A socket-level error, or getToken throwing. Relay-sent errors go to
+   * onErrorEvent instead. */
   onError?: (error: Error) => void;
+  /** The relay accepted the join (RoomJoined), with this client's id. Fires
+   * again after each reconnect, with a new id. */
   onConnect?: (clientId: string) => void;
   /** Called once for every connection that reached onConnect, however it
    * ends: disconnect(), the relay closing, or the owner ending the session
@@ -25,10 +32,17 @@ export interface CollabClientOptions {
    * "owner_disconnected"), or one of the client's own: "session_gone" when a
    * reconnect found the room no longer exists (the relay restarted, or
    * everyone left), and "reconnect_failed" when maxRetries attempts couldn't
-   * reach the relay or rejoin. */
+   * reach the relay or rejoin. "token_expired" is the relay ending the
+   * connection at the token's exp; with getToken set the client reconnects
+   * on a fresh token instead of reporting it. */
   onSessionEnded?: (reason: string) => void;
+  /** Ownership moved to newOwnerClientId (another tab of the owner's
+   * browser); isOwner reflects it already. */
   onOwnerChanged?: (newOwnerClientId: string) => void;
+  /** The owner changed or removed the room's password ("password_removed").
+   * The client stays connected; an encrypted app must re-derive its key. */
   onCredentialsChanged?: (reason: string) => void;
+  /** The owner retitled the session; title reflects it already. */
   onTitleChanged?: (title: string) => void;
   /** A generic app-defined message another peer sent to the room, or to this
    * client among the peers it addressed. fromClientId is the sender, as stamped
@@ -40,7 +54,8 @@ export interface CollabClientOptions {
   onAppMessage?: (kind: string, payload: Uint8Array, fromClientId: string, toClientId: string) => void;
   /** Called when the relay returns an ErrorEvent. One that arrives before the
    * join (ROOM_FULL, ROOM_FORBIDDEN, PROTOCOL_VERSION_TOO_OLD) means the join
-   * was refused, and the client closes without calling onDisconnect. One that
+   * was refused, and the client closes without calling onDisconnect. On a
+   * rejoin, ROOM_NOT_FOUND is followed by onSessionEnded("session_gone"). One that
    * arrives after it (PEER_NOT_FOUND, ALREADY_JOINED, RATE_LIMITED) refuses
    * that one action, and the connection stays open. */
   onErrorEvent?: (code: string, message: string) => void;
@@ -282,6 +297,9 @@ export class CollabClient {
           protocolVersion: 2,
           encrypted: this._encrypted,
           title: this._title,
+          // A rejoin must not recreate a room the relay lost between the
+          // room check and this join. Older relays ignore the field.
+          mustExist: this.hasJoined,
         },
       };
       this.grpc?.send(joinAction);
@@ -301,7 +319,10 @@ export class CollabClient {
         // keeps the stream open, so we do too.
         const err = event.event.value;
         this.options.onErrorEvent?.(err.code, err.message);
-        if (!this._isConnected) this.closeFromRelay();
+        if (!this._isConnected) {
+          this.closeFromRelay();
+          if (err.code === 'ROOM_NOT_FOUND' && this.hasJoined) this.options.onSessionEnded?.('session_gone');
+        }
         break;
       }
 
@@ -360,7 +381,10 @@ export class CollabClient {
 
       case 'sessionEnded': {
         const reason = event.event.value.reason;
-        if (reason === 'slow_consumer' && this.reconnectEnabled()) {
+        // An expired token only comes back with a fresh one; without
+        // getToken the rejoin would be refused until retries ran out.
+        const reconnectable = reason === 'slow_consumer' || (reason === 'token_expired' && !!this.options.getToken);
+        if (reconnectable && this.reconnectEnabled()) {
           this.dropAndReconnect();
           break;
         }
