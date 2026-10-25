@@ -125,7 +125,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 
 ## Issues and missions
 
-Two missions are active: #53 (auth works on a deployed relay binary, `mission_deployed_auth`; 2/3, #27 left) and #54 (a client rejoins on its own after an eviction or relay restart, `mission_resilient_client`; 2/2, exercise passing, waiting on a close). `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
+One mission is active: #53 (auth works on a deployed relay binary, `mission_deployed_auth`; 2/3, #27 left). #54 (resilient client) closed on 2026-10-24 with `make exercise-reconnect` passing; the exercise still runs in CI. `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
 
 ## Code Conventions
 
