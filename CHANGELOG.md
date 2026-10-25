@@ -35,6 +35,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   connection (#38).
 - `make exercise-reconnect` runs mission #54's exercise against the relay
   binary (an eviction, then a restart), and CI runs it (#57).
+- Interop tests for peer identity on the relay binary with keys from
+  `RELAY_AUTH_KEYS_FILE`: `onPeerJoined` and `getPeer` carry each peer's
+  validated subject, both for later joiners and in the roster, and an
+  addressed call and reply work the way the mcpkit room bridge uses them,
+  including a peer with no token or another subject being ignored (#27).
 
 ### Changed
 - `RelayApp.Init` returns `ErrAuthRequiredNoKeys` when `RELAY_AUTH_REQUIRED=true`
