@@ -10,6 +10,8 @@
 - collab-protocol: CollabAction/CollabEvent protobuf messaging protocol
 - app-message: generic app-defined pub-sub messages (AppMessage{kind,payload,to_client_ids}), room-wide fan-out or addressed to a set of peers in one message, in order per sender, with no editor semantics — use massrelay as a message bus without the Scene/Text protocol
 - peer-identity: PeerInfo.identity from the connection's validated JWT (sub, client_id); `rooms` claim restricts which sessions a token may join
+- jwt-auth: signing keys from a keys file or a JWKS URL, fail-closed startup when auth is required, connections ended at the token's exp (`SessionEnded{token_expired}`)
+- client-reconnect: CollabClient rejoins the same session after a drop, eviction or expiry, only if the relay still has the room (`must_exist`), with `getToken` for fresh JWTs
 - admin-api: Token-gated admin endpoints (/admin/status, /admin/rooms)
 - security-middleware: Origin allowlist, connection limiting, rate limiting, CSRF, trusted proxy
 - observability: OpenTelemetry metrics (Prometheus, OTLP), structured JSON logging (slog)
@@ -26,7 +28,7 @@ newstack/massrelay
 
 ## Stack Dependencies
 - oneauth (github.com/panyam/oneauth) v0.3.0 — uses only `apiauth` (JWT middleware) + `keys` (multi-tenant KeyLookup)
-- servicekit (github.com/panyam/servicekit) v0.2.0 — `middleware`, `http` (ListenAndServeGraceful), `grpcws`
+- servicekit (github.com/panyam/servicekit) v0.2.2 — `middleware`, `http` (ListenAndServeGraceful), `grpcws`
 - gocurrent (github.com/panyam/gocurrent) v0.1.1 — indirect
 - goutils (github.com/panyam/goutils) v0.1.13 — indirect
 
@@ -37,7 +39,7 @@ Requires Go 1.26.9+ (oneauth v0.3.0 minimum).
 ### Go Module
 ```go
 // go.mod
-require github.com/panyam/massrelay v0.2.5
+require github.com/panyam/massrelay v0.3.2
 
 // Local development
 replace github.com/panyam/massrelay => ~/newstack/massrelay
@@ -45,7 +47,10 @@ replace github.com/panyam/massrelay => ~/newstack/massrelay
 
 ### Key Imports
 ```go
-import "github.com/panyam/massrelay/relay"
+import (
+    "github.com/panyam/massrelay/services"   // CollabService
+    "github.com/panyam/massrelay/web/server" // RelayApp (http.Handler)
+)
 ```
 
 ## Status

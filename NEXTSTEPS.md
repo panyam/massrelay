@@ -5,11 +5,12 @@ Maintained by /checkpoint: one thread per branch, pruned when the branch merges.
 
 ## At a glance
 
-- No open branch threads. main is at v0.3.2, released and published to npm.
-- Mission #53 (deployed auth): 0/3, next ready #56 (KeyStore from config, and no silent open relay). Exercise `make exercise-auth` doesn't exist yet (#55).
-- Mission #54 (resilient client): 0/3, next ready #38 (reconnect). Exercise `make exercise-reconnect` doesn't exist yet (#57).
-- This run: first retriage. Every open issue now has a priority or `waiting`; #4 and #6 parked.
+- No open branch threads. main is at 2fb358f, unreleased since v0.3.2 (#58, #59, #62 merged; CHANGELOG's Unreleased section is ready for a release).
+- Mission #53 (deployed auth): 2/3, next ready #27 (mcpkit bridge interop against a real relay). `make exercise-auth` passes, last run 2026-10-24 on 2fb358f.
+- Mission #54 (resilient client): 2/2, `make exercise-reconnect` passes (2fb358f). Its tickets are all closed, so it's ready to close once the output looks right by eye.
+- #13 (in-session re-auth) came off `waiting` at P2 now that the relay enforces `exp`; queue.sh flags it as an orphan (P2, no mission) for the next retriage.
+- This run: dropped nothing (no threads); feat/deployed-auth-56, feat/reconnect-38 and feat/token-lifetime-60 are merged.
 
 ## Across threads
 
-- relay01 (relay01.excaliframe.com) was down at the last check; confirm before planning a deploy around it.
+- relay01 (relay01.excaliframe.com) didn't answer `/health` on 2026-10-24; confirm before planning a deploy around it.

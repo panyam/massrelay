@@ -15,8 +15,9 @@ make tests
 # TS client against the real relay binary (Go + Node 22+)
 make test-interop
 
-# Mission exercise: auth on the relay binary
+# Mission exercises against the relay binary
 make exercise-auth
+make exercise-reconnect
 ```
 
 ## Local Development
@@ -55,7 +56,7 @@ After regeneration, update both `gen/go/` and `ts/src/gen/`.
 Bump `ts/package.json` to the release version before tagging. Pushing a `v*` tag runs
 `.github/workflows/publish-npm.yml`, which refuses a tag that doesn't match `ts/package.json`, runs
 the TS and interop tests, and publishes `@panyam/massrelay` (skipping a version already on npm).
-It needs the `NPM_TOKEN` repo secret. For a tag pushed before the workflow existed, run it by hand
+It uses npm trusted publishing, so no token secret. For a tag pushed before the workflow existed, run it by hand
 with that tag as the ref. Until 2026-10 nothing published automatically, so npm sat at 0.1.1 while
 the Go side reached v0.2.1, and mcpkit's room page client couldn't depend on the addressed
 `sendAppMessage` that 0.2.x added.
@@ -124,7 +125,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 
 ## Issues and missions
 
-Two missions are active: #53 (auth works on a deployed relay binary, `mission_deployed_auth`) and #54 (a client rejoins on its own after an eviction or relay restart, `mission_resilient_client`). `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
+Two missions are active: #53 (auth works on a deployed relay binary, `mission_deployed_auth`; 2/3, #27 left) and #54 (a client rejoins on its own after an eviction or relay restart, `mission_resilient_client`; 2/2, exercise passing, waiting on a close). `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
 
 ## Code Conventions
 
@@ -143,6 +144,8 @@ Two missions are active: #53 (auth works on a deployed relay binary, `mission_de
 - Admin endpoints gated by bearer token with constant-time comparison
 - Caddy handles TLS (auto Let's Encrypt) and reverse-proxies to relay on port 8787
 - WebSocket keepalive (30s ping, 5min pong) handled by servicekit — don't set `ReadTimeout`/`WriteTimeout` on `http.Server`. The per-write timeout (`StreamConfig.WriteTimeout`, 10s) and `CloseOnStreamEnd` go on the grpcws handler in `web/server/api.go` instead
+- **Token lifetime**: a stream ends at its token's `exp` (`SessionEnded{token_expired}`, via the same `endSession` as a slow-consumer eviction). `CollabClient` reconnects on that only with `getToken`; every rejoin sends `JoinRoom.must_exist` so the relay answers `ROOM_NOT_FOUND` rather than recreating a lost room
+- **Config errors surface from `Init`**, not `NewRelayApp` (whose signature mcpkit depends on): `ErrAuthRequiredNoKeys`, a bad keys file, an unreachable JWKS URL. Call `RelayApp.Close()` after serving to stop the JWKS refresh
 - **Graceful shutdown** uses `servicekit/http.ListenAndServeGraceful` — no manual `signal.Notify`/`srv.Shutdown` boilerplate needed
 - **oneauth surface is deliberately thin**: massrelay imports only `oneauth/apiauth` (the JWT-validating `APIMiddleware` + context accessors `GetSubjectFromAPIContext`/`GetScopesFromAPIContext`/`GetCustomClaimsFromContext`) and `oneauth/keys` (`KeyLookup`/`InMemoryKeyStore` for per-`client_id` key resolution). It does not use oneauth's OAuth-server surface. `web/middleware/auth.go` wraps these into `RelayAuthenticator`; `guard.go` composes it into the WebSocket Guard chain. Because massrelay rides oneauth's larger module, oneauth's periodic API refactors (e.g. the 0.0.x→0.1.x `apiauth`/`keys` rewrite) surface here as breaking changes — see Known Gotchas.
 
@@ -159,4 +162,9 @@ Two missions are active: #53 (auth works on a deployed relay binary, `mission_de
 - **npm 12 changed `npm pack --json`** from an array to an object keyed by package name. `scripts/check-pack.mjs` and servicekit's shared workflow accept both; anything else parsing it must too.
 - **`npm trust` needs a newer npm than Node 22 ships**: run `npx npm@latest trust github <pkg> --repo panyam/<repo> --file publish-npm.yml --allow-publish`.
 - **Releases: never chain `gh release create` after a check with `;`**. A failed check once let the release tag the wrong commit. Use `set -e` / `&&`.
+- **oneauth's custom claims leave out `exp`/`iat`** (and every other standard claim). `RelayClaims.ExpiresAt` was silently zero until #62; `tokenTimes` in `web/middleware/auth.go` reads them from the already-verified token. #63 tracks a oneauth accessor.
+- **`keys.JWKSKeyStore.Stop()` panics if called twice** (it closes a channel). `RelayApp.Close` guards it with a `sync.Once`.
+- **`buf generate` needs `protoc-gen-go-grpc` v1.5.1 and `protoc-gen-es` v2.9.0 on PATH**, the versions the checked-in code was generated with. Without them it fails with `context canceled`. Install them somewhere temporary (`GOBIN=... go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1`, `npm install @bufbuild/protoc-gen-es@2.9.0`) so the diff stays to your proto change.
+- **A Go stream test must drain every stream it writes to.** `CollabBidiStream.reply` blocks on a full 64-slot queue, which servicekit drains in production but a test doesn't. `TestStreamEvictsSlowConsumer` hung CI that way from #44 to #62 (`go test -cpu 1 -count=200` reproduced it).
+- **The keys file is mounted as a directory** (`deploy/production/secrets` → `/etc/massrelay`) because docker turns a missing single-file mount into an empty directory.
 - **oneauth 0.0.x → 0.1.x API migration** (done at massrelay v0.1.0): `apiauth.APIMiddleware.TokenQueryParam` → `LegacyQueryParamBearer`; `apiauth.GetUserIDFromAPIContext` → `GetSubjectFromAPIContext`; `keys.InMemoryKeyStore.RegisterKey(id, key, alg)` → request/response `PutKey(ctx, &keys.PutKeyRequest{Record: &keys.KeyRecord{ClientID, Key, Algorithm}})`. oneauth v0.3.0 requires **Go 1.26.9+** (v0.1.36 needed 1.26.4+).

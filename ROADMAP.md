@@ -24,6 +24,13 @@
 
 ## Recently Completed
 
+### Auth on the binary, reconnect, token lifetime (unreleased)
+- [x] The relay binary loads signing keys from `RELAY_AUTH_KEYS_FILE` or `RELAY_AUTH_JWKS_URL` and refuses to start open (issues #55, #56, PR #58)
+- [x] `CollabClient` reconnects after checking the room still exists; `reconnect`, `retryDelayMs`, `onReconnecting`, `getToken` (issues #38, #57, PR #59)
+- [x] Connections end at the token's `exp`; `JoinRoom.must_exist`; `RelayApp.Close()` (issues #60, #61, PR #62)
+- [x] `make exercise-auth` and `make exercise-reconnect` against the binary, in CI
+- [x] servicekit v0.2.2, `@panyam/servicekit-client` ^0.2.2
+
 ### Slow consumers and the peer roster (v0.3.0 to v0.3.2)
 - [x] An evicted slow consumer's socket is closed by the relay (`CloseOnStreamEnd`), and a client that stopped reading is dropped after a 10s write timeout (issue #46, servicekit v0.1.12)
 - [x] `CollabClient.getPeer(clientId)` keeps the room roster on the client (issue #42)
@@ -76,7 +83,7 @@
 ## Next Up
 
 ### Issue #4: Relay Pool (client-side)
-- Client-side relay selection, health probing, auto-reconnect
+- Client-side relay selection, health probing, reconnecting to another relay (same-relay reconnect landed in #59)
 
 ### Issue #6: Distributed Relay Architecture
 - Multi-instance session support via memberlist + gRPC
@@ -135,9 +142,8 @@
 
 ## Future
 
-- Wire KeyStore to persistent source (oneauth now has JWKS endpoint + Cloud KMS KeyStore)
-- In-session re-auth (issue #13)
-- Auto-reconnect with session validation (currently disabled to prevent phantom sessions)
+- In-session re-auth, so an expiry doesn't cost a drop and a rejoin (issue #13)
+- `DenySub` ending a subject's open streams (issue #63)
 - `ListRooms` REST endpoint (exists in code, intentionally not registered to prevent session enumeration)
 - Binary protobuf transport (instead of JSON over WebSocket)
 - Python/Node client libraries
