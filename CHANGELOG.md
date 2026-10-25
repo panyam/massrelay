@@ -7,6 +7,17 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- The relay ends a connection when its token's `exp` passes: the peer leaves
+  its room and gets `SessionEnded{token_expired}`. Until now a connection
+  outlived its token indefinitely (#60).
+- `JoinRoom.must_exist`: join only a room the relay already has, with
+  `ErrorEvent{ROOM_NOT_FOUND}` otherwise. `CollabClient` sets it on a rejoin,
+  which closes the window where a room lost between the room check and the
+  join was recreated empty (#61).
+- `RelayApp.Close()` stops the `RELAY_AUTH_JWKS_URL` background refresh, and
+  `main` calls it on shutdown (#60).
+- `CollabClient` reconnects after `token_expired` when `getToken` is set, and
+  reports `onSessionEnded("token_expired")` when it isn't.
 - The relay binary loads its JWT signing keys from config:
   `RELAY_AUTH_KEYS_FILE` (a JSON array of `{client_id, alg, key}`) or
   `RELAY_AUTH_JWKS_URL`. Until now `NewRelayApp` never built a key store, so
@@ -36,10 +47,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead. Pass `reconnect: false` for the old behavior.
 - `CollabEngine` reports `session_gone` and `reconnect_failed` with their own
   messages instead of "The owner ended the sharing session".
-- servicekit v0.2.1 (was v0.2.0), and `@panyam/servicekit-client` ^0.2.1 in
-  development. massrelay uses none of the APIs that changed.
+- servicekit v0.2.2 (was v0.2.0, via v0.2.1), and `@panyam/servicekit-client`
+  ^0.2.2 in development. Neither release changed an API massrelay uses.
 
 ### Fixed
+- `RelayClaims.ExpiresAt` and `IssuedAt` were always zero: oneauth's custom
+  claims leave out `exp` and `iat`, so the middleware now reads them from the
+  verified token.
 - `deploy/production/docker-compose.yml` now passes `RELAY_AUTH_REQUIRED` and
   `RELAY_AUTH_ISSUER` to the relay container, and mounts `./secrets` at
   `/etc/massrelay` for the keys file.

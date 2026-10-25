@@ -321,6 +321,11 @@ func (s *CollabService) handleJoin(ctx context.Context, action *pb.CollabAction)
 		s.mu.Unlock()
 	}
 
+	// A rejoin sets must_exist so that a room the relay lost (a restart,
+	// or its last peer leaving) isn't recreated empty under the old name.
+	if join.GetMustExist() && s.GetRoomByID(sessionId) == nil {
+		return errorEvent("ROOM_NOT_FOUND", "No room "+sessionId+" on this relay"), nil
+	}
 	room, isNew := s.GetOrCreateRoom(sessionId)
 	if isNew && s.OnRoomCreated != nil {
 		s.OnRoomCreated()

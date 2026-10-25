@@ -43,6 +43,7 @@ message JoinRoom {
   int32 protocol_version = 9; // client protocol version (current = 2, legacy implicit = 1)
   bool encrypted = 10;        // owner declares room as encrypted (password-based E2EE)
   string title = 11;          // document/session title (owner sends, relay echoes to joiners)
+  bool must_exist = 12;       // join only a room that already exists; ErrorEvent ROOM_NOT_FOUND otherwise (a reconnect sets it)
 }
 
 message LeaveRoom {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/panyam/oneauth/keys"
 )
@@ -26,6 +27,14 @@ type AuthKey struct {
 	Algorithm string `json:"alg"`
 	Key       string `json:"key"`
 }
+
+// How often a RELAY_AUTH_JWKS_URL key store refetches, and the least time
+// between fetches. Vars so tests can shorten them; the gap matches oneauth's
+// default.
+var (
+	jwksRefreshInterval = time.Hour
+	jwksMinRefreshGap   = 5 * time.Second
+)
 
 var authKeyAlgs = map[string]bool{
 	"HS256": true, "HS384": true, "HS512": true,
@@ -81,25 +90,26 @@ func LoadAuthKeysFile(path string) (*keys.InMemoryKeyStore, error) {
 // authKeyStoreFromEnv builds the key store from RELAY_AUTH_KEYS_FILE or
 // RELAY_AUTH_JWKS_URL (setting both is an error). It returns a nil store
 // when neither is set. A JWKS store does its first fetch here, so a relay
-// that can't reach its JWKS endpoint fails to start.
-func authKeyStoreFromEnv() (keys.KeyLookup, string, error) {
+// that can't reach its JWKS endpoint fails to start, and keeps refreshing in
+// the background until the returned stop func runs (nil for a keys file).
+func authKeyStoreFromEnv() (keys.KeyLookup, string, func(), error) {
 	file := os.Getenv("RELAY_AUTH_KEYS_FILE")
 	jwksURL := os.Getenv("RELAY_AUTH_JWKS_URL")
 	switch {
 	case file != "" && jwksURL != "":
-		return nil, "", errors.New("set one of RELAY_AUTH_KEYS_FILE and RELAY_AUTH_JWKS_URL, not both")
+		return nil, "", nil, errors.New("set one of RELAY_AUTH_KEYS_FILE and RELAY_AUTH_JWKS_URL, not both")
 	case file != "":
 		ks, err := LoadAuthKeysFile(file)
 		if err != nil {
-			return nil, "", err
+			return nil, "", nil, err
 		}
-		return ks, "file", nil
+		return ks, "file", nil, nil
 	case jwksURL != "":
-		ks := keys.NewJWKSKeyStore(jwksURL)
+		ks := keys.NewJWKSKeyStore(jwksURL, keys.WithRefreshInterval(jwksRefreshInterval), keys.WithMinRefreshGap(jwksMinRefreshGap))
 		if err := ks.Start(); err != nil {
-			return nil, "", err
+			return nil, "", nil, err
 		}
-		return ks, "jwks", nil
+		return ks, "jwks", ks.Stop, nil
 	}
-	return nil, "", nil
+	return nil, "", nil, nil
 }

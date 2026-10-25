@@ -28,6 +28,7 @@ func main() {
 	defer otelShutdown(ctx)
 
 	app := server.NewRelayApp()
+	defer app.Close()
 	if err := app.Init(); err != nil {
 		slog.Error("Failed to initialize relay", "error", err)
 		os.Exit(1)

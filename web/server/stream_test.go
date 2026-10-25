@@ -267,8 +267,25 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 	readerId := joinStream(t, reader, "room-slow").GetRoomJoined().GetClientId()
 	recvEvent(t, sender) // PeerJoined reader
 
-	// 150 overflows the reader's two 64-slot queues, while the sender's own
-	// PEER_NOT_FOUND replies after the eviction still fit in its queue.
+	// 150 overflows the reader's two 64-slot queues. How many sends land
+	// after the eviction, and come back to the sender as PEER_NOT_FOUND,
+	// depends on when the reader's bridge got to run; more than 64 would
+	// block Send on the sender's own queue. So drain the sender meanwhile,
+	// the way servicekit would, and look at what it got afterwards.
+	senderEvents := make(chan *pb.CollabEvent, 1024)
+	stopDrain := make(chan struct{})
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for {
+			select {
+			case evt := <-sender.sendCh:
+				senderEvents <- evt
+			case <-stopDrain:
+				return
+			}
+		}
+	}()
 	const sent = 150
 	for i := 0; i < sent; i++ {
 		if err := sender.Send(&pb.CollabAction{Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{
@@ -300,7 +317,12 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 	}
 
 	for {
-		evt := recvEvent(t, sender)
+		var evt *pb.CollabEvent
+		select {
+		case evt = <-senderEvents:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for the sender to see the reader leave")
+		}
 		if evt.GetError().GetCode() == "PEER_NOT_FOUND" {
 			continue // sends that landed after the eviction
 		}
@@ -309,7 +331,61 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 		}
 		break
 	}
+	close(stopDrain)
+	<-drained
 	if room := svc.GetRoomByID("room-slow"); room == nil || room.Clients[readerId] != nil || room.Clients[senderId] == nil {
 		t.Fatal("slow reader should be gone from the room and the sender still in it")
+	}
+}
+
+// A connection never outlives its token: at exp the client leaves its room,
+// gets SessionEnded{token_expired}, and the stream ends.
+func TestStreamEndsWhenTokenExpires(t *testing.T) {
+	svc := services.NewCollabService()
+	peer := streamFromRequest(t, svc, "")
+	joinStream(t, peer, "room-exp")
+	authed := streamFromRequest(t, svc, mintStreamToken(t, jwt.MapClaims{"exp": time.Now().Add(1500 * time.Millisecond).Unix()}))
+	authedId := joinStream(t, authed, "room-exp").GetRoomJoined().GetClientId()
+	recvEvent(t, peer) // PeerJoined authed
+
+	var end *pb.SessionEnded
+	select {
+	case evt := <-authed.sendCh:
+		end = evt.GetSessionEnded()
+	case <-time.After(3 * time.Second):
+		t.Fatal("stream still open 3s after a token that expired within 1.5s")
+	}
+	if end.GetReason() != "token_expired" {
+		t.Fatalf("got %v, want SessionEnded{token_expired}", end)
+	}
+	if err := recvErr(t, authed); err != io.EOF {
+		t.Fatalf("Recv after token_expired = %v, want io.EOF so servicekit closes the socket", err)
+	}
+	if left := recvEvent(t, peer).GetPeerLeft(); left.GetClientId() != authedId {
+		t.Fatalf("peer saw %v, want PeerLeft for %s", left, authedId)
+	}
+}
+
+func TestStreamWithoutTokenHasNoExpiry(t *testing.T) {
+	svc := services.NewCollabService()
+	if s := streamFromRequest(t, svc, ""); s.expiry != nil {
+		t.Fatal("an anonymous stream got an expiry timer")
+	}
+	if s := streamFromRequest(t, svc, mintStreamToken(t, nil)); s.expiry == nil {
+		t.Fatal("a stream with an exp claim got no expiry timer")
+	}
+}
+
+// An eviction and an expiry ending the same stream send one SessionEnded.
+func TestStreamEndsOnce(t *testing.T) {
+	s := streamFromRequest(t, services.NewCollabService(), "")
+	joinStream(t, s, "room-once")
+	s.endSession("slow_consumer")
+	s.endSession("token_expired")
+	if end := recvEvent(t, s).GetSessionEnded(); end.GetReason() != "slow_consumer" {
+		t.Fatalf("first event %v, want SessionEnded{slow_consumer}", end)
+	}
+	if err := recvErr(t, s); err != io.EOF {
+		t.Fatalf("Recv after the end = %v, want io.EOF", err)
 	}
 }
