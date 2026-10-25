@@ -6,25 +6,34 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-25
+
+Full write-up in [docs/releases/v0.3.3.md](docs/releases/v0.3.3.md).
+
+Auth works in the relay binary, `CollabClient` reconnects on its own, and a
+connection ends when its token expires. Two defaults change behavior:
+`RelayApp.Init` refuses to start open, and a slow-consumer eviction reconnects
+instead of ending the session (see Changed).
+
 ### Added
 - The relay ends a connection when its token's `exp` passes: the peer leaves
   its room and gets `SessionEnded{token_expired}`. Until now a connection
-  outlived its token indefinitely (#60).
+  outlived its token indefinitely (issue 60).
 - `JoinRoom.must_exist`: join only a room the relay already has, with
   `ErrorEvent{ROOM_NOT_FOUND}` otherwise. `CollabClient` sets it on a rejoin,
   which closes the window where a room lost between the room check and the
-  join was recreated empty (#61).
+  join was recreated empty (issue 61).
 - `RelayApp.Close()` stops the `RELAY_AUTH_JWKS_URL` background refresh, and
-  `main` calls it on shutdown (#60).
+  `main` calls it on shutdown (issue 60).
 - `CollabClient` reconnects after `token_expired` when `getToken` is set, and
   reports `onSessionEnded("token_expired")` when it isn't.
 - The relay binary loads its JWT signing keys from config:
   `RELAY_AUTH_KEYS_FILE` (a JSON array of `{client_id, alg, key}`) or
   `RELAY_AUTH_JWKS_URL`. Until now `NewRelayApp` never built a key store, so
-  auth was always off in the binary (#56).
-- `make exercise-auth` runs mission #53's exercise against the relay binary
+  auth was always off in the binary (issue 56).
+- `make exercise-auth` runs mission 53's exercise against the relay binary
   (no token, a room outside the `rooms` claim, an allowed room), and CI runs
-  it (#55).
+  it (issue 55).
 - `CollabClient` reconnects. After the socket closes without `disconnect()`,
   or a `SessionEnded{slow_consumer}` eviction, it backs off, checks
   `GET /api/v1/rooms/{sessionId}`, and rejoins the same session on a 200. A
@@ -32,14 +41,16 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   leaves a phantom room, and running out of `maxRetries` ends with
   `"reconnect_failed"`. New options `reconnect` (default true),
   `retryDelayMs`, `onReconnecting`, and `getToken` for a fresh JWT on every
-  connection (#38).
-- `make exercise-reconnect` runs mission #54's exercise against the relay
-  binary (an eviction, then a restart), and CI runs it (#57).
+  connection (issue 38).
+- `make exercise-reconnect` runs mission 54's exercise against the relay
+  binary (an eviction, then a restart), and CI runs it (issue 57).
 - Interop tests for peer identity on the relay binary with keys from
   `RELAY_AUTH_KEYS_FILE`: `onPeerJoined` and `getPeer` carry each peer's
   validated subject, both for later joiners and in the roster, and an
   addressed call and reply work the way the mcpkit room bridge uses them,
-  including a peer with no token or another subject being ignored (#27).
+  including a peer with no token or another subject being ignored (issue 27).
+- Interop tests for slow-consumer eviction as the TS client sees it
+  (issue 50).
 
 ### Changed
 - `RelayApp.Init` returns `ErrAuthRequiredNoKeys` when `RELAY_AUTH_REQUIRED=true`
