@@ -18,8 +18,14 @@ export interface CollabClientOptions {
   onConnect?: (clientId: string) => void;
   /** Called once for every connection that reached onConnect, however it
    * ends: disconnect(), the relay closing, or the owner ending the session
-   * (before onSessionEnded). */
+   * (before onSessionEnded). A reconnect that rejoins calls onConnect again,
+   * with a new clientId. */
   onDisconnect?: () => void;
+  /** The session is over for this client. reason is the relay's (e.g.
+   * "owner_disconnected"), or one of the client's own: "session_gone" when a
+   * reconnect found the room no longer exists (the relay restarted, or
+   * everyone left), and "reconnect_failed" when maxRetries attempts couldn't
+   * reach the relay or rejoin. */
   onSessionEnded?: (reason: string) => void;
   onOwnerChanged?: (newOwnerClientId: string) => void;
   onCredentialsChanged?: (reason: string) => void;
@@ -38,19 +44,40 @@ export interface CollabClientOptions {
    * arrives after it (PEER_NOT_FOUND, ALREADY_JOINED, RATE_LIMITED) refuses
    * that one action, and the connection stays open. */
   onErrorEvent?: (code: string, message: string) => void;
+  /** Rejoin on its own when the connection drops: the socket closing without
+   * disconnect(), or the relay evicting this client as a slow consumer.
+   * Before each attempt it checks GET /api/v1/rooms/{sessionId}, rejoining the
+   * same sessionId on a 200 and ending with onSessionEnded("session_gone") on
+   * a 404, so a relay restart never recreates the room as a phantom. Only a
+   * client that has joined once reconnects. Default true. */
+  reconnect?: boolean;
+  /** Reconnect attempts before onSessionEnded("reconnect_failed"). Default 5.
+   * The count resets each time a rejoin succeeds. */
   maxRetries?: number;
+  /** Delay before the first reconnect attempt, doubling per attempt up to
+   * 30s. Default 1000. */
+  retryDelayMs?: number;
+  /** Called before each reconnect attempt waits, with the 1-based attempt. */
+  onReconnecting?: (attempt: number) => void;
   /** JWT for a relay running with auth. Sent as the `token` query parameter,
    * since browsers can't set headers on a WebSocket upgrade. */
   token?: string;
+  /** Returns a JWT for each connection, the first and every reconnect, so a
+   * rejoin after the original token expired presents a fresh one. Takes
+   * precedence over token. If it throws, that attempt counts as failed. */
+  getToken?: () => string | Promise<string>;
   /** Factory for creating GRPCWSClient instances. Defaults to `() => new GRPCWSClient()`.
    *  Override in tests with `GRPCWSClient.createMock()`. */
   _grpcFactory?: () => GRPCWSClient;
+  /** fetch used for the reconnect room check. Defaults to globalThis.fetch. */
+  _fetch?: typeof fetch;
 }
 
 /**
  * Framework-agnostic WebSocket client for the collab relay.
  * Uses @panyam/servicekit-client GRPCWSClient for envelope protocol
- * and auto ping/pong. Adds reconnect with exponential backoff on top.
+ * and auto ping/pong. Adds reconnect with exponential backoff on top (see
+ * CollabClientOptions.reconnect).
  */
 export class CollabClient {
   private grpc: GRPCWSClient | null = null;
@@ -74,6 +101,8 @@ export class CollabClient {
   private retryCount: number = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private explicitDisconnect: boolean = false;
+  private hasJoined: boolean = false;
+  private joinAsOwner: boolean = false;
   private maxRetries: number;
   private boundBeforeUnload: (() => void) | null = null;
 
@@ -113,11 +142,13 @@ export class CollabClient {
     this._metadata = metadata;
     this._title = title;
     this._isOwner = isOwner;
+    this.joinAsOwner = isOwner;
     this._browserId = browserId;
     this._clientHint = clientHint;
     this._encrypted = encrypted;
     this._isConnecting = true;
     this.explicitDisconnect = false;
+    this.hasJoined = false;
     this.retryCount = 0;
 
     // Ensure cleanup on page unload (refresh, tab close, navigation)
@@ -126,7 +157,7 @@ export class CollabClient {
       window.addEventListener('beforeunload', this.boundBeforeUnload);
     }
 
-    this.openWebSocket();
+    this.openWithToken();
   }
 
   disconnect(): void {
@@ -139,6 +170,7 @@ export class CollabClient {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
+    this._isConnecting = false;
     if (!this.grpc) return;
 
     const wasConnected = this._isConnected;
@@ -186,12 +218,34 @@ export class CollabClient {
     this.send({ appMessage });
   }
 
-  private openWebSocket(): void {
+  /** Opens the socket with options.token, or with getToken()'s result when
+   * set. A getToken failure counts as a failed reconnect attempt. */
+  private openWithToken(): void {
+    const getToken = this.options.getToken;
+    if (!getToken) {
+      this.openWebSocket(this.options.token);
+      return;
+    }
+    Promise.resolve().then(getToken).then(
+      (token) => {
+        if (!this.explicitDisconnect) this.openWebSocket(token);
+      },
+      (err) => {
+        this.options.onError?.(err instanceof Error ? err : new Error(String(err)));
+        if (this.explicitDisconnect) return;
+        if (this.hasJoined) this.scheduleReconnect();
+        else this._isConnecting = false;
+      },
+    );
+  }
+
+  private openWebSocket(token: string | undefined): void {
     const resolved = resolveRelayUrl(this._relayUrl);
     const wsSessionId = this._sessionId || '_new';
     let url = `${resolved}/ws/v1/${encodeURIComponent(wsSessionId)}/sync`;
-    if (this.options.token) url += `?token=${encodeURIComponent(this.options.token)}`;
-    this.grpc = this.options._grpcFactory ? this.options._grpcFactory() : new GRPCWSClient();
+    if (token) url += `?token=${encodeURIComponent(token)}`;
+    const grpc = this.options._grpcFactory ? this.options._grpcFactory() : new GRPCWSClient();
+    this.grpc = grpc;
 
     // GRPCWSClient.onMessage receives data already unwrapped from the
     // servicekit envelope ({type:"data", data:...} → just the data).
@@ -201,8 +255,10 @@ export class CollabClient {
       this.handleEvent(event);
     };
 
+    // A socket this client already replaced or closed can still report its
+    // close late; only the current one counts.
     this.grpc.onClose = () => {
-      this.handleConnectionClosed();
+      if (this.grpc === grpc) this.handleConnectionClosed();
     };
 
     this.grpc.onError = (err: string) => {
@@ -220,7 +276,7 @@ export class CollabClient {
           username: this._username,
           metadata: this._metadata,
           clientType: 'browser',
-          isOwner: this._isOwner,
+          isOwner: this.joinAsOwner,
           browserId: this._browserId,
           clientHint: this._clientHint,
           protocolVersion: 2,
@@ -262,6 +318,7 @@ export class CollabClient {
         this._title = room?.title || '';
         this._isConnected = true;
         this._isConnecting = false;
+        this.hasJoined = true;
         this.retryCount = 0;
         this.options.onConnect?.(this._clientId);
 
@@ -301,10 +358,16 @@ export class CollabClient {
         this.options.onPeerLeft?.(event.event.value.clientId);
         break;
 
-      case 'sessionEnded':
+      case 'sessionEnded': {
+        const reason = event.event.value.reason;
+        if (reason === 'slow_consumer' && this.reconnectEnabled()) {
+          this.dropAndReconnect();
+          break;
+        }
         this.closeFromRelay();
-        this.options.onSessionEnded?.(event.event.value.reason);
+        this.options.onSessionEnded?.(reason);
         break;
+      }
 
       case 'ownerChanged': {
         const newOwnerId = event.event.value.newOwnerClientId;
@@ -333,18 +396,69 @@ export class CollabClient {
 
   private handleConnectionClosed(): void {
     const wasConnected = this._isConnected;
-    this._isConnected = false;
-    this._isConnecting = false;
-    this.peers.clear();
-
+    this.resetState();
     if (wasConnected) {
       this.options.onDisconnect?.();
     }
+    if (!this.explicitDisconnect && this.hasJoined && this.reconnectEnabled()) {
+      this.scheduleReconnect();
+    }
+  }
 
-    // Auto-reconnect disabled for now — reconnecting with stale session
-    // params after a server restart creates phantom sessions. The user can
-    // re-click Share to reconnect. TODO: add smart reconnect that validates
-    // the session is still alive before re-joining.
+  private reconnectEnabled(): boolean {
+    return this.options.reconnect ?? true;
+  }
+
+  /** Closes a connection the relay evicted and starts reconnecting. */
+  private dropAndReconnect(): void {
+    const grpc = this.grpc;
+    const wasConnected = this._isConnected;
+    this.resetState();
+    grpc?.close();
+    if (wasConnected) this.options.onDisconnect?.();
+    this.scheduleReconnect();
+  }
+
+  private scheduleReconnect(): void {
+    if (this.retryCount >= this.maxRetries) {
+      this.endSession('reconnect_failed');
+      return;
+    }
+    const attempt = ++this.retryCount;
+    this._isConnecting = true;
+    this.options.onReconnecting?.(attempt);
+    const delay = Math.min((this.options.retryDelayMs ?? 1000) * 2 ** (attempt - 1), 30000);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.rejoinIfRoomExists();
+    }, delay);
+  }
+
+  /** Rejoins only a room the relay still has, so a restarted relay doesn't
+   * get the room recreated empty by whoever reconnects first. */
+  private async rejoinIfRoomExists(): Promise<void> {
+    const base = resolveRelayUrl(this._relayUrl).replace(/^ws/i, 'http');
+    const fetchFn = this.options._fetch ?? globalThis.fetch;
+    let status = 0;
+    try {
+      status = (await fetchFn(`${base}/api/v1/rooms/${encodeURIComponent(this._sessionId)}`)).status;
+    } catch {
+      // relay unreachable; retry
+    }
+    if (this.explicitDisconnect) return;
+    if (status === 404) {
+      this.endSession('session_gone');
+    } else if (status === 200) {
+      this.openWithToken();
+    } else {
+      this.scheduleReconnect();
+    }
+  }
+
+  private endSession(reason: string): void {
+    this.explicitDisconnect = true;
+    this._isConnecting = false;
+    this.options.onSessionEnded?.(reason);
   }
 
   /** Closes a connection the relay ended. Fires onDisconnect if it had

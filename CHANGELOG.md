@@ -14,6 +14,16 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `make exercise-auth` runs mission #53's exercise against the relay binary
   (no token, a room outside the `rooms` claim, an allowed room), and CI runs
   it (#55).
+- `CollabClient` reconnects. After the socket closes without `disconnect()`,
+  or a `SessionEnded{slow_consumer}` eviction, it backs off, checks
+  `GET /api/v1/rooms/{sessionId}`, and rejoins the same session on a 200. A
+  404 ends with `onSessionEnded("session_gone")`, so a relay restart no longer
+  leaves a phantom room, and running out of `maxRetries` ends with
+  `"reconnect_failed"`. New options `reconnect` (default true),
+  `retryDelayMs`, `onReconnecting`, and `getToken` for a fresh JWT on every
+  connection (#38).
+- `make exercise-reconnect` runs mission #54's exercise against the relay
+  binary (an eviction, then a restart), and CI runs it (#57).
 
 ### Changed
 - `RelayApp.Init` returns `ErrAuthRequiredNoKeys` when `RELAY_AUTH_REQUIRED=true`
@@ -21,6 +31,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unreachable JWKS URL, so the binary exits instead of accepting every
   connection. An embedder that sets `RELAY_AUTH_REQUIRED=true` and builds its
   own `Guard` must now also set a key source.
+- **Behavior change:** with reconnect on by default, a slow-consumer eviction
+  no longer reaches `onSessionEnded("slow_consumer")`; the client rejoins
+  instead. Pass `reconnect: false` for the old behavior.
+- `CollabEngine` reports `session_gone` and `reconnect_failed` with their own
+  messages instead of "The owner ended the sharing session".
 - servicekit v0.2.1 (was v0.2.0), and `@panyam/servicekit-client` ^0.2.1 in
   development. massrelay uses none of the APIs that changed.
 

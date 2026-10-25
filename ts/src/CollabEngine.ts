@@ -243,8 +243,9 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
 
     client.options.onSessionEnded = (reason: string) => {
       this._resetState();
-      this._updateState({ error: 'The owner ended the sharing session' });
-      this.emit('sessionEnded', reason || 'The owner ended the sharing session');
+      const message = sessionEndedMessages[reason] ?? 'The owner ended the sharing session';
+      this._updateState({ error: message });
+      this.emit('sessionEnded', reason || message);
     };
 
     client.options.onOwnerChanged = (newOwnerClientId: string) => {
@@ -464,3 +465,9 @@ export class CollabEngine extends TypedEmitter<CollabEngineEvents> {
     this.emit('stateChange', this._state);
   }
 }
+
+// Reasons CollabClient itself reports when a reconnect can't rejoin.
+const sessionEndedMessages: Record<string, string> = {
+  session_gone: 'The sharing session no longer exists on the relay',
+  reconnect_failed: 'Lost the connection to the relay',
+};
