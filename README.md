@@ -815,18 +815,23 @@ const client = new CollabClient(options?: CollabClientOptions);
 | Option | Type | Description |
 |--------|------|-------------|
 | `onEvent` | `(event: any) => void` | Called for every event from the relay. Receives the raw protobuf JSON. |
-| `onConnect` | `(clientId: string) => void` | Fires after `RoomJoined` is received. |
-| `onDisconnect` | `() => void` | Fires on connection close (graceful or ungraceful). |
+| `onConnect` | `(clientId: string) => void` | Fires after `RoomJoined` is received, again after each rejoin (with a new `clientId`). |
+| `onDisconnect` | `() => void` | Fires on connection close (graceful or ungraceful), once per `onConnect`. A drop that reconnects fires it too. |
 | `onPeerJoined` | `(peer: PeerInfo) => void` | New peer joined the room. Also fires for self on connect. `peer.identity` holds the subject the relay validated from that peer's token, and is absent for anonymous peers and for self. |
 | `onPeerLeft` | `(clientId: string) => void` | Peer left the room. |
 | `onError` | `(error: Error) => void` | WebSocket-level error. |
 | `onErrorEvent` | `(code: string, message: string) => void` | Relay-sent graceful error (`ROOM_FULL`, `PROTOCOL_VERSION_TOO_OLD`). |
-| `onSessionEnded` | `(reason: string) => void` | Session terminated by relay (owner left). |
+| `onSessionEnded` | `(reason: string) => void` | The session is over for this client. The relay's reason (e.g. `owner_disconnected`), or the client's own after a reconnect: `session_gone` (the room no longer exists) or `reconnect_failed` (`maxRetries` attempts failed). |
 | `onOwnerChanged` | `(newOwnerClientId: string) => void` | Ownership transferred. |
 | `onCredentialsChanged` | `(reason: string) => void` | Session password changed. |
 | `onTitleChanged` | `(title: string) => void` | Drawing title changed. |
 | `onAppMessage` | `(kind: string, payload: Uint8Array, fromClientId: string, toClientId: string) => void` | An `AppMessage` from another peer, or from the embedding server (empty `fromClientId`). `toClientId` is this client's id when the message was addressed to it, and empty when it went to the whole room. |
-| `maxRetries` | number | Max auto-reconnect attempts (default: `5`). Currently unused — auto-reconnect is disabled. |
+| `reconnect` | boolean | Rejoin on its own after a drop (default `true`). See [Reconnect](#reconnect). |
+| `maxRetries` | number | Reconnect attempts before `onSessionEnded('reconnect_failed')` (default `5`). Resets after each successful rejoin. |
+| `retryDelayMs` | number | Delay before the first attempt, doubling per attempt up to 30s (default `1000`). |
+| `onReconnecting` | `(attempt: number) => void` | Fires before each reconnect attempt waits, with the 1-based attempt number. |
+| `token` | string | JWT for a relay running with auth, sent as the `token` query parameter. |
+| `getToken` | `() => string \| Promise<string>` | Called for every connection, the first and each reconnect, so a rejoin presents a fresh JWT. Takes precedence over `token`. A throw counts as a failed attempt. |
 | `_grpcFactory` | `() => GRPCWSClient` | Override WebSocket client for testing. |
 
 #### Properties (read-only)
@@ -905,8 +910,19 @@ client.sendAppMessage('tools/call', bytes, { to: pageClientId });
 
 - **Page unload**: Automatically calls `disconnect()` on `beforeunload` to ensure graceful leave.
 - **Self-as-peer**: On connect, `onPeerJoined` fires with the client's own info first, then existing peers.
-- **Auto-reconnect**: Currently **disabled** to prevent phantom sessions after server restart. The `maxRetries` option is reserved for future use.
-- **Error events**: `ROOM_FULL` and `PROTOCOL_VERSION_TOO_OLD` are delivered via `onErrorEvent` (not `onError`). The client sets `explicitDisconnect = true` so it won't attempt reconnection.
+- **Error events**: `ROOM_FULL` and `PROTOCOL_VERSION_TOO_OLD` are delivered via `onErrorEvent` (not `onError`). A join refused this way is never retried, including a rejoin during a reconnect.
+
+#### Reconnect
+
+A client that has joined once reconnects when its socket closes without `disconnect()`, or when the relay evicts it as a slow consumer (`SessionEnded{slow_consumer}`, which then doesn't reach `onSessionEnded`). Each attempt waits (`retryDelayMs`, doubling), then asks the relay `GET /api/v1/rooms/{sessionId}`:
+
+- **200**: it rejoins the same `sessionId`, and `onConnect` fires with a new `clientId`. Other peers see a `peerLeft` for the old id and a `peerJoined` for the new one.
+- **404**: it stops with `onSessionEnded('session_gone')`. This is what a relay restart looks like, and checking first is what keeps a reconnecting client from recreating the room empty.
+- **Anything else, or the relay unreachable**: it tries again, until `maxRetries` attempts, then `onSessionEnded('reconnect_failed')`.
+
+It doesn't reconnect after `disconnect()`, after the owner ends the session, or when a join is refused. An owner that's evicted ends the room for everyone unless another tab of the same browser takes over, so its reconnect usually finds a 404. With `reconnect: false` a drop just fires `onDisconnect` (and `onSessionEnded('slow_consumer')` for an eviction), as in 0.3.x.
+
+`make exercise-reconnect` runs this against the relay binary: one client stalled until it's evicted, then a relay restart.
 
 ---
 
@@ -1178,7 +1194,7 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 - **No persistence** — Rooms exist only in memory. Server restart terminates all sessions.
 - **Single-instance** — No clustering or room distribution. Suitable for single-server deployments.
 - **Auth is opt-in** — Without `RELAY_AUTH_REQUIRED` and signing keys, session IDs are the only access control.
-- **No auto-reconnect** — Currently disabled in the client to prevent phantom sessions. Clients must manually re-join.
+- **Reconnect stays on one relay** — `CollabClient` rejoins the relay it was on. A room that relay lost (a restart) is gone, and there's no failover to another relay in a pool.
 - **Ownership model** — Ownership only transfers to same-browser tabs (matching `browserId`). Cross-browser ownership transfer is not supported.
 - **Broadcast ordering** — Broadcasts are async and non-blocking. If a client's channel buffer (64 events) is full, events are dropped silently.
 - **ListRooms not exposed** — The endpoint exists in code but is not registered, to prevent session enumeration.

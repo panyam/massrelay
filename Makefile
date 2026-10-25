@@ -15,6 +15,10 @@ test-interop:
 exercise-auth:
 	cd ts && npm run exercise -- exercise/auth.exercise.ts
 
+# Mission #54's exercise: a client evicted as a slow consumer rejoins; after a relay restart both report the session gone
+exercise-reconnect:
+	cd ts && npm run exercise -- exercise/reconnect.exercise.ts
+
 ## Dev stack — relay + Grafana LGTM in Docker (for local development only)
 
 dev-up: ## Build and start relay + Grafana LGTM stack

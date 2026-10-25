@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GRPCWSClient } from '@panyam/servicekit-client';
 import { CollabClient } from './CollabClient.js';
 import type { PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
@@ -217,5 +217,241 @@ describe('CollabClient peer identity', () => {
     controller.simulateClose();
 
     expect(client.getPeer('bridge')).toBeUndefined();
+  });
+});
+
+type Controller = ReturnType<typeof GRPCWSClient.createMock>['controller'];
+
+/** A client whose every connection gets its own mock socket, so a reconnect
+ * shows up as a new entry in sockets. rooms answers the reconnect room check:
+ * an HTTP status, or 'down' for a relay that refuses the connection. */
+function reconnectingClient(opts: { rooms?: Array<number | 'down'>; options?: Partial<ConstructorParameters<typeof CollabClient>[0]> } = {}) {
+  const sockets: Array<{ controller: Controller; url: string }> = [];
+  const calls: string[] = [];
+  const rooms = [...(opts.rooms ?? [])];
+  const fetched: string[] = [];
+  const client = new CollabClient({
+    retryDelayMs: 100,
+    _grpcFactory: () => {
+      const { client: grpc, controller } = GRPCWSClient.createMock();
+      const entry = { controller, url: '' };
+      const connect = grpc.connect.bind(grpc);
+      grpc.connect = (url: string) => {
+        entry.url = url;
+        return connect(url);
+      };
+      sockets.push(entry);
+      return grpc;
+    },
+    _fetch: (async (url: string) => {
+      fetched.push(url);
+      const r = rooms.shift() ?? 404;
+      if (r === 'down') throw new TypeError('fetch failed');
+      return new Response(null, { status: r });
+    }) as typeof fetch,
+    onConnect: (id) => calls.push(`connect:${id}`),
+    onDisconnect: () => calls.push('disconnect'),
+    onSessionEnded: (reason) => calls.push(`ended:${reason}`),
+    onReconnecting: (n) => calls.push(`reconnecting:${n}`),
+    onErrorEvent: (code) => calls.push(`error:${code}`),
+    ...opts.options,
+  });
+  return { client, sockets, calls, fetched };
+}
+
+async function openAndJoin(c: Controller, clientId: string) {
+  c.simulateOpen();
+  await vi.advanceTimersByTimeAsync(0);
+  c.simulateMessage({ roomJoined: { clientId, room: { sessionId: 'design:abc' } } });
+}
+
+function joinOf(c: Controller) {
+  return (c.sentMessages.find((m) => (m as { join?: unknown }).join) as { join: { sessionId: string } }).join;
+}
+
+describe('CollabClient reconnect', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** @flow Relay evicts a stalled tab as a slow consumer → it checks the room is alive and rejoins the same session */
+  it('rejoins the same session after a slow_consumer eviction', async () => {
+    const { client, sockets, calls, fetched } = reconnectingClient({ rooms: [200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateMessage({ sessionEnded: { reason: 'slow_consumer' } });
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1']);
+    expect(sockets).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fetched).toEqual(['http://relay.test/api/v1/rooms/design%3Aabc']);
+    expect(sockets).toHaveLength(2);
+    await openAndJoin(sockets[1].controller, 'me-2');
+
+    expect(joinOf(sockets[1].controller).sessionId).toBe('design:abc');
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'connect:me-2']);
+    expect(client.isConnected).toBe(true);
+    expect(client.clientId).toBe('me-2');
+  });
+
+  /** @flow Relay restarts → the client finds the room gone and tells the app instead of recreating it */
+  it('ends with session_gone when the room no longer exists', async () => {
+    const { client, sockets, calls } = reconnectingClient({ rooms: ['down', 404] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'reconnecting:2', 'ended:session_gone']);
+    expect(sockets).toHaveLength(1);
+    expect(client.isConnecting).toBe(false);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(calls.at(-1)).toBe('ended:session_gone');
+  });
+
+  it('gives up with reconnect_failed after maxRetries unreachable attempts', async () => {
+    const { client, sockets, calls, fetched } = reconnectingClient({ rooms: ['down', 'down', 'down'], options: { maxRetries: 2 } });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(fetched).toHaveLength(2);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'reconnecting:2', 'ended:reconnect_failed']);
+  });
+
+  it('backs off exponentially between attempts', async () => {
+    const { client, sockets, fetched } = reconnectingClient({ rooms: ['down', 'down', 200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(fetched).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetched).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(199);
+    expect(fetched).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetched).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(fetched).toHaveLength(3);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('does not reconnect after disconnect()', async () => {
+    const { client, sockets, calls, fetched } = reconnectingClient({ rooms: [200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    client.disconnect();
+    sockets[0].controller.simulateClose();
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(fetched).toEqual([]);
+    expect(sockets).toHaveLength(1);
+    expect(calls).toEqual(['connect:me-1', 'disconnect']);
+  });
+
+  it('does not reconnect when the owner ends the session', async () => {
+    const { client, sockets, calls, fetched } = reconnectingClient({ rooms: [200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateMessage({ sessionEnded: { reason: 'owner_disconnected' } });
+    sockets[0].controller.simulateClose();
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(fetched).toEqual([]);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'ended:owner_disconnected']);
+  });
+
+  it('does not reconnect a client that never joined', async () => {
+    const { client, sockets, fetched } = reconnectingClient({ rooms: [200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(fetched).toEqual([]);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it('keeps the old behavior with reconnect: false', async () => {
+    const { client, sockets, calls, fetched } = reconnectingClient({ rooms: [200], options: { reconnect: false } });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateMessage({ sessionEnded: { reason: 'slow_consumer' } });
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(fetched).toEqual([]);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'ended:slow_consumer']);
+  });
+
+  it('stops when the rejoin is refused', async () => {
+    const { client, sockets, calls } = reconnectingClient({ rooms: [200, 200] });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(100);
+    sockets[1].controller.simulateOpen();
+    await vi.advanceTimersByTimeAsync(0);
+    sockets[1].controller.simulateMessage({ error: { code: 'ROOM_FULL', message: 'Room is full (2/2)' } });
+    sockets[1].controller.simulateClose();
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(sockets).toHaveLength(2);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'error:ROOM_FULL']);
+  });
+
+  /** @flow A rejoin after the original token expired → the app's getToken supplies a fresh one */
+  it('asks getToken for a token on every connection', async () => {
+    let n = 0;
+    const { client, sockets } = reconnectingClient({ rooms: [200], options: { getToken: async () => `tok-${++n}` } });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(sockets.map((s) => s.url)).toEqual([
+      'ws://relay.test/ws/v1/design%3Aabc/sync?token=tok-1',
+      'ws://relay.test/ws/v1/design%3Aabc/sync?token=tok-2',
+    ]);
+  });
+
+  it('counts a getToken failure as a failed attempt', async () => {
+    let fail = false;
+    const errors: string[] = [];
+    const { client, sockets, calls } = reconnectingClient({
+      rooms: [200, 200],
+      options: {
+        getToken: async () => {
+          if (fail) {
+            fail = false;
+            throw new Error('token endpoint down');
+          }
+          return 'tok';
+        },
+        onError: (e) => errors.push(e.message),
+      },
+    });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await openAndJoin(sockets[0].controller, 'me-1');
+
+    fail = true;
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(errors).toEqual(['token endpoint down']);
+    expect(sockets).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sockets).toHaveLength(2);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'reconnecting:2']);
   });
 });

@@ -753,6 +753,22 @@ describe('CollabEngine', () => {
       expect(engine.state.error).toContain('owner ended');
       expect(endedReasons).toHaveLength(1);
     });
+
+    /** @flow Relay restarted while the client was away → the reconnect finds no room, and the message says so rather than blaming the owner */
+    it('says the session is gone when a reconnect found no room', () => {
+      const client = makeMockClient();
+      const engine = new CollabEngine({ client, timers });
+      const endedReasons: string[] = [];
+      engine.on('sessionEnded', (r) => endedReasons.push(r));
+
+      engine.connect({ relayUrl: 'ws://test', sessionId: 'sess1', username: 'Follower', metadata: { tool: 'excalidraw' } });
+      client.simulateRoomJoined({ clientId: 'f1', sessionId: 'sess1', ownerClientId: 'o1' });
+      client.simulateSessionEnded('session_gone');
+
+      expect(engine.state.phase).toBe('disconnected');
+      expect(engine.state.error).toBe('The sharing session no longer exists on the relay');
+      expect(endedReasons).toEqual(['session_gone']);
+    });
   });
 
   /**
