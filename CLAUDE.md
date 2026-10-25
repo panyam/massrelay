@@ -14,6 +14,9 @@ make tests
 
 # TS client against the real relay binary (Go + Node 22+)
 make test-interop
+
+# Mission exercise: auth on the relay binary
+make exercise-auth
 ```
 
 ## Local Development
@@ -104,6 +107,8 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 | `RELAY_LOG_PAYLOADS` | Log first N chars of payloads | 0 (off) |
 | `RELAY_AUTH_REQUIRED` | Reject unauthenticated WebSocket connections | false |
 | `RELAY_AUTH_ISSUER` | Expected JWT `iss` claim | (any) |
+| `RELAY_AUTH_KEYS_FILE` | JSON array of `{client_id, alg, key}` signing keys | (none) |
+| `RELAY_AUTH_JWKS_URL` | JWKS endpoint for signing keys (instead of a keys file) | (none) |
 | `RELAY_RESOURCE_URL` | Resource server base URL for RFC 9728 PRM | (disabled) |
 | `RELAY_AUTH_SERVERS` | Comma-separated trusted auth server URLs for PRM | (disabled) |
 | `OTEL_SERVICE_NAME` | OTEL service identifier | massrelay |

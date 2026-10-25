@@ -34,6 +34,7 @@ A stateless WebSocket relay server for real-time collaboration. Massrelay routes
   - [Room Limits](#room-limits)
   - [Payload Logging](#payload-logging)
   - [CORS](#cors)
+  - [Authentication](#authentication)
 - [Embedding in Another Server](#embedding-in-another-server)
 - [TypeScript Client](#typescript-client)
   - [Installation](#installation)
@@ -690,6 +691,30 @@ Supports exact domains (`excaliframe.com`), wildcard subdomains (`*.excaliframe.
 
 Preflight `OPTIONS` requests return `204 No Content` with appropriate headers. Non-preflight requests from disallowed origins still execute (CORS is advisory — the browser enforces).
 
+### Authentication
+
+The relay can require a JWT on the WebSocket upgrade, sent as the `token` query parameter or an `Authorization: Bearer` header. A token's `sub` and `client_id` become the peer's identity, and its `rooms` claim (a session ID, or a prefix ending in `*`) limits which sessions it may join.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RELAY_AUTH_REQUIRED` | false | Reject upgrades without a valid token (401). With `false`, a token is validated when present and anonymous clients still connect |
+| `RELAY_AUTH_ISSUER` | (any) | Expected `iss` claim |
+| `RELAY_AUTH_KEYS_FILE` | | JSON file of signing keys, one per `client_id` |
+| `RELAY_AUTH_JWKS_URL` | | JWKS endpoint to fetch public keys from, matched by the token's `kid` |
+
+Set one of `RELAY_AUTH_KEYS_FILE` and `RELAY_AUTH_JWKS_URL`. With neither, auth is off, and a relay started with `RELAY_AUTH_REQUIRED=true` and no keys exits at startup instead of running open. It also exits on an unreadable or malformed keys file, or a JWKS endpoint it can't fetch at startup.
+
+The keys file is a JSON array. A token is checked against the entry whose `client_id` matches its `client_id` claim. `key` is the shared secret for `HS256`/`HS384`/`HS512` and a PEM public key for the `RS*`, `PS*` and `ES*` algorithms:
+
+```json
+[
+  { "client_id": "my-app", "alg": "HS256", "key": "a-secret-of-at-least-32-bytes" },
+  { "client_id": "other-app", "alg": "RS256", "key": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n" }
+]
+```
+
+In `deploy/production`, put the file in `deploy/production/secrets/` (mounted read-only at `/etc/massrelay`) and set `RELAY_AUTH_KEYS_FILE=/etc/massrelay/keys.json` in `.env`. `make exercise-auth` runs the relay binary this way and checks the three cases (no token, a room outside the claim, an allowed room).
+
 ### Trusted Proxies
 
 When deploying behind a reverse proxy (Caddy, nginx, etc.), configure trusted proxies so the relay uses the real client IP for rate limiting instead of the proxy IP:
@@ -1132,7 +1157,7 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 
 ## Security
 
-- **No authentication**: The relay does not authenticate clients. Anyone with a session ID can join. Applications should implement access control at a higher layer.
+- **Optional JWT auth**: With `RELAY_AUTH_REQUIRED=true` and signing keys configured, upgrades without a valid token get 401 and a token's `rooms` claim limits which sessions it joins (see [Authentication](#authentication)). Without it, anyone with a session ID can join.
 - **No persistence**: No data is written to disk. Room state exists only in memory.
 - **Optional E2EE**: Rooms can be declared encrypted by the owner. The relay enforces protocol version checks but never sees plaintext. Encryption/decryption is entirely client-side (AES-256-GCM with PBKDF2 key derivation is the recommended scheme).
 - **Rate limiting**: Multi-layer rate limiting protects against connection floods and message spam (global + per-IP + per-client).
@@ -1152,7 +1177,7 @@ The inner `data` field is the protobuf JSON representation with **camelCase** fi
 
 - **No persistence** — Rooms exist only in memory. Server restart terminates all sessions.
 - **Single-instance** — No clustering or room distribution. Suitable for single-server deployments.
-- **No authentication** — Session IDs are the only access control. Applications must implement auth separately.
+- **Auth is opt-in** — Without `RELAY_AUTH_REQUIRED` and signing keys, session IDs are the only access control.
 - **No auto-reconnect** — Currently disabled in the client to prevent phantom sessions. Clients must manually re-join.
 - **Ownership model** — Ownership only transfers to same-browser tabs (matching `browserId`). Cross-browser ownership transfer is not supported.
 - **Broadcast ordering** — Broadcasts are async and non-blocking. If a client's channel buffer (64 events) is full, events are dropped silently.

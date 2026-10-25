@@ -49,8 +49,15 @@ services:
       - RELAY_PER_IP_RATE=${RELAY_PER_IP_RATE:-5}
       - RELAY_PER_IP_BURST=${RELAY_PER_IP_BURST:-}
       - RELAY_PER_SUB_RATE=${RELAY_PER_SUB_RATE:-0}
+      - RELAY_AUTH_REQUIRED=${RELAY_AUTH_REQUIRED:-false}
+      - RELAY_AUTH_ISSUER=${RELAY_AUTH_ISSUER:-}
+      - RELAY_AUTH_KEYS_FILE=${RELAY_AUTH_KEYS_FILE:-}
+      - RELAY_AUTH_JWKS_URL=${RELAY_AUTH_JWKS_URL:-}
       - RELAY_RESOURCE_URL=${RELAY_RESOURCE_URL:-}
       - RELAY_AUTH_SERVERS=${RELAY_AUTH_SERVERS:-}
+    volumes:
+      # Signing keys for RELAY_AUTH_KEYS_FILE, e.g. ./secrets/keys.json
+      - ./secrets:/etc/massrelay:ro
     command: ["-port", "8787"]
 
 volumes:

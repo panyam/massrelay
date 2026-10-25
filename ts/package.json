@@ -57,6 +57,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:interop": "vitest run --config vitest.interop.config.ts",
+    "exercise": "vitest run --config vitest.exercise.config.ts",
     "prepublishOnly": "npm run build",
     "check:pack": "node scripts/check-pack.mjs"
   },
@@ -69,7 +70,7 @@
   },
   "devDependencies": {
     "@bufbuild/protobuf": "^2.11.0",
-    "@panyam/servicekit-client": "^0.2.0",
+    "@panyam/servicekit-client": "^0.2.1",
     "@types/node": "^22.20.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"

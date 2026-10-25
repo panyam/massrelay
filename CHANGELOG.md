@@ -6,6 +6,29 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- The relay binary loads its JWT signing keys from config:
+  `RELAY_AUTH_KEYS_FILE` (a JSON array of `{client_id, alg, key}`) or
+  `RELAY_AUTH_JWKS_URL`. Until now `NewRelayApp` never built a key store, so
+  auth was always off in the binary (#56).
+- `make exercise-auth` runs mission #53's exercise against the relay binary
+  (no token, a room outside the `rooms` claim, an allowed room), and CI runs
+  it (#55).
+
+### Changed
+- `RelayApp.Init` returns `ErrAuthRequiredNoKeys` when `RELAY_AUTH_REQUIRED=true`
+  and no keys are configured, and an error for a bad keys file or an
+  unreachable JWKS URL, so the binary exits instead of accepting every
+  connection. An embedder that sets `RELAY_AUTH_REQUIRED=true` and builds its
+  own `Guard` must now also set a key source.
+- servicekit v0.2.1 (was v0.2.0), and `@panyam/servicekit-client` ^0.2.1 in
+  development. massrelay uses none of the APIs that changed.
+
+### Fixed
+- `deploy/production/docker-compose.yml` now passes `RELAY_AUTH_REQUIRED` and
+  `RELAY_AUTH_ISSUER` to the relay container, and mounts `./secrets` at
+  `/etc/massrelay` for the keys file.
+
 ## [0.3.2] - 2026-10-24
 
 Moves to servicekit v0.2.0 and accepts servicekit-client 0.2.x as a peer. No
