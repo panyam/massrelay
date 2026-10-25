@@ -267,8 +267,25 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 	readerId := joinStream(t, reader, "room-slow").GetRoomJoined().GetClientId()
 	recvEvent(t, sender) // PeerJoined reader
 
-	// 150 overflows the reader's two 64-slot queues, while the sender's own
-	// PEER_NOT_FOUND replies after the eviction still fit in its queue.
+	// 150 overflows the reader's two 64-slot queues. How many sends land
+	// after the eviction, and come back to the sender as PEER_NOT_FOUND,
+	// depends on when the reader's bridge got to run; more than 64 would
+	// block Send on the sender's own queue. So drain the sender meanwhile,
+	// the way servicekit would, and look at what it got afterwards.
+	senderEvents := make(chan *pb.CollabEvent, 1024)
+	stopDrain := make(chan struct{})
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for {
+			select {
+			case evt := <-sender.sendCh:
+				senderEvents <- evt
+			case <-stopDrain:
+				return
+			}
+		}
+	}()
 	const sent = 150
 	for i := 0; i < sent; i++ {
 		if err := sender.Send(&pb.CollabAction{Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{
@@ -300,7 +317,12 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 	}
 
 	for {
-		evt := recvEvent(t, sender)
+		var evt *pb.CollabEvent
+		select {
+		case evt = <-senderEvents:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for the sender to see the reader leave")
+		}
 		if evt.GetError().GetCode() == "PEER_NOT_FOUND" {
 			continue // sends that landed after the eviction
 		}
@@ -309,6 +331,8 @@ func TestStreamEvictsSlowConsumer(t *testing.T) {
 		}
 		break
 	}
+	close(stopDrain)
+	<-drained
 	if room := svc.GetRoomByID("room-slow"); room == nil || room.Clients[readerId] != nil || room.Clients[senderId] == nil {
 		t.Fatal("slow reader should be gone from the room and the sender still in it")
 	}
