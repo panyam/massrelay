@@ -6,8 +6,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-11-08
+
+Keycloak user tokens now report their client. Nothing changes on the wire.
+
 ### Changed
-- oneauth v0.3.2. A token without `client_id` reports its `azp` as the
+- oneauth v0.3.2 (PR 77). A token without `client_id` reports its `azp` as the
   client, as Keycloak user tokens do, so `PeerIdentity.client_id` is set for
   them and ReAuth's same-client check compares a real value. Before, it was
   empty for those tokens.
