@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CollabClient } from '../src/CollabClient.js';
 import { testKey, type TestKey } from '../interop/jwt.js';
-import { startRelay, type Relay } from '../interop/relay.js';
+import { relayForExercise, type Relay } from '../interop/relay.js';
 
 // Mission #66: a CollabClient on 3s tokens with getToken refreshes them over
 // the open socket and stays in its room, same clientId, with no peer seeing it
@@ -22,7 +22,7 @@ function until(cond: () => boolean, what: string, ms: number): Promise<void> {
 
 const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
-describe('exercise-token-refresh: relay binary with RELAY_AUTH_REQUIRED=true', () => {
+describe('exercise-token-refresh: relay with RELAY_AUTH_REQUIRED=true', () => {
   let relay: Relay;
   let key: TestKey;
   const room = `room-${crypto.randomUUID()}`;
@@ -42,7 +42,7 @@ describe('exercise-token-refresh: relay binary with RELAY_AUTH_REQUIRED=true', (
 
   beforeAll(async () => {
     key = testKey('exercise-app', 'exercise-issuer');
-    relay = await startRelay(key.env);
+    relay = await relayForExercise(key.env);
   });
 
   afterAll(() => {

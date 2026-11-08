@@ -18,6 +18,11 @@ make test-interop
 # Mission exercises against the relay binary
 make exercise-auth
 make exercise-reconnect
+make exercise-token-refresh
+
+# All three through the prod-up stack (Caddy, TLS, relay container, auth from
+# env). Needs Docker and free ports 80/443; replaces a running prod-up stack.
+make exercise-prod
 ```
 
 ## Local Development
@@ -168,5 +173,6 @@ Active mission: #68 (`mission_prod_stack`): the auth, reconnect and token-refres
 - **`keys.JWKSKeyStore.Stop()` panics if called twice** (it closes a channel). `RelayApp.Close` guards it with a `sync.Once`.
 - **`buf generate` needs `protoc-gen-go-grpc` v1.5.1 and `protoc-gen-es` v2.9.0 on PATH**, the versions the checked-in code was generated with. Without them it fails with `context canceled`. Install them somewhere temporary (`GOBIN=... go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1`, `npm install @bufbuild/protoc-gen-es@2.9.0`) so the diff stays to your proto change.
 - **A Go stream test must drain every stream it writes to.** `CollabBidiStream.reply` blocks on a full 64-slot queue, which servicekit drains in production but a test doesn't. `TestStreamEvictsSlowConsumer` hung CI that way from #44 to #62 (`go test -cpu 1 -count=200` reproduced it).
+- **Exercises take an external relay**: with `MASSRELAY_RELAY_URL` set, `relayForExercise` in `ts/interop/relay.ts` uses that relay instead of building the binary, and `restart()` runs `MASSRELAY_RELAY_RESTART`. It ignores the env an exercise asks for, so `scripts/exercise-prod.sh` starts the stack with the one config all three need (auth required, `exercise-app`/`exercise-issuer`). Unlike `startRelay`, it leaves the rate limits at the stack's values. Node trusts Caddy's local CA through `NODE_EXTRA_CA_CERTS`, and the stall proxy forwards TLS bytes, so `relayCloses` sees nothing on `wss://`.
 - **The keys file is mounted as a directory** (`deploy/production/secrets` → `/etc/massrelay`) because docker turns a missing single-file mount into an empty directory.
 - **oneauth 0.0.x → 0.1.x API migration** (done at massrelay v0.1.0): `apiauth.APIMiddleware.TokenQueryParam` → `LegacyQueryParamBearer`; `apiauth.GetUserIDFromAPIContext` → `GetSubjectFromAPIContext`; `keys.InMemoryKeyStore.RegisterKey(id, key, alg)` → request/response `PutKey(ctx, &keys.PutKeyRequest{Record: &keys.KeyRecord{ClientID, Key, Algorithm}})`. oneauth v0.3.0 requires **Go 1.26.9+** (v0.1.36 needed 1.26.4+).

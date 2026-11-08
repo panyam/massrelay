@@ -23,6 +23,10 @@ exercise-reconnect:
 exercise-token-refresh:
 	cd ts && npm run exercise -- exercise/token-refresh.exercise.ts
 
+# Mission #68's exercise: the three exercises above through the prod-up stack (Caddy, TLS, the relay container, auth from env)
+exercise-prod:
+	./scripts/exercise-prod.sh
+
 ## Dev stack — relay + Grafana LGTM in Docker (for local development only)
 
 dev-up: ## Build and start relay + Grafana LGTM stack
