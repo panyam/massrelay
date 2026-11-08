@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CollabClient } from '../src/CollabClient.js';
-import { startRelay, type Relay } from '../interop/relay.js';
+import { testKey, type TestKey } from '../interop/jwt.js';
+import { relayForExercise, type Relay } from '../interop/relay.js';
 import { stallProxy, type StallProxy } from '../interop/stall-proxy.js';
 
 // Mission #54: a CollabClient keeps its session when the relay drops it. One
 // client is evicted as a slow consumer and should rejoin the same session;
 // then the relay restarts and both should report the session gone rather
-// than recreate it.
+// than recreate it. The relay requires tokens, so this runs unchanged against
+// the production stack (`make exercise-prod`), which does.
 
 interface Peer {
   name: string;
@@ -31,9 +33,10 @@ function until(cond: () => boolean, what: string, ms: number): Promise<void> {
   });
 }
 
-function peer(name: string): Peer {
+function peer(name: string, token: string): Peer {
   const p: Peer = { name, client: undefined as unknown as CollabClient, ids: [], joinedPeers: [], left: [], ended: [], reconnecting: [], disconnects: 0 };
   p.client = new CollabClient({
+    token,
     retryDelayMs: 200,
     onConnect: (id) => p.ids.push(id),
     onPeerJoined: (info) => info.clientId && p.joinedPeers.push(info.clientId),
@@ -56,18 +59,20 @@ function report(p: Peer): string {
 
 const payload = new Uint8Array(256 * 1024);
 
-describe('exercise-reconnect: relay binary drops a client, then restarts', () => {
+describe('exercise-reconnect: relay drops a client, then restarts', () => {
   let relay: Relay;
+  let key: TestKey;
   let proxy: StallProxy;
   let a: Peer;
   let b: Peer;
   const room = `design:${crypto.randomUUID()}`;
 
   beforeAll(async () => {
-    relay = await startRelay();
+    key = testKey('exercise-app', 'exercise-issuer');
+    relay = await relayForExercise(key.env);
     proxy = await stallProxy(relay.url);
-    a = peer('steady');
-    b = peer('stalled');
+    a = peer('steady', key.sign('steady', 3600));
+    b = peer('stalled', key.sign('stalled', 3600));
     b.client.connect(proxy.url, room, 'stalled', {});
     await until(() => b.ids.length === 1, 'stalled to join', 5000);
     a.client.connect(relay.url, room, 'steady', {});
@@ -79,6 +84,7 @@ describe('exercise-reconnect: relay binary drops a client, then restarts', () =>
     b?.client.disconnect();
     proxy?.stop();
     relay?.stop();
+    key?.remove();
   });
 
   it('after a slow_consumer eviction the stalled client rejoins the same session', async () => {
@@ -111,7 +117,7 @@ describe('exercise-reconnect: relay binary drops a client, then restarts', () =>
     try {
       await until(() => a.ended.length > 0 && b.ended.length > 0, 'both clients to give up on the session', 15000);
     } finally {
-      status = (await fetch(`http://127.0.0.1:${relay.port}/api/v1/rooms/${encodeURIComponent(room)}`)).status;
+      status = (await fetch(`${relay.httpUrl}/api/v1/rooms/${encodeURIComponent(room)}`)).status;
       console.log(`restart  → ${report(a)}`);
       console.log(`restart  → ${report(b)}`);
       console.log(`restart  → GET /api/v1/rooms/{session} is ${status}${status === 404 ? ' (no phantom room)' : ''}`);

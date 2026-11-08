@@ -25,9 +25,15 @@ export interface StallProxy {
 }
 
 /** Listens on a free loopback port and forwards each connection to the relay
- * at relayUrl, with the relay → client direction under the returned controls. */
+ * at relayUrl, with the relay → client direction under the returned controls.
+ * It forwards raw bytes, so a wss:// relay works too: the returned url keeps
+ * relayUrl's scheme and host, and TLS runs end to end through the proxy.
+ * relayCloses only sees close frames on a plain ws:// relay. */
 export function stallProxy(relayUrl: string): Promise<StallProxy> {
-  const relayPort = Number(new URL(relayUrl).port);
+  const target = new URL(relayUrl);
+  const tls = target.protocol === 'wss:';
+  const relayPort = Number(target.port) || (tls ? 443 : 80);
+  const relayHost = target.hostname === 'localhost' ? '127.0.0.1' : target.hostname;
   const relayCloses: CloseFrame[] = [];
   const sniff = closeFrameSniffer(relayCloses);
   let upstream: Socket | undefined;
@@ -37,7 +43,7 @@ export function stallProxy(relayUrl: string): Promise<StallProxy> {
   const sockets: Socket[] = [];
 
   const server: Server = createServer((client) => {
-    const relay = connect(relayPort, '127.0.0.1');
+    const relay = connect(relayPort, relayHost);
     upstream = relay;
     sockets.push(client, relay);
     if (paused) relay.pause();
@@ -60,7 +66,7 @@ export function stallProxy(relayUrl: string): Promise<StallProxy> {
       const addr = server.address();
       const port = typeof addr === 'object' && addr ? addr.port : 0;
       ok({
-        url: `ws://127.0.0.1:${port}`,
+        url: `${target.protocol}//${tls ? target.hostname : '127.0.0.1'}:${port}`,
         pause: () => {
           paused = true;
           upstream?.pause();

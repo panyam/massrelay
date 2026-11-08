@@ -958,7 +958,7 @@ When a refresh fails (the relay refuses the token, or `getToken` throws), the cl
 
 Against an older relay, `RoomJoined` has no `tokenExpiresAt`, so the client never sends a `ReAuthAction`. It drops and rejoins at each `exp`, as before.
 
-`make exercise-token-refresh` runs this against the relay binary. A client on 3s tokens refreshes over three lifetimes, then its refresh is refused.
+`make exercise-token-refresh` runs this against the relay binary. A client on 3s tokens refreshes over three lifetimes, then its refresh is refused. `make exercise-prod` runs it, along with the auth and reconnect exercises, through the `make prod-up` stack: Caddy with TLS, the relay container with auth from env, and the stack's own rate limits.
 
 ---
 

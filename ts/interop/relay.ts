@@ -1,12 +1,15 @@
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, execSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 export interface Relay {
+  /** WebSocket base, e.g. ws://127.0.0.1:1234 or wss://localhost. */
   url: string;
-  port: number;
+  /** HTTP base for the same relay (http:// or https://), for /health and the
+   * REST routes. */
+  httpUrl: string;
   /** Kills the relay and starts it again on the same port with the same env,
    * resolving once it is healthy. Every room is gone afterwards. */
   restart(): Promise<void>;
@@ -23,17 +26,17 @@ function freePort(): Promise<number> {
   });
 }
 
-async function waitForHealth(port: number, deadlineMs = 15000): Promise<void> {
+async function waitForHealth(httpUrl: string, deadlineMs = 15000): Promise<void> {
   const until = Date.now() + deadlineMs;
   while (Date.now() < until) {
     try {
-      if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) return;
+      if ((await fetch(`${httpUrl}/health`)).ok) return;
     } catch {
       // not listening yet
     }
     await new Promise((r) => setTimeout(r, 100));
   }
-  throw new Error(`relay did not become healthy on port ${port}`);
+  throw new Error(`relay did not become healthy at ${httpUrl}`);
 }
 
 /** Builds the Go relay from this checkout and starts it on a free port. env
@@ -46,6 +49,7 @@ export async function startRelay(env: Record<string, string> = {}): Promise<Rela
   execFileSync('go', ['build', '-o', bin, '.'], { cwd: repoRoot, stdio: 'inherit' });
 
   const port = await freePort();
+  const httpUrl = `http://127.0.0.1:${port}`;
   const launch = async () => {
     const proc = spawn(bin, ['-port', String(port)], {
       env: { ...process.env, RELAY_PER_IP_RATE: '1000', RELAY_GLOBAL_RATE: '1000', ...env },
@@ -56,7 +60,7 @@ export async function startRelay(env: Record<string, string> = {}): Promise<Rela
     );
     exited.catch(() => {});
     try {
-      await Promise.race([waitForHealth(port), exited]);
+      await Promise.race([waitForHealth(httpUrl), exited]);
     } catch (err) {
       proc.kill();
       throw err;
@@ -79,7 +83,7 @@ export async function startRelay(env: Record<string, string> = {}): Promise<Rela
   }
   return {
     url: `ws://127.0.0.1:${port}`,
-    port,
+    httpUrl,
     restart: async () => {
       await kill(relay);
       relay = await launch();
@@ -88,5 +92,29 @@ export async function startRelay(env: Record<string, string> = {}): Promise<Rela
       relay.kill();
       rmSync(dir, { recursive: true, force: true });
     },
+  };
+}
+
+/** The relay a mission exercise runs against. By default it builds and starts
+ * the binary with env, as startRelay does. With MASSRELAY_RELAY_URL set (e.g.
+ * wss://localhost, the `make prod-up` stack) it uses that relay instead and
+ * ignores env, since the stack was started with its own config; restart()
+ * then runs MASSRELAY_RELAY_RESTART and waits for /health. That relay keeps
+ * its own rate limits, which startRelay raises. */
+export async function relayForExercise(env: Record<string, string> = {}): Promise<Relay> {
+  const url = process.env.MASSRELAY_RELAY_URL;
+  if (!url) return startRelay(env);
+  const restartCmd = process.env.MASSRELAY_RELAY_RESTART;
+  const httpUrl = url.replace(/^ws/i, 'http').replace(/\/+$/, '');
+  await waitForHealth(httpUrl);
+  return {
+    url: url.replace(/\/+$/, ''),
+    httpUrl,
+    restart: async () => {
+      if (!restartCmd) throw new Error('MASSRELAY_RELAY_RESTART is not set, so this relay cannot be restarted');
+      execSync(restartCmd, { stdio: 'inherit' });
+      await waitForHealth(httpUrl, 60000);
+    },
+    stop: () => {},
   };
 }
