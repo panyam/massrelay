@@ -24,11 +24,15 @@
 
 ## Recently Completed
 
+### In-session token refresh and the production-stack exercise (unreleased)
+- [x] In-session token refresh (`ReAuthAction`), so an expiry doesn't cost a drop and a rejoin; a refused refresh falls back to a bounded reconnect (issue #13, PR #67)
+- [x] `make exercise-token-refresh` against the binary, in CI (mission #66)
+- [x] `make exercise-prod`: the three exercises through the `make prod-up` stack, in CI (issue #69, PR #70, mission #68)
+
 ### Auth on the binary, reconnect, token lifetime (v0.3.3)
 - [x] The relay binary loads signing keys from `RELAY_AUTH_KEYS_FILE` or `RELAY_AUTH_JWKS_URL` and refuses to start open (issues #55, #56, PR #58)
 - [x] `CollabClient` reconnects after checking the room still exists; `reconnect`, `retryDelayMs`, `onReconnecting`, `getToken` (issues #38, #57, PR #59)
 - [x] Connections end at the token's `exp`; `JoinRoom.must_exist`; `RelayApp.Close()` (issues #60, #61, PR #62)
-- [x] In-session token refresh (`ReAuthAction`), so an expiry doesn't cost a drop and a rejoin (issue #13)
 - [x] `make exercise-auth` and `make exercise-reconnect` against the binary, in CI
 - [x] Interop tests for peer identity and addressed calls on the binary, the way the mcpkit room bridge uses them (issue #27, PR #65)
 - [x] servicekit v0.2.2, `@panyam/servicekit-client` ^0.2.2

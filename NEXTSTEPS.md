@@ -5,13 +5,11 @@ Maintained by /checkpoint: one thread per branch, pruned when the branch merges.
 
 ## At a glance
 
-- No open branch threads. v0.3.3 released 2026-10-25 (GitHub release, npm `latest`, Go tag), covering #56, #38, #60, #61 and #27's tests.
-- Active mission #68 (`mission_prod_stack`), opened 2026-11-08: the three exercises pass through the `make prod-up` stack. relay01 is gone, so this stack stands in for production. Next ready: #69 (P1), which adds `make exercise-prod`.
-- #66 closed on 2026-11-08 after PR #67 (#13, in-session token refresh) merged. P3 leftovers: #63 (now only DenySub ending open streams), #37 (the oneauth slice; pushdown filed as panyam/oneauth#456), #39, #36.
-- In-session refresh is unreleased (CHANGELOG `[Unreleased]`); the next release carries it, and mcpkit's exact Go pin needs a bump after.
-- #64 (waiting): `slow-consumer.interop.ts` flaked once under concurrent relay builds; pick up if it fails in CI. PR #67 fixed the `identity.interop.ts` ordering flake.
-- This run: dropped nothing (no threads); feat/bridge-interop-27 merged as PR #65 and its worktree is removed.
+- No open branch threads. v0.3.3 is the latest release (2026-10-25). `main` adds in-session token refresh (#13, PR #67) and `make exercise-prod` (#69, PR #70), both under CHANGELOG `[Unreleased]`. A release is next.
+- Active mission #68 (`mission_prod_stack`): 1/1 tickets closed. `make exercise-prod` passed on main at 65c786c (logged on #68), and a required CI job runs it. Closing it is the user's call. No ticket is ready after it, only P3: #63 (DenySub ending open streams), #37 (the oneauth slice; pushdown is panyam/oneauth#456), #39, #36.
+- #64 (waiting): `slow-consumer.interop.ts` flaked once under concurrent relay builds; pick up if it fails in CI.
+- This run: no threads to prune; feat/reauth-13 (PR #67) and feat/exercise-prod-69 (PR #70) merged, worktrees removed. Their remote branches still exist.
 
 ## Across threads
 
-- mcpkit's Go side (`experimental/ext/rooms/massrelay/go.mod`) still pins massrelay v0.3.2; bumping it to v0.3.3 is mcpkit work.
+- mcpkit's Go side (`experimental/ext/rooms/massrelay/go.mod`) pins massrelay exactly (v0.3.2 when last checked). After the next release it needs a bump in mcpkit to pick up ReAuth.
