@@ -7,19 +7,16 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/panyam/oneauth/apiauth"
 	"github.com/panyam/oneauth/keys"
 )
 
-// RelayClaims holds the validated JWT claims relevant to the relay.
-// Parsed from oneauth's custom claims map after token validation.
+// RelayClaims holds the validated JWT claims relevant to the relay, read
+// from the TokenInfo oneauth returns once it has verified the token.
 type RelayClaims struct {
 	Subject   string    // JWT "sub" claim (user ID)
 	ClientID  string    // custom "client_id" claim (host identifier)
@@ -208,10 +205,11 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 	}
 
 	return oaMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := apiauth.GetSubjectFromAPIContext(r.Context())
+		info := apiauth.GetTokenInfoFromAPIContext(r.Context())
 
-		// If we got a userID, build RelayClaims
-		if userID != "" {
+		// A validated token: check the deny list, then build RelayClaims
+		if info != nil && info.Subject != "" {
+			userID := info.Subject
 			// Check deny list
 			if a.isDenied(userID) {
 				if a.config.OnRejected != nil {
@@ -222,7 +220,7 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 				return
 			}
 
-			claims := a.buildRelayClaims(r, userID)
+			claims := relayClaims(info)
 			ctx := context.WithValue(r.Context(), contextKeyRelayClaims, claims)
 			r = r.WithContext(ctx)
 
@@ -241,95 +239,40 @@ var ErrAuthDisabled = errors.New("auth is not configured on this relay")
 
 // ValidateToken checks raw the way Middleware checks a token on the upgrade
 // (signature, issuer, expiry, the deny list) and returns its claims. A token
-// is required even when the authenticator is optional. The error is oneauth's
-// description of why the token was refused, "subject is denied" for a denied
-// subject, or ErrAuthDisabled on a nil authenticator. oneauth validates only
-// requests, so this runs one with raw as its bearer token.
+// is required even when the authenticator is optional, and a DPoP-bound
+// token is refused, since a bare token has no proof to check. The error is
+// oneauth's description of why the token was refused, "subject is denied"
+// for a denied subject, or ErrAuthDisabled on a nil authenticator.
 func (a *RelayAuthenticator) ValidateToken(ctx context.Context, raw string) (*RelayClaims, error) {
 	if a == nil {
 		return nil, ErrAuthDisabled
 	}
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+	resp, err := a.mw.ValidateBearer(ctx, &apiauth.ValidateBearerRequest{Token: raw})
 	if err != nil {
 		return nil, err
 	}
-	r.Header.Set("Authorization", "Bearer "+raw)
-	var claims *RelayClaims
-	var refused error
-	rec := httptest.NewRecorder()
-	a.mw.ValidateToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sub := apiauth.GetSubjectFromAPIContext(r.Context())
-		if a.isDenied(sub) {
-			refused = errDenied
-			return
-		}
-		claims = a.buildRelayClaims(r, sub)
-	})).ServeHTTP(rec, r)
-	if refused != nil {
-		return nil, refused
+	if a.isDenied(resp.Info.Subject) {
+		return nil, errDenied
 	}
-	if claims == nil {
-		var body struct {
-			Description string `json:"error_description"`
-		}
-		json.Unmarshal(rec.Body.Bytes(), &body)
-		if body.Description == "" {
-			body.Description = http.StatusText(rec.Code)
-		}
-		return nil, errors.New(body.Description)
-	}
-	return claims, nil
+	return relayClaims(resp.Info), nil
 }
 
-// buildRelayClaims extracts RelayClaims from oneauth's context values, and
-// exp/iat from the token itself: oneauth's custom claims leave out the
-// standard ones, and it has no accessor for them.
-func (a *RelayAuthenticator) buildRelayClaims(r *http.Request, userID string) *RelayClaims {
-	ctx := r.Context()
+// relayClaims reads RelayClaims from the token oneauth validated. client_id
+// comes from TokenInfo, falling back to the custom claim for a token
+// oneauth didn't fill it from.
+func relayClaims(info *apiauth.TokenInfo) *RelayClaims {
 	claims := &RelayClaims{
-		Subject: userID,
-		Scopes:  apiauth.GetScopesFromAPIContext(ctx),
+		Subject:   info.Subject,
+		ClientID:  info.ClientID,
+		Scopes:    info.Scopes,
+		Rooms:     stringOrStrings(info.CustomClaims["rooms"]),
+		ExpiresAt: info.ExpiresAt,
+		IssuedAt:  info.IssuedAt,
 	}
-
-	custom := apiauth.GetCustomClaimsFromContext(ctx)
-	if custom != nil {
-		if v, ok := custom["client_id"].(string); ok {
-			claims.ClientID = v
-		}
-		claims.Rooms = stringOrStrings(custom["rooms"])
+	if claims.ClientID == "" {
+		claims.ClientID, _ = info.CustomClaims["client_id"].(string)
 	}
-	claims.ExpiresAt, claims.IssuedAt = a.tokenTimes(r)
 	return claims
-}
-
-// tokenTimes reads exp and iat from the request's token. oneauth has already
-// verified it by the time this runs, so it's decoded without checking the
-// signature again. It looks where oneauth does: the Authorization header
-// first, then the query parameter. An API key or an unparseable token gives
-// zero times.
-func (a *RelayAuthenticator) tokenTimes(r *http.Request) (exp, iat time.Time) {
-	raw := ""
-	if h := r.Header.Get("Authorization"); h != "" {
-		if _, tok, ok := strings.Cut(h, " "); ok {
-			raw = strings.TrimSpace(tok)
-		}
-	} else if a.config.TokenQueryParam != "" {
-		raw = r.URL.Query().Get(a.config.TokenQueryParam)
-	}
-	if raw == "" {
-		return
-	}
-	var mc jwt.MapClaims
-	if _, _, err := jwt.NewParser().ParseUnverified(raw, &mc); err != nil {
-		return
-	}
-	if t, err := mc.GetExpirationTime(); err == nil && t != nil {
-		exp = t.Time
-	}
-	if t, err := mc.GetIssuedAt(); err == nil && t != nil {
-		iat = t.Time
-	}
-	return
 }
 
 // stringOrStrings reads a claim that may be a single string or a JSON array of
