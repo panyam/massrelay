@@ -1,6 +1,7 @@
 import { GRPCWSClient } from '@panyam/servicekit-client';
 import { fromJson, type JsonValue } from '@bufbuild/protobuf';
 import { base64Encode } from '@bufbuild/protobuf/wire';
+import { timestampMs, type Timestamp } from '@bufbuild/protobuf/wkt';
 import type { CollabActionJson, PeerInfoJson } from './gen/massrelay/v1/models/collab_pb.js';
 import type { CollabEvent, PeerInfo } from './gen/massrelay/v1/models/collab_pb.js';
 import { CollabEventSchema } from './gen/massrelay/v1/models/collab_pb.js';
@@ -31,10 +32,12 @@ export interface CollabClientOptions {
   /** The session is over for this client. reason is the relay's (e.g.
    * "owner_disconnected"), or one of the client's own: "session_gone" when a
    * reconnect found the room no longer exists (the relay restarted, or
-   * everyone left), and "reconnect_failed" when maxRetries attempts couldn't
-   * reach the relay or rejoin. "token_expired" is the relay ending the
-   * connection at the token's exp; with getToken set the client reconnects
-   * on a fresh token instead of reporting it. */
+   * everyone left), "reconnect_failed" when maxRetries attempts couldn't
+   * reach the relay or rejoin, and "token_refused" when a rejoin's token
+   * doesn't allow the room (ROOM_FORBIDDEN). "token_expired" is the relay
+   * ending the connection at the token's exp. With getToken set the client
+   * reconnects on a fresh token instead of reporting it, unless the refresh
+   * failed in two token lifetimes in a row (see onTokenRefresh). */
   onSessionEnded?: (reason: string) => void;
   /** Ownership moved to newOwnerClientId (another tab of the owner's
    * browser); isOwner reflects it already. */
@@ -55,7 +58,8 @@ export interface CollabClientOptions {
   /** Called when the relay returns an ErrorEvent. One that arrives before the
    * join (ROOM_FULL, ROOM_FORBIDDEN, PROTOCOL_VERSION_TOO_OLD) means the join
    * was refused, and the client closes without calling onDisconnect. On a
-   * rejoin, ROOM_NOT_FOUND is followed by onSessionEnded("session_gone"). One that
+   * rejoin, ROOM_NOT_FOUND is followed by onSessionEnded("session_gone"), and
+   * ROOM_FORBIDDEN by onSessionEnded("token_refused"). One that
    * arrives after it (PEER_NOT_FOUND, ALREADY_JOINED, RATE_LIMITED) refuses
    * that one action, and the connection stays open. */
   onErrorEvent?: (code: string, message: string) => void;
@@ -79,8 +83,20 @@ export interface CollabClientOptions {
   token?: string;
   /** Returns a JWT for each connection, the first and every reconnect, so a
    * rejoin after the original token expired presents a fresh one. Takes
-   * precedence over token. If it throws, that attempt counts as failed. */
+   * precedence over token. If it throws, that attempt counts as failed.
+   * Against a relay that accepts in-session refresh (RoomJoined carries
+   * tokenExpiresAt), the client also calls it ahead of each exp and hands the
+   * relay the new token over the open socket, so it stays in the room with
+   * the same clientId. */
   getToken?: () => string | Promise<string>;
+  /** The result of each in-session token refresh. ok with the new expiresAt
+   * when the relay took the token. Otherwise error is the relay's reason, or
+   * getToken's error. After a failure the client tries again at half the time
+   * left, while 2s or more remain. When none succeeds the relay ends the
+   * connection at the old exp, and the client reconnects through getToken.
+   * If the next lifetime's refresh fails as well, the session ends with
+   * "token_expired" instead of reconnecting again. */
+  onTokenRefresh?: (result: { ok: boolean; expiresAt?: Date; error?: string }) => void;
   /** Factory for creating GRPCWSClient instances. Defaults to `() => new GRPCWSClient()`.
    *  Override in tests with `GRPCWSClient.createMock()`. */
   _grpcFactory?: () => GRPCWSClient;
@@ -120,6 +136,15 @@ export class CollabClient {
   private joinAsOwner: boolean = false;
   private maxRetries: number;
   private boundBeforeUnload: (() => void) | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** exp of this connection's current token, in ms; 0 when the relay didn't
+   * say, so the client never refreshes in-session. */
+  private tokenExpiresAt: number = 0;
+  /** A refresh failed during this connection's current token lifetime. */
+  private refreshFailed: boolean = false;
+  /** Consecutive token lifetimes that ended at exp after a failed refresh.
+   * A successful refresh resets it; a rejoin doesn't. */
+  private refusedLifetimes: number = 0;
 
   constructor(options: CollabClientOptions = {}) {
     this.options = options;
@@ -165,6 +190,7 @@ export class CollabClient {
     this.explicitDisconnect = false;
     this.hasJoined = false;
     this.retryCount = 0;
+    this.refusedLifetimes = 0;
 
     // Ensure cleanup on page unload (refresh, tab close, navigation)
     if (typeof window !== 'undefined') {
@@ -322,6 +348,7 @@ export class CollabClient {
         if (!this._isConnected) {
           this.closeFromRelay();
           if (err.code === 'ROOM_NOT_FOUND' && this.hasJoined) this.options.onSessionEnded?.('session_gone');
+          if (err.code === 'ROOM_FORBIDDEN' && this.hasJoined) this.options.onSessionEnded?.('token_refused');
         }
         break;
       }
@@ -341,6 +368,8 @@ export class CollabClient {
         this._isConnecting = false;
         this.hasJoined = true;
         this.retryCount = 0;
+        this.refreshFailed = false;
+        this.trackTokenExpiry(rj.tokenExpiresAt);
         this.options.onConnect?.(this._clientId);
 
         // Add self as a peer (server doesn't include joining client in peers list).
@@ -383,7 +412,11 @@ export class CollabClient {
         const reason = event.event.value.reason;
         // An expired token only comes back with a fresh one; without
         // getToken the rejoin would be refused until retries ran out.
-        const reconnectable = reason === 'slow_consumer' || (reason === 'token_expired' && !!this.options.getToken);
+        // A refresh that failed in two lifetimes running would fail a third
+        // time, so stop rejoining once per lifetime.
+        if (reason === 'token_expired' && this.refreshFailed) this.refusedLifetimes++;
+        const refreshable = !!this.options.getToken && this.refusedLifetimes < MAX_REFUSED_LIFETIMES;
+        const reconnectable = reason === 'slow_consumer' || (reason === 'token_expired' && refreshable);
         if (reconnectable && this.reconnectEnabled()) {
           this.dropAndReconnect();
           break;
@@ -411,6 +444,19 @@ export class CollabClient {
         this._title = event.event.value.title;
         this.options.onTitleChanged?.(this._title);
         break;
+
+      case 'reAuthResult': {
+        const result = event.event.value;
+        if (result.success) {
+          this.refusedLifetimes = 0;
+          this.refreshFailed = false;
+          this.trackTokenExpiry(result.expiresAt);
+          this.options.onTokenRefresh?.({ ok: true, expiresAt: result.expiresAt ? new Date(timestampMs(result.expiresAt)) : undefined });
+        } else {
+          this.refreshFailedAndRetry(result.error);
+        }
+        break;
+      }
 
       case 'appMessage':
         this.options.onAppMessage?.(event.event.value.kind, event.event.value.payload, event.fromClientId, event.event.value.toClientIds[0] ?? '');
@@ -497,7 +543,58 @@ export class CollabClient {
     if (wasConnected) this.options.onDisconnect?.();
   }
 
+  /** Schedules the next in-session refresh from the relay's word on when the
+   * token expires: when 60s are left, or three quarters of the way to exp,
+   * whichever is later. No exp, or no getToken, means no refresh. */
+  private trackTokenExpiry(expiresAt: Timestamp | undefined): void {
+    this.clearRefreshTimer();
+    this.tokenExpiresAt = expiresAt ? timestampMs(expiresAt) : 0;
+    if (!this.tokenExpiresAt || !this.options.getToken) return;
+    const left = this.tokenExpiresAt - Date.now();
+    if (left <= 0) return;
+    this.refreshTimer = setTimeout(() => this.refreshToken(), Math.max(left - 60000, left * 0.75));
+  }
+
+  private refreshToken(): void {
+    this.refreshTimer = null;
+    const grpc = this.grpc;
+    const getToken = this.options.getToken;
+    if (!getToken || !grpc) return;
+    Promise.resolve().then(getToken).then(
+      (token) => {
+        if (this.grpc === grpc && this._isConnected) this.send({ reAuth: { token } });
+      },
+      (err) => {
+        if (this.grpc !== grpc) return;
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.options.onError?.(error);
+        this.refreshFailedAndRetry(error.message);
+      },
+    );
+  }
+
+  /** Reports a failed refresh, and tries again at half the time left while
+   * 2s or more remain. After that the relay's token_expired takes over. */
+  private refreshFailedAndRetry(error: string): void {
+    this.refreshFailed = true;
+    this.options.onTokenRefresh?.({ ok: false, error });
+    this.clearRefreshTimer();
+    const left = this.tokenExpiresAt - Date.now();
+    if (this.tokenExpiresAt && left >= 2000) {
+      this.refreshTimer = setTimeout(() => this.refreshToken(), left / 2);
+    }
+  }
+
+  private clearRefreshTimer(): void {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
   private resetState(): void {
+    this.clearRefreshTimer();
+    this.tokenExpiresAt = 0;
     this._isConnected = false;
     this._isConnecting = false;
     this._clientId = '';
@@ -511,6 +608,10 @@ export class CollabClient {
     this.options.onPeerJoined?.(peer);
   }
 }
+
+/** Token lifetimes in a row whose refresh failed before the client stops
+ * rejoining on token_expired. */
+const MAX_REFUSED_LIFETIMES = 2;
 
 function peerToJson(peer: PeerInfo): PeerInfoJson {
   const json: PeerInfoJson = {
