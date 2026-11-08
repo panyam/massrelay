@@ -28,6 +28,9 @@ message CollabAction {
     // fanned out to the room unchanged, so any application can use massrelay as a
     // message bus without adopting the editor (Scene/Text) protocol.
     AppMessage app_message = 20;
+    // A fresh token for this connection, so it can stay past the old one's
+    // exp. Send it only to a relay whose RoomJoined set token_expires_at.
+    ReAuthAction re_auth = 21;
   }
 }
 
@@ -138,6 +141,7 @@ message CollabEvent {
     // Generic, app-defined pub-sub message fanned out to the room (see the
     // matching CollabAction.app_message).
     AppMessage app_message = 24;
+    ReAuthResult re_auth_result = 25;
   }
 }
 
@@ -158,6 +162,9 @@ message RoomJoined {
   Room room = 2;
   int32 max_peers = 5;            // relay's max-peers setting (informational for UI)
   int32 protocol_version = 7;     // relay protocol version
+  // exp of the token that opened this connection, when it had one. Set only
+  // by a relay that accepts ReAuthAction, so a client refreshes only then.
+  google.protobuf.Timestamp token_expires_at = 8;
 }
 
 message PeerInfo {
@@ -198,6 +205,22 @@ message ErrorEvent {
 
 message SessionEnded {
   string reason = 1;
+}
+
+// ReAuthAction hands the relay a fresh JWT over the open connection. The relay
+// checks it like the one on the upgrade, and it must have the same sub and
+// client_id and allow the room this connection is in.
+message ReAuthAction {
+  string token = 1;
+}
+
+// ReAuthResult answers a ReAuthAction. On success the connection now ends at
+// expires_at. On failure, error says why, and the connection still ends at the
+// old token's exp.
+message ReAuthResult {
+  bool success = 1;
+  string error = 2;
+  google.protobuf.Timestamp expires_at = 3;
 }
 
 message OwnerChanged {

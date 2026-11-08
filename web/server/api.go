@@ -34,6 +34,7 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 
 	// WebSocket bidi endpoint using servicekit grpcws
 	streamCfg := DefaultStreamConfig()
+	streamCfg.Auth = h.app.Guard.Authenticator()
 	wsHandler := grpcws.NewBidiStreamHandler(
 		func(ctx context.Context) (*CollabBidiStream, error) {
 			return NewCollabBidiStream(ctx, h.app.Service, streamCfg), nil

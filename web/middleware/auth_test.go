@@ -553,3 +553,49 @@ func TestRelayClaimsCarryTokenTimes(t *testing.T) {
 		}
 	}
 }
+
+// ValidateToken is how a ReAuthAction's token gets checked, so it must refuse
+// whatever the upgrade would, even on an authenticator that lets anonymous
+// connections through.
+func TestValidateToken(t *testing.T) {
+	ks := testKeyStore(testClientID, testSecret)
+	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{KeyStore: ks, Issuer: "test-issuer"})
+	auth.DenySub("user-banned")
+	ctx := context.Background()
+
+	exp := time.Now().Add(10 * time.Minute).Truncate(time.Second)
+	good := validClaims(testClientID)
+	good["exp"] = exp.Unix()
+	good["rooms"] = []string{"room-a"}
+	got, err := auth.ValidateToken(ctx, mintToken(t, testSecret, good))
+	if err != nil {
+		t.Fatalf("valid token: %v", err)
+	}
+	if got.Subject != "user-42" || got.ClientID != testClientID || !reflect.DeepEqual(got.Rooms, []string{"room-a"}) || !got.ExpiresAt.Equal(exp) {
+		t.Errorf("valid token: claims %+v", got)
+	}
+
+	expired := validClaims(testClientID)
+	expired["exp"] = time.Now().Add(-time.Minute).Unix()
+	wrongIss := validClaims(testClientID)
+	wrongIss["iss"] = "other-issuer"
+	denied := validClaims(testClientID)
+	denied["sub"] = "user-banned"
+	for name, tok := range map[string]string{
+		"expired":      mintToken(t, testSecret, expired),
+		"wrong key":    mintToken(t, "some-other-secret-entirely", validClaims(testClientID)),
+		"wrong issuer": mintToken(t, testSecret, wrongIss),
+		"denied":       mintToken(t, testSecret, denied),
+		"malformed":    "not.a.jwt",
+		"empty":        "",
+	} {
+		if c, err := auth.ValidateToken(ctx, tok); err == nil || c != nil {
+			t.Errorf("%s: got claims %+v, err %v; want a refusal", name, c, err)
+		}
+	}
+
+	var none *middleware.RelayAuthenticator
+	if _, err := none.ValidateToken(ctx, mintToken(t, testSecret, good)); err != middleware.ErrAuthDisabled {
+		t.Errorf("nil authenticator: err %v, want ErrAuthDisabled", err)
+	}
+}

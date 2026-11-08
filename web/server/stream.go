@@ -15,6 +15,7 @@ import (
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // StreamConfig controls per-client stream limits.
@@ -27,6 +28,10 @@ type StreamConfig struct {
 	// socket, which unblocks an eviction stuck behind that client's queue.
 	// 0 means no deadline, leaving it to the 5 min pong timeout.
 	WriteTimeout time.Duration
+
+	// Auth checks the token in a ReAuthAction. Nil refuses every ReAuthAction,
+	// and RoomJoined then leaves token_expires_at unset, so clients don't try.
+	Auth *middleware.RelayAuthenticator
 }
 
 // DefaultStreamConfig returns sensible defaults.
@@ -47,9 +52,11 @@ type CollabBidiStream struct {
 	sendCh         chan *pb.CollabEvent // events from service → WebSocket client
 	ended          chan struct{}        // closed once the relay ends this stream (eviction, token expiry)
 	endOnce        sync.Once
-	expiry         *time.Timer // ends the stream at the token's exp; nil without one
-	sessionId      string      // set after first JoinRoom action
-	clientId       string      // set after first JoinRoom action
+	auth           *middleware.RelayAuthenticator
+	claims         *middleware.RelayClaims // the current token's; nil for an anonymous connection
+	expiry         *time.Timer             // ends the stream at the token's exp; nil without one
+	sessionId      string                  // set after first JoinRoom action
+	clientId       string                  // set after first JoinRoom action
 	mu             sync.Mutex
 	messageLimiter *rate.Limiter // per-client message rate limiter
 }
@@ -58,7 +65,7 @@ type CollabBidiStream struct {
 // the upgrade request's context; if the auth middleware validated a token on
 // it, the stream's joins carry that identity (see services.Principal), and
 // the stream ends with SessionEnded{token_expired} when the token's exp
-// passes, so a connection never outlives the token that opened it.
+// passes, unless a ReAuthAction has moved it to a fresh token's exp.
 func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg StreamConfig) *CollabBidiStream {
 	claims := middleware.GetRelayClaimsFromContext(ctx)
 	if claims != nil {
@@ -80,12 +87,11 @@ func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg S
 		sendCh:         make(chan *pb.CollabEvent, 64),
 		ended:          make(chan struct{}),
 		messageLimiter: msgLimiter,
+		auth:           cfg.Auth,
+		claims:         claims,
 	}
 	if claims != nil && !claims.ExpiresAt.IsZero() {
-		s.expiry = time.AfterFunc(time.Until(claims.ExpiresAt), func() {
-			slog.Info("Token expired, ending stream", "component", "stream", "sub", claims.Subject)
-			s.endSession("token_expired")
-		})
+		s.expiry = time.AfterFunc(time.Until(claims.ExpiresAt), s.expire)
 	}
 	// Watch for context cancellation (WebSocket close) and clean up the client.
 	// BidiStreamConn.OnClose() cancels the context but does NOT call CloseSend(),
@@ -97,7 +103,15 @@ func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg S
 
 // Send processes a CollabAction from the client (WS → service).
 func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
-	// Rate limit non-control messages (join/leave always allowed)
+	if ra := action.GetReAuth(); ra != nil {
+		return s.reply(&pb.CollabEvent{
+			EventId: uuid.New().String(),
+			Event:   &pb.CollabEvent_ReAuthResult{ReAuthResult: s.reAuth(ra.GetToken())},
+		})
+	}
+
+	// Rate limit non-control messages (join/leave always allowed; ReAuth
+	// returned above, since a dropped refresh would end the stream at exp)
 	if s.messageLimiter != nil {
 		switch action.Action.(type) {
 		case *pb.CollabAction_Join, *pb.CollabAction_Leave:
@@ -150,6 +164,9 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 			s.mu.Lock()
 			s.sessionId = sessionId
 			s.clientId = rj.GetClientId()
+			if s.auth != nil && s.claims != nil && !s.claims.ExpiresAt.IsZero() {
+				rj.TokenExpiresAt = timestamppb.New(s.claims.ExpiresAt)
+			}
 			s.mu.Unlock()
 			slog.Info("Client joined, starting bridge", "component", "stream", "client", rj.GetClientId(), "session", sessionId)
 
@@ -168,6 +185,61 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 		return s.reply(resp)
 	}
 	return nil
+}
+
+// expire ends the stream when its token's exp passes.
+func (s *CollabBidiStream) expire() {
+	s.mu.Lock()
+	sub := s.claims.Subject
+	s.mu.Unlock()
+	slog.Info("Token expired, ending stream", "component", "stream", "sub", sub)
+	s.endSession("token_expired")
+}
+
+// reAuth moves this stream onto the token raw and reports how that went. The
+// token must pass the checks the upgrade's token did, have the same sub and
+// client_id, and allow the room the stream is in. On success the stream ends
+// at the new token's exp instead of the old one's. A refusal changes nothing,
+// so the stream still ends at the old exp.
+func (s *CollabBidiStream) reAuth(raw string) *pb.ReAuthResult {
+	refuse := func(why string) *pb.ReAuthResult {
+		slog.Info("ReAuth refused", "component", "stream", "reason", why)
+		return &pb.ReAuthResult{Error: why}
+	}
+	s.mu.Lock()
+	sessionId, old := s.sessionId, s.claims
+	s.mu.Unlock()
+	if sessionId == "" {
+		return refuse("join a room before re-authenticating")
+	}
+	if s.auth == nil || old == nil {
+		return refuse("this connection has no token to refresh")
+	}
+	claims, err := s.auth.ValidateToken(s.ctx, raw)
+	if err != nil {
+		return refuse(err.Error())
+	}
+	if claims.Subject != old.Subject || claims.ClientID != old.ClientID {
+		return refuse("the token is for a different sub or client_id")
+	}
+	if !(&services.Principal{Rooms: claims.Rooms}).AllowsRoom(sessionId) {
+		return refuse("the token does not allow this room")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.expiry != nil && !s.expiry.Stop() {
+		return refuse("the old token has already expired")
+	}
+	s.claims = claims
+	s.expiry = nil
+	result := &pb.ReAuthResult{Success: true}
+	if !claims.ExpiresAt.IsZero() {
+		s.expiry = time.AfterFunc(time.Until(claims.ExpiresAt), s.expire)
+		result.ExpiresAt = timestamppb.New(claims.ExpiresAt)
+	}
+	slog.Info("ReAuth accepted", "component", "stream", "sub", claims.Subject, "exp", claims.ExpiresAt)
+	return result
 }
 
 // bridge forwards client's room events to this connection in order. When the
@@ -305,9 +377,11 @@ func (s *CollabBidiStream) leaveAndCleanup(reason string) {
 // watchClose waits for context cancellation (WebSocket drop) and cleans up.
 func (s *CollabBidiStream) watchClose() {
 	<-s.ctx.Done()
+	s.mu.Lock()
 	if s.expiry != nil {
 		s.expiry.Stop()
 	}
+	s.mu.Unlock()
 	s.leaveAndCleanup("connection closed")
 }
 

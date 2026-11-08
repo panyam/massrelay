@@ -26,8 +26,16 @@ const (
 
 // streamFromRequest runs a WebSocket upgrade request through the relay auth
 // middleware and opens a CollabBidiStream on the resulting context, which is
-// what the grpcws handler does with r.Context().
+// what the grpcws handler does with r.Context(). The stream checks ReAuth
+// tokens with the same authenticator, as api.go wires it.
 func streamFromRequest(t *testing.T, svc *services.CollabService, token string) *CollabBidiStream {
+	t.Helper()
+	return streamFromRequestCfg(t, svc, token, StreamConfig{}, true)
+}
+
+// streamFromRequestCfg is streamFromRequest with cfg, and with cfg.Auth set
+// only when reAuth is true.
+func streamFromRequestCfg(t *testing.T, svc *services.CollabService, token string, cfg StreamConfig, reAuth bool) *CollabBidiStream {
 	t.Helper()
 	ks := keys.NewInMemoryKeyStore()
 	ks.PutKey(context.Background(), &keys.PutKeyRequest{Record: &keys.KeyRecord{
@@ -35,9 +43,12 @@ func streamFromRequest(t *testing.T, svc *services.CollabService, token string) 
 	}})
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{KeyStore: ks, TokenQueryParam: "token"})
 
+	if reAuth {
+		cfg.Auth = auth
+	}
 	var stream *CollabBidiStream
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		stream = NewCollabBidiStream(r.Context(), svc, StreamConfig{})
+		stream = NewCollabBidiStream(r.Context(), svc, cfg)
 	})
 	target := "/ws/v1/x/sync"
 	if token != "" {
@@ -387,5 +398,128 @@ func TestStreamEndsOnce(t *testing.T) {
 	}
 	if err := recvErr(t, s); err != io.EOF {
 		t.Fatalf("Recv after the end = %v, want io.EOF", err)
+	}
+}
+
+func reAuthStream(t *testing.T, s *CollabBidiStream, token string) *pb.ReAuthResult {
+	t.Helper()
+	if err := s.Send(&pb.CollabAction{Action: &pb.CollabAction_ReAuth{ReAuth: &pb.ReAuthAction{Token: token}}}); err != nil {
+		t.Fatalf("reAuth: %v", err)
+	}
+	evt := recvEvent(t, s)
+	if evt.GetReAuthResult() == nil {
+		t.Fatalf("got %v, want ReAuthResult", evt)
+	}
+	return evt.GetReAuthResult()
+}
+
+func expTime(d time.Duration) time.Time { return time.Now().Add(d).Truncate(time.Second) }
+
+func waitSessionEnded(t *testing.T, s *CollabBidiStream, within time.Duration) string {
+	t.Helper()
+	select {
+	case evt := <-s.sendCh:
+		if evt.GetSessionEnded() == nil {
+			t.Fatalf("got %v, want SessionEnded", evt)
+		}
+		return evt.GetSessionEnded().GetReason()
+	case <-time.After(within):
+		t.Fatalf("stream still open after %v", within)
+		return ""
+	}
+}
+
+// A ReAuth moves the stream's end to the fresh token's exp, in either
+// direction, and RoomJoined tells the client the first exp so it knows when
+// to refresh.
+func TestReAuthMovesExpiry(t *testing.T) {
+	svc := services.NewCollabService()
+	first := expTime(2 * time.Second)
+	s := streamFromRequest(t, svc, mintStreamToken(t, jwt.MapClaims{"exp": first.Unix()}))
+	joined := joinStream(t, s, "room-reauth").GetRoomJoined()
+	if got := joined.GetTokenExpiresAt().AsTime(); !got.Equal(first) {
+		t.Fatalf("RoomJoined.token_expires_at = %v, want %v", got, first)
+	}
+
+	later := expTime(time.Hour)
+	if r := reAuthStream(t, s, mintStreamToken(t, jwt.MapClaims{"exp": later.Unix()})); !r.GetSuccess() || !r.GetExpiresAt().AsTime().Equal(later) {
+		t.Fatalf("got %v, want success with expires_at %v", r, later)
+	}
+	select {
+	case evt := <-s.sendCh:
+		t.Fatalf("stream got %v after the refresh, past the first token's exp", evt)
+	case <-time.After(time.Until(first) + time.Second):
+	}
+
+	soon := expTime(2 * time.Second)
+	if r := reAuthStream(t, s, mintStreamToken(t, jwt.MapClaims{"exp": soon.Unix()})); !r.GetSuccess() {
+		t.Fatalf("second refresh: %v", r)
+	}
+	if reason := waitSessionEnded(t, s, 4*time.Second); reason != "token_expired" {
+		t.Fatalf("reason %q, want token_expired at the second token's exp", reason)
+	}
+	if err := recvErr(t, s); err != io.EOF {
+		t.Fatalf("Recv after token_expired = %v, want io.EOF", err)
+	}
+}
+
+// A refused ReAuth leaves the stream as it was: still open, and still ending
+// at the old token's exp.
+func TestReAuthRefusals(t *testing.T) {
+	svc := services.NewCollabService()
+	old := expTime(2 * time.Second)
+	s := streamFromRequest(t, svc, mintStreamToken(t, jwt.MapClaims{"exp": old.Unix(), "rooms": []string{"room-*"}}))
+	joinStream(t, s, "room-refuse")
+
+	badSig, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": "user-42", "client_id": streamTestClientID, "type": "access", "exp": time.Now().Add(time.Hour).Unix(),
+	}).SignedString([]byte("not-the-stream-secret"))
+	for name, tok := range map[string]string{
+		"other sub":     mintStreamToken(t, jwt.MapClaims{"sub": "user-43"}),
+		"other room":    mintStreamToken(t, jwt.MapClaims{"rooms": []string{"elsewhere"}}),
+		"bad signature": badSig,
+		"expired":       mintStreamToken(t, jwt.MapClaims{"exp": time.Now().Add(-time.Minute).Unix()}),
+		"not a token":   "garbage",
+	} {
+		if r := reAuthStream(t, s, tok); r.GetSuccess() || r.GetError() == "" || r.GetExpiresAt() != nil {
+			t.Errorf("%s: got %v, want a refusal with a reason", name, r)
+		}
+	}
+	if reason := waitSessionEnded(t, s, time.Until(old)+2*time.Second); reason != "token_expired" {
+		t.Fatalf("reason %q, want token_expired at the old exp", reason)
+	}
+}
+
+func TestReAuthBeforeJoinIsRefused(t *testing.T) {
+	s := streamFromRequest(t, services.NewCollabService(), mintStreamToken(t, nil))
+	if r := reAuthStream(t, s, mintStreamToken(t, nil)); r.GetSuccess() {
+		t.Fatalf("got %v, want a refusal before the join", r)
+	}
+}
+
+// A relay without an authenticator for ReAuth doesn't advertise it in
+// RoomJoined, and refuses one sent anyway.
+func TestReAuthWithoutAuthenticator(t *testing.T) {
+	s := streamFromRequestCfg(t, services.NewCollabService(), mintStreamToken(t, nil), StreamConfig{}, false)
+	if joined := joinStream(t, s, "room-noauth").GetRoomJoined(); joined.GetTokenExpiresAt() != nil {
+		t.Fatalf("RoomJoined.token_expires_at = %v, want unset", joined.GetTokenExpiresAt())
+	}
+	if r := reAuthStream(t, s, mintStreamToken(t, nil)); r.GetSuccess() {
+		t.Fatalf("got %v, want a refusal", r)
+	}
+}
+
+// A refresh the rate limiter dropped would end the stream at exp, so ReAuth
+// isn't rate limited.
+func TestReAuthIsNotRateLimited(t *testing.T) {
+	s := streamFromRequestCfg(t, services.NewCollabService(), mintStreamToken(t, nil), StreamConfig{MaxMessageRate: 1}, true)
+	joinStream(t, s, "room-rl-reauth")
+	s.Send(&pb.CollabAction{Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{Kind: "k"}}})
+	s.Send(&pb.CollabAction{Action: &pb.CollabAction_AppMessage{AppMessage: &pb.AppMessage{Kind: "k"}}})
+	if evt := recvEvent(t, s); evt.GetError().GetCode() != "RATE_LIMITED" {
+		t.Fatalf("got %v, want RATE_LIMITED for the second message", evt)
+	}
+	if r := reAuthStream(t, s, mintStreamToken(t, nil)); !r.GetSuccess() {
+		t.Fatalf("got %v, want the refresh accepted over the rate limit", r)
 	}
 }

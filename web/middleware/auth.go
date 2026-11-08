@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"time"
@@ -193,6 +195,52 @@ func (a *RelayAuthenticator) Middleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	}))
+}
+
+// ErrAuthDisabled is ValidateToken's error on a relay without signing keys,
+// which has nothing to check a token against.
+var ErrAuthDisabled = errors.New("auth is not configured on this relay")
+
+// ValidateToken checks raw the way Middleware checks a token on the upgrade
+// (signature, issuer, expiry, the deny list) and returns its claims. A token
+// is required even when the authenticator is optional. The error is oneauth's
+// description of why the token was refused, "subject is denied" for a denied
+// subject, or ErrAuthDisabled on a nil authenticator. oneauth validates only
+// requests, so this runs one with raw as its bearer token.
+func (a *RelayAuthenticator) ValidateToken(ctx context.Context, raw string) (*RelayClaims, error) {
+	if a == nil {
+		return nil, ErrAuthDisabled
+	}
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+	if err != nil {
+		return nil, err
+	}
+	r.Header.Set("Authorization", "Bearer "+raw)
+	var claims *RelayClaims
+	var refused error
+	rec := httptest.NewRecorder()
+	a.mw.ValidateToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sub := apiauth.GetSubjectFromAPIContext(r.Context())
+		if a.isDenied(sub) {
+			refused = errDenied
+			return
+		}
+		claims = a.buildRelayClaims(r, sub)
+	})).ServeHTTP(rec, r)
+	if refused != nil {
+		return nil, refused
+	}
+	if claims == nil {
+		var body struct {
+			Description string `json:"error_description"`
+		}
+		json.Unmarshal(rec.Body.Bytes(), &body)
+		if body.Description == "" {
+			body.Description = http.StatusText(rec.Code)
+		}
+		return nil, errors.New(body.Description)
+	}
+	return claims, nil
 }
 
 // buildRelayClaims extracts RelayClaims from oneauth's context values, and
