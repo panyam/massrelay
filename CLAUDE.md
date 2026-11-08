@@ -130,7 +130,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 
 ## Issues and missions
 
-No active mission. #68 (`make exercise-prod`, the three exercises through the `make prod-up` stack) closed on 2026-11-08, #66 (`make exercise-token-refresh`) the same day, #53 (`make exercise-auth`) on 2026-10-25 and #54 (`make exercise-reconnect`) on 2026-10-24. All four exercises run in CI. `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
+Active mission: #72 (`mission_revoke`): an operator revokes a user, and their open connections end with `SessionEnded{denied}`. Its exercise is `make exercise-revoke`; #73 (admin deny endpoints) makes it runnable, then #63 ends the streams. Earlier: #68 (`make exercise-prod`, the three exercises through the `make prod-up` stack) closed on 2026-11-08, #66 (`make exercise-token-refresh`) the same day, #53 (`make exercise-auth`) on 2026-10-25 and #54 (`make exercise-reconnect`) on 2026-10-24. All four exercises run in CI. `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
 
 ## Code Conventions
 
