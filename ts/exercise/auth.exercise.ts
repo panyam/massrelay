@@ -1,37 +1,11 @@
-import { request as httpRequest } from 'node:http';
-import { request as httpsRequest } from 'node:https';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CollabClient } from '../src/CollabClient.js';
 import { testKey, type TestKey } from '../interop/jwt.js';
-import { relayForExercise, type Relay } from '../interop/relay.js';
+import { relayForExercise, upgradeStatus, type Relay } from '../interop/relay.js';
 
 // Mission #53: a relay binary started with RELAY_AUTH_REQUIRED=true and a
 // signing key lets a CollabClient with a valid JWT into the rooms its claim
 // allows, refuses it others, and refuses an upgrade with no token.
-
-/** The HTTP status of a WebSocket upgrade, which a WebSocket client can't see. */
-function upgradeStatus(httpUrl: string, path: string): Promise<number> {
-  const base = new URL(httpUrl);
-  const request = base.protocol === 'https:' ? httpsRequest : httpRequest;
-  return new Promise((ok, fail) => {
-    const req = request({
-      host: base.hostname,
-      port: base.port || undefined,
-      path,
-      headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': Buffer.from('exercise-key-16b').toString('base64') },
-    });
-    req.on('upgrade', (res, socket) => {
-      socket.destroy();
-      ok(res.statusCode ?? 0);
-    });
-    req.on('response', (res) => {
-      res.resume();
-      ok(res.statusCode ?? 0);
-    });
-    req.on('error', fail);
-    req.end();
-  });
-}
 
 interface Outcome {
   joined: string;

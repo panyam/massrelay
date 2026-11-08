@@ -1,4 +1,6 @@
 import { execFileSync, execSync, spawn, type ChildProcess } from 'node:child_process';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -10,6 +12,8 @@ export interface Relay {
   /** HTTP base for the same relay (http:// or https://), for /health and the
    * REST routes. */
   httpUrl: string;
+  /** Bearer token for /admin/*, when the relay has one. */
+  adminToken?: string;
   /** Kills the relay and starts it again on the same port with the same env,
    * resolving once it is healthy. Every room is gone afterwards. */
   restart(): Promise<void>;
@@ -84,6 +88,7 @@ export async function startRelay(env: Record<string, string> = {}): Promise<Rela
   return {
     url: `ws://127.0.0.1:${port}`,
     httpUrl,
+    adminToken: env.RELAY_ADMIN_TOKEN,
     restart: async () => {
       await kill(relay);
       relay = await launch();
@@ -98,7 +103,8 @@ export async function startRelay(env: Record<string, string> = {}): Promise<Rela
 /** The relay a mission exercise runs against. By default it builds and starts
  * the binary with env, as startRelay does. With MASSRELAY_RELAY_URL set (e.g.
  * wss://localhost, the `make prod-up` stack) it uses that relay instead and
- * ignores env, since the stack was started with its own config; restart()
+ * ignores env, since the stack was started with its own config; adminToken
+ * comes from MASSRELAY_ADMIN_TOKEN, and restart()
  * then runs MASSRELAY_RELAY_RESTART and waits for /health. That relay keeps
  * its own rate limits, which startRelay raises. */
 export async function relayForExercise(env: Record<string, string> = {}): Promise<Relay> {
@@ -110,6 +116,7 @@ export async function relayForExercise(env: Record<string, string> = {}): Promis
   return {
     url: url.replace(/\/+$/, ''),
     httpUrl,
+    adminToken: process.env.MASSRELAY_ADMIN_TOKEN,
     restart: async () => {
       if (!restartCmd) throw new Error('MASSRELAY_RELAY_RESTART is not set, so this relay cannot be restarted');
       execSync(restartCmd, { stdio: 'inherit' });
@@ -117,4 +124,28 @@ export async function relayForExercise(env: Record<string, string> = {}): Promis
     },
     stop: () => {},
   };
+}
+
+/** The HTTP status of a WebSocket upgrade, which a WebSocket client can't see. */
+export function upgradeStatus(httpUrl: string, path: string): Promise<number> {
+  const base = new URL(httpUrl);
+  const request = base.protocol === 'https:' ? httpsRequest : httpRequest;
+  return new Promise((ok, fail) => {
+    const req = request({
+      host: base.hostname,
+      port: base.port || undefined,
+      path,
+      headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': Buffer.from('exercise-key-16b').toString('base64') },
+    });
+    req.on('upgrade', (res, socket) => {
+      socket.destroy();
+      ok(res.statusCode ?? 0);
+    });
+    req.on('response', (res) => {
+      res.resume();
+      ok(res.statusCode ?? 0);
+    });
+    req.on('error', fail);
+    req.end();
+  });
 }
