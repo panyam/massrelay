@@ -32,6 +32,10 @@ type StreamConfig struct {
 	// Auth checks the token in a ReAuthAction. Nil refuses every ReAuthAction,
 	// and RoomJoined then leaves token_expires_at unset, so clients don't try.
 	Auth *middleware.RelayAuthenticator
+
+	// registry lets a deny end this stream. api.go sets it, and registers its
+	// endSubject with Auth.OnDeny.
+	registry *streamRegistry
 }
 
 // DefaultStreamConfig returns sensible defaults.
@@ -53,6 +57,7 @@ type CollabBidiStream struct {
 	ended          chan struct{}        // closed once the relay ends this stream (eviction, token expiry)
 	endOnce        sync.Once
 	auth           *middleware.RelayAuthenticator
+	registry       *streamRegistry
 	claims         *middleware.RelayClaims // the current token's; nil for an anonymous connection
 	expiry         *time.Timer             // ends the stream at the token's exp; nil without one
 	sessionId      string                  // set after first JoinRoom action
@@ -89,6 +94,15 @@ func NewCollabBidiStream(ctx context.Context, svc *services.CollabService, cfg S
 		messageLimiter: msgLimiter,
 		auth:           cfg.Auth,
 		claims:         claims,
+	}
+	// Register before checking the deny list: a deny that lands between the
+	// upgrade's check and here either finds this stream or is seen below.
+	if claims != nil && cfg.registry != nil {
+		s.registry = cfg.registry
+		cfg.registry.add(claims.Subject, s)
+		if cfg.Auth.IsDenied(claims.Subject) {
+			s.endSession("denied")
+		}
 	}
 	if claims != nil && !claims.ExpiresAt.IsZero() {
 		s.expiry = time.AfterFunc(time.Until(claims.ExpiresAt), s.expire)
@@ -383,7 +397,14 @@ func (s *CollabBidiStream) watchClose() {
 	if s.expiry != nil {
 		s.expiry.Stop()
 	}
+	sub := ""
+	if s.claims != nil {
+		sub = s.claims.Subject
+	}
 	s.mu.Unlock()
+	if s.registry != nil {
+		s.registry.remove(sub, s)
+	}
 	s.leaveAndCleanup("connection closed")
 }
 

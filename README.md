@@ -477,7 +477,7 @@ Also sent to a single peer that fell too far behind (its queue of undelivered ev
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `reason` | string | `"owner_disconnected"` (to every peer), `"slow_consumer"` (to the one peer removed), or `"token_expired"` (to a peer whose token's `exp` passed). |
+| `reason` | string | `"owner_disconnected"` (to every peer), `"slow_consumer"` (to the one peer removed), `"token_expired"` (to a peer whose token's `exp` passed), or `"denied"` (to each connection of a subject an operator denied; see [Admin API](#admin-api)). |
 
 #### ReAuthResult
 
@@ -775,6 +775,23 @@ Besides `sub`, the relay reads these from a validated JWT:
 `sub` and `client_id` become the joining peer's `PeerInfo.identity`. An app can mint a token with `"rooms": "design:abc"` so a page can only join the room for the resource it shows.
 
 A connection lasts as long as its token. When `exp` passes, the relay takes the peer out of its room, sends it `SessionEnded{reason: "token_expired"}`, and closes the socket. A client can avoid that by sending a fresh token over the open socket first (`ReAuthAction`). The connection then ends at the new token's `exp`, and the peer keeps its `clientId`. A `CollabClient` with `getToken` set does this on its own (see [Token refresh](#token-refresh)). If the refresh fails it reconnects on a fresh token. One with only `token` reports `onSessionEnded('token_expired')`.
+
+### Admin API
+
+Set `RELAY_ADMIN_TOKEN` to enable these, and call them with `Authorization: Bearer <token>`. Without a token the routes aren't registered.
+
+| Route | What it does |
+|-------|--------------|
+| `GET /admin/status` | Uptime, room and peer counts, and per-room details. |
+| `GET /admin/rooms` | Every active room. |
+| `GET /admin/rooms/{sessionId}` | One room, with its peers. |
+| `POST /admin/subjects/{sub}/deny` | Revokes a token subject. Every connection it has open ends at once: it leaves its rooms (peers see `PeerLeft` with reason `denied`) and gets `SessionEnded{reason: "denied"}`. A new upgrade gets 403 and a `ReAuthAction` is refused. `CollabClient` reports `onSessionEnded('denied')` and doesn't reconnect. Answers 204. |
+| `DELETE /admin/subjects/{sub}/deny` | Takes the subject off the deny list. Answers 204. |
+| `GET /admin/subjects/denied` | The deny list, as `{"denied": [...]}`. |
+
+The deny routes answer 409 when the relay runs without auth, since it has no deny list. The list is in memory, so a restarted relay forgets it. Pair revocation with short-lived tokens, so a subject that comes back after a restart is out again at its token's `exp`. An embedder can call `RelayAuthenticator.DenySub` directly, which ends the subject's connections the same way.
+
+`make exercise-revoke` runs this against the relay binary: a subject with two connections is denied, then allowed again.
 
 ---
 

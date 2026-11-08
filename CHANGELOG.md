@@ -6,6 +6,16 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Admin deny endpoints (issues 73 and 63). `POST /admin/subjects/{sub}/deny`
+  revokes a token subject: every connection it has open leaves its rooms and
+  gets `SessionEnded{denied}`, and a new upgrade gets 403.
+  `DELETE /admin/subjects/{sub}/deny` allows it again, and
+  `GET /admin/subjects/denied` lists the deny list. They answer 409 without
+  auth. `RelayAuthenticator.OnDeny` and `DeniedSubs` back them, so an
+  embedder calling `DenySub` directly gets the same effect.
+- `make exercise-revoke` (mission 72), which `make exercise-prod` runs too.
+
 ## [0.3.4] - 2026-11-08
 
 Full write-up in [docs/releases/v0.3.4.md](docs/releases/v0.3.4.md).

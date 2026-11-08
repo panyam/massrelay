@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func newTestApp(t *testing.T) *RelayApp {
@@ -291,5 +294,84 @@ func TestPerIPBurstOverride(t *testing.T) {
 	t.Setenv("RELAY_PER_IP_BURST", "2")
 	if got := count429(t, newTestApp(t), 3); got != 1 {
 		t.Fatalf("RELAY_PER_IP_BURST=2: %d of 3 rejected, want 1", got)
+	}
+}
+
+func adminDo(t *testing.T, app *RelayApp, method, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	req.Header.Set("Authorization", "Bearer secret-token-123")
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+	return w
+}
+
+func deniedList(t *testing.T, app *RelayApp) []string {
+	t.Helper()
+	w := adminDo(t, app, "GET", "/admin/subjects/denied")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /admin/subjects/denied: %d %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Denied []string `json:"denied"`
+	}
+	json.NewDecoder(w.Body).Decode(&body)
+	return body.Denied
+}
+
+// An operator denies a subject, the relay refuses that subject's upgrade
+// with 403, and allowing it lets the subject back in.
+func TestAdminDenyAndAllowSubject(t *testing.T) {
+	const secret = "test-secret-at-least-32-bytes-long!!"
+	t.Setenv("RELAY_AUTH_REQUIRED", "true")
+	t.Setenv("RELAY_AUTH_KEYS_FILE", writeKeysFile(t, []AuthKey{{ClientID: "app", Algorithm: "HS256", Key: secret}}))
+	app := newTestAppWithAdmin(t, "secret-token-123")
+	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims("app")).SignedString([]byte(secret))
+
+	for i := 0; i < 2; i++ {
+		if w := adminDo(t, app, "POST", "/admin/subjects/user-1/deny"); w.Code != http.StatusNoContent {
+			t.Fatalf("deny #%d: %d %s, want 204", i+1, w.Code, w.Body.String())
+		}
+	}
+	if got := deniedList(t, app); !reflect.DeepEqual(got, []string{"user-1"}) {
+		t.Fatalf("denied list %v, want [user-1]", got)
+	}
+	if got := dialStatus(t, app, tok); got != http.StatusForbidden {
+		t.Fatalf("denied subject's upgrade: %d, want 403", got)
+	}
+
+	if w := adminDo(t, app, "DELETE", "/admin/subjects/user-1/deny"); w.Code != http.StatusNoContent {
+		t.Fatalf("allow: %d %s, want 204", w.Code, w.Body.String())
+	}
+	if got := deniedList(t, app); len(got) != 0 {
+		t.Fatalf("denied list %v after allow, want empty", got)
+	}
+	if got := dialStatus(t, app, tok); got != http.StatusSwitchingProtocols {
+		t.Fatalf("allowed subject's upgrade: %d, want 101", got)
+	}
+}
+
+func TestAdminDenyNeedsAdminToken(t *testing.T) {
+	app := newTestAppWithAdmin(t, "secret-token-123")
+	req := httptest.NewRequest("POST", "/admin/subjects/user-1/deny", nil)
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("no bearer: %d, want 401", w.Code)
+	}
+}
+
+// Without auth there's no deny list, and saying so beats a 204 that did
+// nothing.
+func TestAdminDenyWithoutAuthIsAConflict(t *testing.T) {
+	app := newTestAppWithAdmin(t, "secret-token-123")
+	for _, c := range []struct{ method, path string }{
+		{"POST", "/admin/subjects/user-1/deny"},
+		{"DELETE", "/admin/subjects/user-1/deny"},
+		{"GET", "/admin/subjects/denied"},
+	} {
+		if w := adminDo(t, app, c.method, c.path); w.Code != http.StatusConflict {
+			t.Errorf("%s %s without auth: %d, want 409", c.method, c.path, w.Code)
+		}
 	}
 }

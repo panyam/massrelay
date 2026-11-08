@@ -13,7 +13,7 @@
 - jwt-auth: signing keys from a keys file or a JWKS URL, fail-closed startup when auth is required, connections ended at the token's exp (`SessionEnded{token_expired}`), or moved to a fresh token's exp by `ReAuthAction`
 - client-reconnect: CollabClient rejoins the same session after a drop, eviction or expiry, only if the relay still has the room (`must_exist`), with `getToken` for fresh JWTs
 - token-refresh: CollabClient hands the relay a fresh token over the open socket before `exp` (`ReAuthAction`), keeping its `clientId`; a failed refresh falls back to a bounded reconnect
-- admin-api: Token-gated admin endpoints (/admin/status, /admin/rooms)
+- admin-api: Token-gated admin endpoints (/admin/status, /admin/rooms, /admin/subjects/{sub}/deny); a deny ends the subject's open connections with `SessionEnded{denied}`
 - security-middleware: Origin allowlist, connection limiting, rate limiting, CSRF, trusted proxy
 - observability: OpenTelemetry metrics (Prometheus, OTLP), structured JSON logging (slog)
 - e2ee-support: End-to-end encryption support (relay-agnostic)

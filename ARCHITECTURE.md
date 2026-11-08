@@ -65,6 +65,7 @@ Token-gated endpoints behind `RELAY_ADMIN_TOKEN`:
 - `GET /admin/status` — full relay overview (uptime, rooms, peers, goroutines + per-room details)
 - `GET /admin/rooms` — list all active rooms
 - `GET /admin/rooms/{sessionId}` — full room detail with peer info
+- `POST`/`DELETE /admin/subjects/{sub}/deny`, `GET /admin/subjects/denied` — the deny list. `DenySub` calls its `OnDeny` listeners, and `api.go` registers one from a stream registry (`web/server/registry.go`, subject → open streams), so a deny ends each of the subject's connections with `SessionEnded{denied}`. A stream adds itself to the registry and then checks the deny list, so one that passed the upgrade check just before a deny still ends.
 
 Disabled entirely when no token is set (routes not registered).
 

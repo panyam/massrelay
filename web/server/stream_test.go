@@ -37,17 +37,31 @@ func streamFromRequest(t *testing.T, svc *services.CollabService, token string) 
 // only when reAuth is true.
 func streamFromRequestCfg(t *testing.T, svc *services.CollabService, token string, cfg StreamConfig, reAuth bool) *CollabBidiStream {
 	t.Helper()
+	auth := newStreamAuth()
+	if reAuth {
+		cfg.Auth = auth
+	}
+	return streamThrough(t, svc, auth, cfg, token, nil)
+}
+
+func newStreamAuth() *middleware.RelayAuthenticator {
 	ks := keys.NewInMemoryKeyStore()
 	ks.PutKey(context.Background(), &keys.PutKeyRequest{Record: &keys.KeyRecord{
 		ClientID: streamTestClientID, Key: []byte(streamTestSecret), Algorithm: "HS256",
 	}})
-	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{KeyStore: ks, TokenQueryParam: "token"})
+	return middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{KeyStore: ks, TokenQueryParam: "token"})
+}
 
-	if reAuth {
-		cfg.Auth = auth
-	}
+// streamThrough opens a stream for token through auth, with cfg as given.
+// beforeOpen, if set, runs after auth accepted the token and before the
+// stream opens.
+func streamThrough(t *testing.T, svc *services.CollabService, auth *middleware.RelayAuthenticator, cfg StreamConfig, token string, beforeOpen func()) *CollabBidiStream {
+	t.Helper()
 	var stream *CollabBidiStream
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if beforeOpen != nil {
+			beforeOpen()
+		}
 		stream = NewCollabBidiStream(r.Context(), svc, cfg)
 	})
 	target := "/ws/v1/x/sync"
@@ -541,5 +555,69 @@ func TestTokenExpiresAtOnlyForProtocol3(t *testing.T) {
 	cur := streamFromRequest(t, svc, mintStreamToken(t, nil))
 	if rj := joinStreamAt(t, cur, "room-v3", 3).GetRoomJoined(); rj.GetTokenExpiresAt() == nil {
 		t.Fatalf("protocol 3 join got %v, want token_expires_at", rj)
+	}
+}
+
+// revokeConfig wires a registry to auth the way api.go does.
+func revokeConfig() (*middleware.RelayAuthenticator, StreamConfig) {
+	auth := newStreamAuth()
+	reg := newStreamRegistry()
+	auth.OnDeny(reg.endSubject)
+	return auth, StreamConfig{Auth: auth, registry: reg}
+}
+
+// Denying a subject ends every stream it has open, joined or not, and takes
+// it out of its rooms, while other subjects' streams carry on.
+func TestDenyEndsTheSubjectsOpenStreams(t *testing.T) {
+	svc := services.NewCollabService()
+	auth, cfg := revokeConfig()
+	bob := streamThrough(t, svc, auth, cfg, mintStreamToken(t, jwt.MapClaims{"sub": "user-bob"}), nil)
+	joinStream(t, bob, "room-d")
+	inD := streamThrough(t, svc, auth, cfg, mintStreamToken(t, nil), nil)
+	inDId := joinStream(t, inD, "room-d").GetRoomJoined().GetClientId()
+	recvEvent(t, bob) // PeerJoined inD
+	inE := streamThrough(t, svc, auth, cfg, mintStreamToken(t, nil), nil)
+	joinStream(t, inE, "room-e")
+	unjoined := streamThrough(t, svc, auth, cfg, mintStreamToken(t, nil), nil)
+
+	auth.DenySub("user-42")
+
+	for name, s := range map[string]*CollabBidiStream{"in room-d": inD, "in room-e": inE, "not joined": unjoined} {
+		if end := recvEvent(t, s).GetSessionEnded(); end.GetReason() != "denied" {
+			t.Fatalf("%s: got %v, want SessionEnded{denied}", name, end)
+		}
+		if err := recvErr(t, s); err != io.EOF {
+			t.Fatalf("%s: Recv after denied = %v, want io.EOF", name, err)
+		}
+	}
+	if left := recvEvent(t, bob).GetPeerLeft(); left.GetClientId() != inDId || left.GetReason() != "denied" {
+		t.Fatalf("bob saw %v, want PeerLeft{%s, denied}", left, inDId)
+	}
+	expectNoEvent(t, bob)
+	if room := svc.GetRoomByID("room-e"); room != nil && len(room.Clients) != 0 {
+		t.Fatal("the denied subject is still in room-e")
+	}
+}
+
+// A connection whose token passed the check just before the deny landed
+// still ends: the stream registers, then checks the deny list.
+func TestDenyBetweenUpgradeAndStreamStillEnds(t *testing.T) {
+	auth, cfg := revokeConfig()
+	s := streamThrough(t, services.NewCollabService(), auth, cfg, mintStreamToken(t, nil), func() { auth.DenySub("user-42") })
+	if end := recvEvent(t, s).GetSessionEnded(); end.GetReason() != "denied" {
+		t.Fatalf("got %v, want SessionEnded{denied}", end)
+	}
+}
+
+func TestStreamLeavesRegistryWhenItCloses(t *testing.T) {
+	auth, cfg := revokeConfig()
+	s := streamThrough(t, services.NewCollabService(), auth, cfg, mintStreamToken(t, nil), nil)
+	s.cancel()
+	deadline := time.Now().Add(time.Second)
+	for cfg.registry.count("user-42") != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("a closed stream is still in the registry")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }

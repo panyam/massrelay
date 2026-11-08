@@ -80,6 +80,7 @@
 - [x] Multi-tenant JWT validation via `KeyStore` interface (per-client signing keys)
 - [x] Token extraction from `Authorization: Bearer` header and `?token=` query param (configurable)
 - [x] Deny list (`DenySub`/`AllowSub`) for immediate subject blocking
+- [x] Admin deny/allow endpoints, and a deny ends the subject's open connections (`SessionEnded{denied}`) (issues #73, #63, mission #72)
 - [x] `OnAuthenticated`/`OnRejected` callbacks for metrics/logging
 - [x] Nil-safe: no KeyStore configured = auth disabled (feature flag via presence)
 - [x] Guard order updated: origin → rate limit → auth → conn limit → handler
@@ -148,7 +149,6 @@
 
 ## Future
 
-- `DenySub` ending a subject's open streams (issue #63)
 - `ListRooms` REST endpoint (exists in code, intentionally not registered to prevent session enumeration)
 - Binary protobuf transport (instead of JSON over WebSocket)
 - Python/Node client libraries
