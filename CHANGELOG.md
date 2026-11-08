@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-08
+
+Full write-up in [docs/releases/v0.3.5.md](docs/releases/v0.3.5.md).
+
+An operator can revoke a user with one admin call, and every connection the
+user has open ends at once. Nothing changes on the wire.
+
 ### Added
 - Admin deny endpoints (issues 73 and 63). `POST /admin/subjects/{sub}/deny`
   revokes a token subject: every connection it has open leaves its rooms and
