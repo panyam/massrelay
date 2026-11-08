@@ -19,7 +19,7 @@ import (
 // from the TokenInfo oneauth returns once it has verified the token.
 type RelayClaims struct {
 	Subject   string    // JWT "sub" claim (user ID)
-	ClientID  string    // custom "client_id" claim (host identifier)
+	ClientID  string    // "client_id" claim (host identifier), or "azp" when absent
 	Scopes    []string  // JWT "scopes" claim
 	Rooms     []string  // custom "rooms" claim: sessions this token may join (exact, or prefix ending in "*"); empty = any
 	ExpiresAt time.Time // JWT "exp" claim
@@ -257,11 +257,11 @@ func (a *RelayAuthenticator) ValidateToken(ctx context.Context, raw string) (*Re
 	return relayClaims(resp.Info), nil
 }
 
-// relayClaims reads RelayClaims from the token oneauth validated. client_id
-// comes from TokenInfo, falling back to the custom claim for a token
-// oneauth didn't fill it from.
+// relayClaims reads RelayClaims from the token oneauth validated. ClientID
+// is the token's client_id, or its azp when it has none, as Keycloak user
+// tokens do.
 func relayClaims(info *apiauth.TokenInfo) *RelayClaims {
-	claims := &RelayClaims{
+	return &RelayClaims{
 		Subject:   info.Subject,
 		ClientID:  info.ClientID,
 		Scopes:    info.Scopes,
@@ -269,10 +269,6 @@ func relayClaims(info *apiauth.TokenInfo) *RelayClaims {
 		ExpiresAt: info.ExpiresAt,
 		IssuedAt:  info.IssuedAt,
 	}
-	if claims.ClientID == "" {
-		claims.ClientID, _ = info.CustomClaims["client_id"].(string)
-	}
-	return claims
 }
 
 // stringOrStrings reads a claim that may be a single string or a JSON array of

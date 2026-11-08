@@ -105,7 +105,11 @@ func TestKeysFileEnablesRequiredAuth(t *testing.T) {
 	}
 }
 
-func TestJWKSURLEnablesRequiredAuth(t *testing.T) {
+// jwksApp starts a JWKS endpoint serving one RS256 key and a relay that
+// requires auth and loads its keys from it. sign mints a token with claims,
+// signed by that key and naming it by kid, the way Keycloak tokens arrive.
+func jwksApp(t *testing.T) (app *RelayApp, sign func(jwt.MapClaims) string) {
+	t.Helper()
 	privPEM, pubPEM, err := utils.GenerateRSAKeyPair(2048)
 	if err != nil {
 		t.Fatal(err)
@@ -117,14 +121,15 @@ func TestJWKSURLEnablesRequiredAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 	jwks := httptest.NewServer(&keys.JWKSHandler{KeyStore: issuerKeys})
-	defer jwks.Close()
+	t.Cleanup(jwks.Close)
 
 	t.Setenv("RELAY_AUTH_REQUIRED", "true")
 	t.Setenv("RELAY_AUTH_JWKS_URL", jwks.URL+"/.well-known/jwks.json")
-	app := NewRelayApp()
+	app = NewRelayApp()
 	if err := app.Init(); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(app.Close)
 
 	priv, err := utils.ParsePrivateKeyPEM(privPEM)
 	if err != nil {
@@ -134,18 +139,41 @@ func TestJWKSURLEnablesRequiredAuth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, accessClaims("app"))
-	tok.Header["kid"] = kid
-	signed, err := tok.SignedString(priv)
-	if err != nil {
-		t.Fatal(err)
+	return app, func(claims jwt.MapClaims) string {
+		tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tok.Header["kid"] = kid
+		signed, err := tok.SignedString(priv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signed
 	}
+}
 
+func TestJWKSURLEnablesRequiredAuth(t *testing.T) {
+	app, sign := jwksApp(t)
 	if got := dialStatus(t, app, ""); got != http.StatusUnauthorized {
 		t.Errorf("no token: status %d, want 401", got)
 	}
-	if got := dialStatus(t, app, signed); got != http.StatusSwitchingProtocols {
+	if got := dialStatus(t, app, sign(accessClaims("app"))); got != http.StatusSwitchingProtocols {
 		t.Errorf("valid RS256 token: status %d, want 101", got)
+	}
+}
+
+// Keycloak names a user token's client only in azp. The relay reports it as
+// the client_id, so PeerIdentity.client_id is set and ReAuth's same-client
+// check compares something.
+func TestKeycloakTokenClientIDComesFromAzp(t *testing.T) {
+	app, sign := jwksApp(t)
+	claims := accessClaims("app")
+	delete(claims, "client_id")
+	claims["azp"] = "app"
+	got, err := app.Guard.Authenticator().ValidateToken(context.Background(), sign(claims))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ClientID != "app" {
+		t.Fatalf("ClientID = %q, want the azp claim, \"app\"", got.ClientID)
 	}
 }
 

@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- oneauth v0.3.2. A token without `client_id` reports its `azp` as the
+  client, as Keycloak user tokens do, so `PeerIdentity.client_id` is set for
+  them and ReAuth's same-client check compares a real value. Before, it was
+  empty for those tokens.
+
 ## [0.3.5] - 2026-11-08
 
 Full write-up in [docs/releases/v0.3.5.md](docs/releases/v0.3.5.md).
