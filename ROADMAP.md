@@ -28,6 +28,7 @@
 - [x] The relay binary loads signing keys from `RELAY_AUTH_KEYS_FILE` or `RELAY_AUTH_JWKS_URL` and refuses to start open (issues #55, #56, PR #58)
 - [x] `CollabClient` reconnects after checking the room still exists; `reconnect`, `retryDelayMs`, `onReconnecting`, `getToken` (issues #38, #57, PR #59)
 - [x] Connections end at the token's `exp`; `JoinRoom.must_exist`; `RelayApp.Close()` (issues #60, #61, PR #62)
+- [x] In-session token refresh (`ReAuthAction`), so an expiry doesn't cost a drop and a rejoin (issue #13)
 - [x] `make exercise-auth` and `make exercise-reconnect` against the binary, in CI
 - [x] Interop tests for peer identity and addressed calls on the binary, the way the mcpkit room bridge uses them (issue #27, PR #65)
 - [x] servicekit v0.2.2, `@panyam/servicekit-client` ^0.2.2
@@ -143,7 +144,6 @@
 
 ## Future
 
-- In-session re-auth, so an expiry doesn't cost a drop and a rejoin (issue #13)
 - `DenySub` ending a subject's open streams (issue #63)
 - `ListRooms` REST endpoint (exists in code, intentionally not registered to prevent session enumeration)
 - Binary protobuf transport (instead of JSON over WebSocket)

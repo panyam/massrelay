@@ -74,18 +74,16 @@ User connects to Relay with JWT
 
 ## Token Refresh Strategy
 
-### Now: Connection-Time Only
+### Connection-time token
 - JWT presented at WebSocket connect (`Authorization: Bearer` header or `?token=` query param)
-- If token expires mid-session, client disconnects and reconnects with fresh token
-- Host refreshes the token via oneauth's `refresh_token` grant
-- Works with existing auto-reconnect plans
+- The relay ends the connection at the token's `exp` (`SessionEnded{token_expired}`)
+- Host refreshes the token via oneauth's `refresh_token` grant, behind `CollabClient`'s `getToken`
 
-### Future: In-Session Re-Auth (Backwards-Compatible)
-- Add `ReAuthAction` to `CollabAction` oneof in proto
-- Client sends new JWT over existing WebSocket before expiry
-- Server validates and updates connection claims
-- Old servers ignore unknown oneof — old clients just reconnect
-- See panyam/massrelay#13
+### In-session re-auth (done, panyam/massrelay#13)
+- `ReAuthAction` hands the relay a new JWT over the open WebSocket before `exp`
+- The relay checks it like the upgrade's token, requires the same `sub`/`client_id` and the current room, and moves the connection's end to the new `exp`
+- `RoomJoined.token_expires_at` gates it. Old relays reject unknown actions, so a client sends ReAuth only to a relay that sets it
+- A failed refresh falls back to reconnecting, bounded to two lifetimes in a row
 
 ## Implementation — Relay Side (panyam/massrelay#12)
 

@@ -378,6 +378,16 @@ Addressing 40 peers takes one message, and it counts once against the sender's r
 
 **Ordering.** Messages from one sender reach each receiver in the order they were sent. There is no ordering across senders: two peers sending at once may be seen in different orders by different receivers. The relay never delivers past a gap. A receiver whose 64-event queue fills is removed from the room and gets `SessionEnded{reason: "slow_consumer"}` after what it had already been sent, so it reconnects and resyncs rather than miss a message silently. The relay then closes the socket (code 1000) within a couple of seconds, and drops a client whose writes stall for 10s, so a client that stopped reading doesn't hold a connection slot until the pong timeout.
 
+#### ReAuthAction
+
+A fresh JWT for this connection, sent before the current token's `exp` so the connection doesn't end there. Send it only when `RoomJoined.tokenExpiresAt` is set. An older relay doesn't set that field, and it refuses unknown actions.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token` | string | The new JWT. The relay checks it like the one on the upgrade (signature, issuer, `exp`, deny list). Its `sub` and `client_id` must match the connection's token, and its `rooms` claim must allow the room the connection is in. |
+
+The relay answers with `ReAuthResult`. ReAuth isn't rate limited.
+
 ---
 
 ### Server → Client (CollabEvent)
@@ -402,6 +412,7 @@ Sent to the joining client as confirmation of a successful join.
 | `room` | Room | Nested room state (see Room below). |
 | `maxPeers` | int32 | Relay's participant limit (informational). |
 | `protocolVersion` | int32 | Relay protocol version (currently `2`). |
+| `tokenExpiresAt` | Timestamp | `exp` of the token that opened this connection. Set only when the connection has a token and the relay accepts `ReAuthAction`. |
 
 #### Room
 
@@ -467,6 +478,16 @@ Also sent to a single peer that fell too far behind (its queue of undelivered ev
 | Field | Type | Description |
 |-------|------|-------------|
 | `reason` | string | `"owner_disconnected"` (to every peer), `"slow_consumer"` (to the one peer removed), or `"token_expired"` (to a peer whose token's `exp` passed). |
+
+#### ReAuthResult
+
+The answer to a `ReAuthAction`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | bool | The relay took the token. The connection now ends at `expiresAt`. |
+| `error` | string | Why the token was refused, when `success` is false. The connection still ends at the old token's `exp`. |
+| `expiresAt` | Timestamp | The new token's `exp`, on success. |
 
 #### OwnerChanged
 
@@ -753,7 +774,7 @@ Besides `sub`, the relay reads these from a validated JWT:
 
 `sub` and `client_id` become the joining peer's `PeerInfo.identity`. An app can mint a token with `"rooms": "design:abc"` so a page can only join the room for the resource it shows.
 
-A connection lasts as long as its token. When `exp` passes, the relay takes the peer out of its room, sends it `SessionEnded{reason: "token_expired"}`, and closes the socket. A `CollabClient` with `getToken` set reconnects on a fresh token; one with only `token` reports `onSessionEnded('token_expired')`.
+A connection lasts as long as its token. When `exp` passes, the relay takes the peer out of its room, sends it `SessionEnded{reason: "token_expired"}`, and closes the socket. A client can avoid that by sending a fresh token over the open socket first (`ReAuthAction`). The connection then ends at the new token's `exp`, and the peer keeps its `clientId`. A `CollabClient` with `getToken` set does this on its own (see [Token refresh](#token-refresh)). If the refresh fails it reconnects on a fresh token. One with only `token` reports `onSessionEnded('token_expired')`.
 
 ---
 
@@ -825,7 +846,7 @@ const client = new CollabClient(options?: CollabClientOptions);
 | `onPeerLeft` | `(clientId: string) => void` | Peer left the room. |
 | `onError` | `(error: Error) => void` | WebSocket-level error. |
 | `onErrorEvent` | `(code: string, message: string) => void` | Relay-sent graceful error (`ROOM_FULL`, `PROTOCOL_VERSION_TOO_OLD`). |
-| `onSessionEnded` | `(reason: string) => void` | The session is over for this client. The relay's reason (e.g. `owner_disconnected`), or the client's own after a reconnect: `session_gone` (the room no longer exists) or `reconnect_failed` (`maxRetries` attempts failed). |
+| `onSessionEnded` | `(reason: string) => void` | The session is over for this client. The relay's reason (e.g. `owner_disconnected`), or the client's own after a reconnect: `session_gone` (the room no longer exists), `reconnect_failed` (`maxRetries` attempts failed) or `token_refused` (the rejoin's token doesn't allow the room). `token_expired` arrives here without `getToken`, or after the in-session refresh failed in two token lifetimes in a row. |
 | `onOwnerChanged` | `(newOwnerClientId: string) => void` | Ownership transferred. |
 | `onCredentialsChanged` | `(reason: string) => void` | Session password changed. |
 | `onTitleChanged` | `(title: string) => void` | Drawing title changed. |
@@ -835,7 +856,8 @@ const client = new CollabClient(options?: CollabClientOptions);
 | `retryDelayMs` | number | Delay before the first attempt, doubling per attempt up to 30s (default `1000`). |
 | `onReconnecting` | `(attempt: number) => void` | Fires before each reconnect attempt waits, with the 1-based attempt number. |
 | `token` | string | JWT for a relay running with auth, sent as the `token` query parameter. |
-| `getToken` | `() => string \| Promise<string>` | Called for every connection, the first and each reconnect, so a rejoin presents a fresh JWT. Takes precedence over `token`. A throw counts as a failed attempt. |
+| `getToken` | `() => string \| Promise<string>` | Called for every connection, the first and each reconnect, so a rejoin presents a fresh JWT. Takes precedence over `token`. A throw counts as a failed attempt. Also called ahead of each `exp` to refresh the token in-session (see [Token refresh](#token-refresh)). |
+| `onTokenRefresh` | `(result: { ok: boolean; expiresAt?: Date; error?: string }) => void` | The result of each in-session refresh: the new `expiresAt`, or why it failed. |
 | `_grpcFactory` | `() => GRPCWSClient` | Override WebSocket client for testing. |
 
 #### Properties (read-only)
@@ -927,6 +949,16 @@ A client that has joined once reconnects when its socket closes without `disconn
 It doesn't reconnect after `disconnect()`, after the owner ends the session, or when a join is refused. An owner that's evicted ends the room for everyone unless another tab of the same browser takes over, so its reconnect usually finds a 404. With `reconnect: false` a drop just fires `onDisconnect` (and `onSessionEnded('slow_consumer')` for an eviction), as in 0.3.x.
 
 `make exercise-reconnect` runs this against the relay binary: one client stalled until it's evicted, then a relay restart.
+
+#### Token refresh
+
+A client on a short-lived token runs with `getToken`. When `RoomJoined` carries `tokenExpiresAt`, the client calls `getToken` again before that time and sends the result as a `ReAuthAction`. It does this when 60s are left, or three quarters of the way to `exp`, whichever is later. On success it keeps its `clientId`, and the other peers see nothing. It schedules the next refresh from `ReAuthResult.expiresAt`. Each result goes to `onTokenRefresh`.
+
+When a refresh fails (the relay refuses the token, or `getToken` throws), the client tries again at half the time left, as long as 2s or more remain. When none succeeds, the relay ends the connection at the old `exp` with `token_expired`, and the client reconnects as above. Suppose the refresh fails again in the next lifetime. The client then stops and reports `onSessionEnded('token_expired')`. Without that limit it would drop and rejoin once per lifetime indefinitely. A rejoin the relay refuses with `ROOM_FORBIDDEN` ends with `onSessionEnded('token_refused')`.
+
+Against an older relay, `RoomJoined` has no `tokenExpiresAt`, so the client never sends a `ReAuthAction`. It drops and rejoins at each `exp`, as before.
+
+`make exercise-token-refresh` runs this against the relay binary. A client on 3s tokens refreshes over three lifetimes, then its refresh is refused.
 
 ---
 
