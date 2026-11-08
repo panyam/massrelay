@@ -16,6 +16,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   embedder calling `DenySub` directly gets the same effect.
 - `make exercise-revoke` (mission 72), which `make exercise-prod` runs too.
 
+### Changed
+- oneauth v0.3.1. `RelayAuthenticator.ValidateToken` uses its
+  `ValidateBearer`, and `RelayClaims` comes from its `TokenInfo`, `exp` and
+  `iat` included. That replaces a synthetic request and a second parse of
+  the token. A DPoP-bound token in a `ReAuthAction` is now refused, since a
+  bare token has no proof to check (issue 37).
+
 ## [0.3.4] - 2026-11-08
 
 Full write-up in [docs/releases/v0.3.4.md](docs/releases/v0.3.4.md).
