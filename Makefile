@@ -19,6 +19,10 @@ exercise-auth:
 exercise-reconnect:
 	cd ts && npm run exercise -- exercise/reconnect.exercise.ts
 
+# Mission #66's exercise: a client on 3s tokens refreshes them over the open socket and stays in its room; a refused refresh ends it
+exercise-token-refresh:
+	cd ts && npm run exercise -- exercise/token-refresh.exercise.ts
+
 ## Dev stack — relay + Grafana LGTM in Docker (for local development only)
 
 dev-up: ## Build and start relay + Grafana LGTM stack
