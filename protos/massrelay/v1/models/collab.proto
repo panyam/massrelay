@@ -43,7 +43,7 @@ message JoinRoom {
   bool is_owner = 6;
   string browser_id = 7;      // localStorage UUID for ownership transfer
   string client_hint = 8;     // opaque hint for session reuse (e.g. "userId:documentId")
-  int32 protocol_version = 9; // client protocol version (current = 2, legacy implicit = 1)
+  int32 protocol_version = 9; // client protocol version (current = 3, legacy implicit = 1); 2 = E2EE, 3 = gets RoomJoined.token_expires_at
   bool encrypted = 10;        // owner declares room as encrypted (password-based E2EE)
   string title = 11;          // document/session title (owner sends, relay echoes to joiners)
   bool must_exist = 12;       // join only a room that already exists; ErrorEvent ROOM_NOT_FOUND otherwise (a reconnect sets it)
@@ -163,7 +163,9 @@ message RoomJoined {
   int32 max_peers = 5;            // relay's max-peers setting (informational for UI)
   int32 protocol_version = 7;     // relay protocol version
   // exp of the token that opened this connection, when it had one. Set only
-  // by a relay that accepts ReAuthAction, so a client refreshes only then.
+  // by a relay that accepts ReAuthAction, so a client refreshes only then,
+  // and only for a join with protocol_version >= 3, since older clients
+  // reject unknown JSON fields.
   google.protobuf.Timestamp token_expires_at = 8;
 }
 

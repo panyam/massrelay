@@ -292,7 +292,9 @@ export class CollabClient {
     // servicekit envelope ({type:"data", data:...} → just the data).
     // Convert raw JSON to canonical protobuf-es Message type at the boundary.
     this.grpc.onMessage = (data: unknown) => {
-      const event = fromJson(CollabEventSchema, data as JsonValue);
+      // A newer relay may add fields this client doesn't know; skip them
+      // rather than drop the whole event.
+      const event = fromJson(CollabEventSchema, data as JsonValue, { ignoreUnknownFields: true });
       this.handleEvent(event);
     };
 
@@ -320,7 +322,7 @@ export class CollabClient {
           isOwner: this.joinAsOwner,
           browserId: this._browserId,
           clientHint: this._clientHint,
-          protocolVersion: 2,
+          protocolVersion: 3,
           encrypted: this._encrypted,
           title: this._title,
           // A rejoin must not recreate a room the relay lost between the

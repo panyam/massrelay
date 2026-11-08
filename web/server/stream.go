@@ -164,7 +164,9 @@ func (s *CollabBidiStream) Send(action *pb.CollabAction) error {
 			s.mu.Lock()
 			s.sessionId = sessionId
 			s.clientId = rj.GetClientId()
-			if s.auth != nil && s.claims != nil && !s.claims.ExpiresAt.IsZero() {
+			// Only a protocol 3 client knows the field. Older ones reject
+			// unknown JSON keys, so they would never see their join.
+			if s.auth != nil && s.claims != nil && !s.claims.ExpiresAt.IsZero() && action.GetJoin().GetProtocolVersion() >= 3 {
 				rj.TokenExpiresAt = timestamppb.New(s.claims.ExpiresAt)
 			}
 			s.mu.Unlock()

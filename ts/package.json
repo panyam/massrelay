@@ -72,6 +72,7 @@
     "@bufbuild/protobuf": "^2.11.0",
     "@panyam/servicekit-client": "^0.2.2",
     "@types/node": "^22.20.5",
+    "massrelay-v033": "npm:@panyam/massrelay@0.3.3",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
   }

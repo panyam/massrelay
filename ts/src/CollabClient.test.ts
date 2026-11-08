@@ -680,3 +680,27 @@ describe('CollabClient token refresh', () => {
     expect(asked).toBe(1);
   });
 });
+
+describe('CollabClient wire compatibility', () => {
+  it('joins with protocol version 3, which asks the relay for tokenExpiresAt', async () => {
+    const { client: grpc, controller } = GRPCWSClient.createMock();
+    const client = new CollabClient({ _grpcFactory: () => grpc });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    controller.simulateOpen();
+    await Promise.resolve();
+    const join = (controller.sentMessages.find((m) => (m as { join?: unknown }).join) as { join: { protocolVersion: number } }).join;
+    expect(join.protocolVersion).toBe(3);
+  });
+
+  /** @flow A newer relay adds a field to an event → an older client still handles the event */
+  it('handles an event carrying a field it does not know', async () => {
+    const ids: string[] = [];
+    const { client: grpc, controller } = GRPCWSClient.createMock();
+    const client = new CollabClient({ _grpcFactory: () => grpc, onConnect: (id) => ids.push(id) });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    controller.simulateOpen();
+    await Promise.resolve();
+    controller.simulateMessage({ roomJoined: { clientId: 'me', room: { sessionId: 'design:abc' }, someFutureField: 7 } });
+    expect(ids).toEqual(['me']);
+  });
+});
