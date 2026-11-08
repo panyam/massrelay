@@ -125,7 +125,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 
 ## Issues and missions
 
-Active mission: #66 (`mission_token_refresh`, a client stays in its room past its token's expiry), exercise `make exercise-token-refresh`. Its next ready ticket is #13 (in-session re-auth). Earlier missions #53 (`make exercise-auth`) and #54 (`make exercise-reconnect`) closed on 2026-10-25 and 2026-10-24; both exercises still run in CI. `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
+No active mission. #66 (`make exercise-token-refresh`) closed on 2026-11-08, #53 (`make exercise-auth`) on 2026-10-25 and #54 (`make exercise-reconnect`) on 2026-10-24. All three exercises still run in CI. `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
 
 ## Code Conventions
 
