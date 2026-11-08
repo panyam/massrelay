@@ -7,7 +7,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/panyam/oneauth v0.3.1
+	github.com/panyam/oneauth v0.3.2
 	github.com/panyam/servicekit v0.2.2
 	github.com/prometheus/client_golang v1.24.1
 	go.opentelemetry.io/otel v1.47.0
