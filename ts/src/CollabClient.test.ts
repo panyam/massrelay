@@ -510,3 +510,173 @@ describe('CollabClient reconnect', () => {
     expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'reconnecting:2']);
   });
 });
+
+function joinWithExp(c: Controller, clientId: string, expInMs?: number) {
+  c.simulateOpen();
+  return vi.advanceTimersByTimeAsync(0).then(() =>
+    c.simulateMessage({
+      roomJoined: {
+        clientId,
+        room: { sessionId: 'design:abc' },
+        ...(expInMs === undefined ? {} : { tokenExpiresAt: new Date(Date.now() + expInMs).toISOString() }),
+      },
+    }),
+  );
+}
+
+function reAuthsOf(c: Controller): string[] {
+  return c.sentMessages.flatMap((m) => {
+    const ra = (m as { reAuth?: { token: string } }).reAuth;
+    return ra ? [ra.token] : [];
+  });
+}
+
+const at = (ms: number) => new Date(Date.now() + ms).toISOString();
+
+describe('CollabClient token refresh', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function refreshingClient(rooms: number[] = []) {
+    let n = 0;
+    const refreshes: string[] = [];
+    const made = reconnectingClient({
+      rooms,
+      options: {
+        getToken: () => `tok-${++n}`,
+        onTokenRefresh: (r) => refreshes.push(r.ok ? `ok:${r.expiresAt?.toISOString()}` : `refused:${r.error}`),
+      },
+    });
+    return { ...made, refreshes };
+  }
+
+  /** @flow A page on a 1h token → it hands the relay a fresh one a minute before exp and stays in the room */
+  it('refreshes over the open socket a minute before exp, and again after the next one', async () => {
+    const { client, sockets, calls, refreshes } = refreshingClient();
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await joinWithExp(sockets[0].controller, 'me-1', 3600_000);
+
+    await vi.advanceTimersByTimeAsync(3540_000 - 1);
+    expect(reAuthsOf(sockets[0].controller)).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(reAuthsOf(sockets[0].controller)).toEqual(['tok-2']);
+
+    const next = at(3600_000);
+    sockets[0].controller.simulateMessage({ reAuthResult: { success: true, expiresAt: next } });
+    expect(refreshes).toEqual([`ok:${next}`]);
+    await vi.advanceTimersByTimeAsync(3540_000);
+    expect(reAuthsOf(sockets[0].controller)).toEqual(['tok-2', 'tok-3']);
+    expect(sockets).toHaveLength(1);
+    expect(calls).toEqual(['connect:me-1']);
+  });
+
+  it('refreshes a short token three quarters of the way to exp', async () => {
+    const { client, sockets } = refreshingClient();
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await joinWithExp(sockets[0].controller, 'me-1', 4000);
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(reAuthsOf(sockets[0].controller)).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(reAuthsOf(sockets[0].controller)).toEqual(['tok-2']);
+  });
+
+  it('retries a refused refresh at half the time left, while 2s remain', async () => {
+    const { client, sockets, refreshes } = refreshingClient();
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await joinWithExp(sockets[0].controller, 'me-1', 16_000);
+
+    await vi.advanceTimersByTimeAsync(12_000); // 4s left
+    sockets[0].controller.simulateMessage({ reAuthResult: { success: false, error: 'the token does not allow this room' } });
+    await vi.advanceTimersByTimeAsync(2000); // 2s left
+    expect(reAuthsOf(sockets[0].controller)).toEqual(['tok-2', 'tok-3']);
+    sockets[0].controller.simulateMessage({ reAuthResult: { success: false, error: 'again' } });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(reAuthsOf(sockets[0].controller)).toEqual(['tok-2', 'tok-3', 'tok-4']);
+    sockets[0].controller.simulateMessage({ reAuthResult: { success: false, error: 'third' } });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(reAuthsOf(sockets[0].controller)).toHaveLength(3);
+    expect(refreshes).toEqual(['refused:the token does not allow this room', 'refused:again', 'refused:third']);
+  });
+
+  /** @flow The app's token service keeps minting tokens the relay won't refresh → the client rejoins once, then gives up instead of dropping every lifetime */
+  it('ends with token_expired after the refresh fails in two lifetimes in a row', async () => {
+    const { client, sockets, calls } = refreshingClient([200, 200]);
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    for (const [i, id] of ['me-1', 'me-2'].entries()) {
+      await joinWithExp(sockets[i].controller, id, 4000);
+      await vi.advanceTimersByTimeAsync(3000);
+      sockets[i].controller.simulateMessage({ reAuthResult: { success: false, error: 'no' } });
+      await vi.advanceTimersByTimeAsync(1000);
+      sockets[i].controller.simulateMessage({ sessionEnded: { reason: 'token_expired' } });
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(sockets).toHaveLength(2);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'connect:me-2', 'disconnect', 'ended:token_expired']);
+  });
+
+  it('keeps rejoining when a successful refresh comes between failed ones', async () => {
+    const { client, sockets, calls } = refreshingClient([200, 200]);
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    const failLifetime = async (i: number) => {
+      await vi.advanceTimersByTimeAsync(3000);
+      sockets[i].controller.simulateMessage({ reAuthResult: { success: false, error: 'no' } });
+      await vi.advanceTimersByTimeAsync(1000);
+      sockets[i].controller.simulateMessage({ sessionEnded: { reason: 'token_expired' } });
+      await vi.advanceTimersByTimeAsync(100);
+    };
+    await joinWithExp(sockets[0].controller, 'me-1', 4000);
+    await failLifetime(0);
+    await joinWithExp(sockets[1].controller, 'me-2', 4000);
+    await vi.advanceTimersByTimeAsync(3000);
+    sockets[1].controller.simulateMessage({ reAuthResult: { success: true, expiresAt: at(4000) } });
+    await failLifetime(1);
+
+    expect(sockets).toHaveLength(3);
+    expect(calls.at(-1)).toBe('reconnecting:1');
+  });
+
+  /** @flow A rejoin's token leaves out the room → the app hears the session ended rather than the client going quiet */
+  it('ends with token_refused when a rejoin is refused ROOM_FORBIDDEN', async () => {
+    const { client, sockets, calls } = refreshingClient([200]);
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await joinWithExp(sockets[0].controller, 'me-1', 3600_000);
+    sockets[0].controller.simulateClose(1006);
+    await vi.advanceTimersByTimeAsync(100);
+    sockets[1].controller.simulateOpen();
+    await vi.advanceTimersByTimeAsync(0);
+    sockets[1].controller.simulateMessage({ error: { code: 'ROOM_FORBIDDEN', message: 'This token may not join this room' } });
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(sockets).toHaveLength(2);
+    expect(calls).toEqual(['connect:me-1', 'disconnect', 'reconnecting:1', 'error:ROOM_FORBIDDEN', 'ended:token_refused']);
+  });
+
+  it('never sends a refresh to a relay that did not report the exp', async () => {
+    const { client, sockets } = refreshingClient();
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await joinWithExp(sockets[0].controller, 'me-1');
+    await vi.advanceTimersByTimeAsync(7200_000);
+    expect(reAuthsOf(sockets[0].controller)).toEqual([]);
+  });
+
+  it('stops refreshing after disconnect()', async () => {
+    let asked = 0;
+    const { client, sockets } = reconnectingClient({ options: { getToken: () => `tok-${++asked}` } });
+    client.connect('ws://relay.test', 'design:abc', 'page', {});
+    await vi.advanceTimersByTimeAsync(0);
+    await joinWithExp(sockets[0].controller, 'me-1', 4000);
+    client.disconnect();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(asked).toBe(1);
+  });
+});

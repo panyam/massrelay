@@ -6,6 +6,24 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- In-session token refresh (issue 13). `ReAuthAction` hands the relay a fresh
+  JWT over the open connection, and the stream then ends at the new token's
+  `exp`. The relay checks it like the upgrade's token. It must have the same
+  `sub` and `client_id`, and allow the connection's room. `ReAuthResult`
+  answers it, and `RoomJoined.token_expires_at` gives the first `exp`.
+  `RelayAuthenticator.ValidateToken`, `Guard.Authenticator` and
+  `StreamConfig.Auth` wire it.
+- `CollabClient` with `getToken` refreshes ahead of each `exp` and keeps its
+  `clientId`. `onTokenRefresh` reports each result. A failed refresh is
+  retried at half the time left. If none succeeds the client reconnects, and
+  if the refresh fails in two lifetimes running it ends with
+  `onSessionEnded("token_expired")`.
+
+### Fixed
+- A rejoin refused with `ROOM_FORBIDDEN` stopped without calling
+  `onSessionEnded`. It now ends with `onSessionEnded("token_refused")`.
+
 ## [0.3.3] - 2026-10-25
 
 Full write-up in [docs/releases/v0.3.3.md](docs/releases/v0.3.3.md).

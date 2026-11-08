@@ -154,7 +154,10 @@ describe('peer identity through the relay binary, auth optional', () => {
     expect(page.client.getPeer(anon.clientId)?.identity).toBeUndefined();
     expect(page.client.getPeer(agent.clientId)?.identity?.subject).toBe('alice');
 
+    // The relay orders messages per sender only, so wait for anon's call to
+    // land before agent sends, or the page may see them the other way round.
     anon.client.sendAppMessage('call', text('select_part'), { to: page.clientId });
+    await until(() => page.received.length === 1, "anon's call to reach the page");
     agent.client.sendAppMessage('call', text('select_part'), { to: page.clientId });
     await until(() => agent.received.length === 1, 'the reply to the authed agent');
     await settle();

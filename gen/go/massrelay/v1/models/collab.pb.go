@@ -40,6 +40,7 @@ type CollabAction struct {
 	//	*CollabAction_CredentialsChanged
 	//	*CollabAction_TitleChanged
 	//	*CollabAction_AppMessage
+	//	*CollabAction_ReAuth
 	Action        isCollabAction_Action `protobuf_oneof:"action"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -202,6 +203,15 @@ func (x *CollabAction) GetAppMessage() *AppMessage {
 	return nil
 }
 
+func (x *CollabAction) GetReAuth() *ReAuthAction {
+	if x != nil {
+		if x, ok := x.Action.(*CollabAction_ReAuth); ok {
+			return x.ReAuth
+		}
+	}
+	return nil
+}
+
 type isCollabAction_Action interface {
 	isCollabAction_Action()
 }
@@ -254,6 +264,12 @@ type CollabAction_AppMessage struct {
 	AppMessage *AppMessage `protobuf:"bytes,20,opt,name=app_message,json=appMessage,proto3,oneof"`
 }
 
+type CollabAction_ReAuth struct {
+	// A fresh token for this connection, so it can stay past the old one's
+	// exp. Send it only to a relay whose RoomJoined set token_expires_at.
+	ReAuth *ReAuthAction `protobuf:"bytes,21,opt,name=re_auth,json=reAuth,proto3,oneof"`
+}
+
 func (*CollabAction_Join) isCollabAction_Action() {}
 
 func (*CollabAction_Leave) isCollabAction_Action() {}
@@ -275,6 +291,8 @@ func (*CollabAction_CredentialsChanged) isCollabAction_Action() {}
 func (*CollabAction_TitleChanged) isCollabAction_Action() {}
 
 func (*CollabAction_AppMessage) isCollabAction_Action() {}
+
+func (*CollabAction_ReAuth) isCollabAction_Action() {}
 
 type JoinRoom struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -941,6 +959,7 @@ type CollabEvent struct {
 	//	*CollabEvent_CredentialsChanged
 	//	*CollabEvent_TitleChanged
 	//	*CollabEvent_AppMessage
+	//	*CollabEvent_ReAuthResult
 	Event         isCollabEvent_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1139,6 +1158,15 @@ func (x *CollabEvent) GetAppMessage() *AppMessage {
 	return nil
 }
 
+func (x *CollabEvent) GetReAuthResult() *ReAuthResult {
+	if x != nil {
+		if x, ok := x.Event.(*CollabEvent_ReAuthResult); ok {
+			return x.ReAuthResult
+		}
+	}
+	return nil
+}
+
 type isCollabEvent_Event interface {
 	isCollabEvent_Event()
 }
@@ -1206,6 +1234,10 @@ type CollabEvent_AppMessage struct {
 	AppMessage *AppMessage `protobuf:"bytes,24,opt,name=app_message,json=appMessage,proto3,oneof"`
 }
 
+type CollabEvent_ReAuthResult struct {
+	ReAuthResult *ReAuthResult `protobuf:"bytes,25,opt,name=re_auth_result,json=reAuthResult,proto3,oneof"`
+}
+
 func (*CollabEvent_RoomJoined) isCollabEvent_Event() {}
 
 func (*CollabEvent_PeerJoined) isCollabEvent_Event() {}
@@ -1235,6 +1267,8 @@ func (*CollabEvent_CredentialsChanged) isCollabEvent_Event() {}
 func (*CollabEvent_TitleChanged) isCollabEvent_Event() {}
 
 func (*CollabEvent_AppMessage) isCollabEvent_Event() {}
+
+func (*CollabEvent_ReAuthResult) isCollabEvent_Event() {}
 
 // Room captures the canonical state of a collaboration session.
 // Composed into RoomJoined and GetRoomResponse to avoid field duplication.
@@ -1336,8 +1370,11 @@ type RoomJoined struct {
 	Room            *Room                  `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
 	MaxPeers        int32                  `protobuf:"varint,5,opt,name=max_peers,json=maxPeers,proto3" json:"max_peers,omitempty"`                      // relay's max-peers setting (informational for UI)
 	ProtocolVersion int32                  `protobuf:"varint,7,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"` // relay protocol version
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// exp of the token that opened this connection, when it had one. Set only
+	// by a relay that accepts ReAuthAction, so a client refreshes only then.
+	TokenExpiresAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=token_expires_at,json=tokenExpiresAt,proto3" json:"token_expires_at,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RoomJoined) Reset() {
@@ -1396,6 +1433,13 @@ func (x *RoomJoined) GetProtocolVersion() int32 {
 		return x.ProtocolVersion
 	}
 	return 0
+}
+
+func (x *RoomJoined) GetTokenExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.TokenExpiresAt
+	}
+	return nil
 }
 
 type PeerInfo struct {
@@ -1755,6 +1799,116 @@ func (x *SessionEnded) GetReason() string {
 	return ""
 }
 
+// ReAuthAction hands the relay a fresh JWT over the open connection. The relay
+// checks it like the one on the upgrade, and it must have the same sub and
+// client_id and allow the room this connection is in.
+type ReAuthAction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReAuthAction) Reset() {
+	*x = ReAuthAction{}
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReAuthAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReAuthAction) ProtoMessage() {}
+
+func (x *ReAuthAction) ProtoReflect() protoreflect.Message {
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReAuthAction.ProtoReflect.Descriptor instead.
+func (*ReAuthAction) Descriptor() ([]byte, []int) {
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ReAuthAction) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+// ReAuthResult answers a ReAuthAction. On success the connection now ends at
+// expires_at. On failure, error says why, and the connection still ends at the
+// old token's exp.
+type ReAuthResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReAuthResult) Reset() {
+	*x = ReAuthResult{}
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReAuthResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReAuthResult) ProtoMessage() {}
+
+func (x *ReAuthResult) ProtoReflect() protoreflect.Message {
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReAuthResult.ProtoReflect.Descriptor instead.
+func (*ReAuthResult) Descriptor() ([]byte, []int) {
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ReAuthResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ReAuthResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *ReAuthResult) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
 type OwnerChanged struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	NewOwnerClientId string                 `protobuf:"bytes,1,opt,name=new_owner_client_id,json=newOwnerClientId,proto3" json:"new_owner_client_id,omitempty"`
@@ -1764,7 +1918,7 @@ type OwnerChanged struct {
 
 func (x *OwnerChanged) Reset() {
 	*x = OwnerChanged{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1776,7 +1930,7 @@ func (x *OwnerChanged) String() string {
 func (*OwnerChanged) ProtoMessage() {}
 
 func (x *OwnerChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[20]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1789,7 +1943,7 @@ func (x *OwnerChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerChanged.ProtoReflect.Descriptor instead.
 func (*OwnerChanged) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{20}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *OwnerChanged) GetNewOwnerClientId() string {
@@ -1808,7 +1962,7 @@ type CredentialsChanged struct {
 
 func (x *CredentialsChanged) Reset() {
 	*x = CredentialsChanged{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1820,7 +1974,7 @@ func (x *CredentialsChanged) String() string {
 func (*CredentialsChanged) ProtoMessage() {}
 
 func (x *CredentialsChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[21]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1833,7 +1987,7 @@ func (x *CredentialsChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CredentialsChanged.ProtoReflect.Descriptor instead.
 func (*CredentialsChanged) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{21}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CredentialsChanged) GetReason() string {
@@ -1852,7 +2006,7 @@ type TitleChanged struct {
 
 func (x *TitleChanged) Reset() {
 	*x = TitleChanged{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1864,7 +2018,7 @@ func (x *TitleChanged) String() string {
 func (*TitleChanged) ProtoMessage() {}
 
 func (x *TitleChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[22]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1877,7 +2031,7 @@ func (x *TitleChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TitleChanged.ProtoReflect.Descriptor instead.
 func (*TitleChanged) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{22}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *TitleChanged) GetTitle() string {
@@ -1896,7 +2050,7 @@ type GetRoomRequest struct {
 
 func (x *GetRoomRequest) Reset() {
 	*x = GetRoomRequest{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[23]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1908,7 +2062,7 @@ func (x *GetRoomRequest) String() string {
 func (*GetRoomRequest) ProtoMessage() {}
 
 func (x *GetRoomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[23]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1921,7 +2075,7 @@ func (x *GetRoomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoomRequest.ProtoReflect.Descriptor instead.
 func (*GetRoomRequest) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{23}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetRoomRequest) GetSessionId() string {
@@ -1940,7 +2094,7 @@ type GetRoomResponse struct {
 
 func (x *GetRoomResponse) Reset() {
 	*x = GetRoomResponse{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[24]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1952,7 +2106,7 @@ func (x *GetRoomResponse) String() string {
 func (*GetRoomResponse) ProtoMessage() {}
 
 func (x *GetRoomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[24]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1965,7 +2119,7 @@ func (x *GetRoomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoomResponse.ProtoReflect.Descriptor instead.
 func (*GetRoomResponse) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{24}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *GetRoomResponse) GetRoom() *Room {
@@ -1983,7 +2137,7 @@ type ListRoomsRequest struct {
 
 func (x *ListRoomsRequest) Reset() {
 	*x = ListRoomsRequest{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[25]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1995,7 +2149,7 @@ func (x *ListRoomsRequest) String() string {
 func (*ListRoomsRequest) ProtoMessage() {}
 
 func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[25]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2008,7 +2162,7 @@ func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsRequest.ProtoReflect.Descriptor instead.
 func (*ListRoomsRequest) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{25}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{27}
 }
 
 type ListRoomsResponse struct {
@@ -2020,7 +2174,7 @@ type ListRoomsResponse struct {
 
 func (x *ListRoomsResponse) Reset() {
 	*x = ListRoomsResponse{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[26]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2032,7 +2186,7 @@ func (x *ListRoomsResponse) String() string {
 func (*ListRoomsResponse) ProtoMessage() {}
 
 func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[26]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2045,7 +2199,7 @@ func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsResponse.ProtoReflect.Descriptor instead.
 func (*ListRoomsResponse) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{26}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListRoomsResponse) GetRooms() []*RoomSummary {
@@ -2066,7 +2220,7 @@ type RoomSummary struct {
 
 func (x *RoomSummary) Reset() {
 	*x = RoomSummary{}
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[27]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2078,7 +2232,7 @@ func (x *RoomSummary) String() string {
 func (*RoomSummary) ProtoMessage() {}
 
 func (x *RoomSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_massrelay_v1_models_collab_proto_msgTypes[27]
+	mi := &file_massrelay_v1_models_collab_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2091,7 +2245,7 @@ func (x *RoomSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoomSummary.ProtoReflect.Descriptor instead.
 func (*RoomSummary) Descriptor() ([]byte, []int) {
-	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{27}
+	return file_massrelay_v1_models_collab_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RoomSummary) GetSessionId() string {
@@ -2119,7 +2273,7 @@ var File_massrelay_v1_models_collab_proto protoreflect.FileDescriptor
 
 const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\n" +
-	" massrelay/v1/models/collab.proto\x12\x13massrelay.v1.models\x1a\x1fgoogle/protobuf/timestamp.proto\"\x90\a\n" +
+	" massrelay/v1/models/collab.proto\x12\x13massrelay.v1.models\x1a\x1fgoogle/protobuf/timestamp.proto\"\xce\a\n" +
 	"\fCollabAction\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\tR\bactionId\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1c\n" +
@@ -2137,7 +2291,8 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x13credentials_changed\x18\x12 \x01(\v2'.massrelay.v1.models.CredentialsChangedH\x00R\x12credentialsChanged\x12H\n" +
 	"\rtitle_changed\x18\x13 \x01(\v2!.massrelay.v1.models.TitleChangedH\x00R\ftitleChanged\x12B\n" +
 	"\vapp_message\x18\x14 \x01(\v2\x1f.massrelay.v1.models.AppMessageH\x00R\n" +
-	"appMessageB\b\n" +
+	"appMessage\x12<\n" +
+	"\are_auth\x18\x15 \x01(\v2!.massrelay.v1.models.ReAuthActionH\x00R\x06reAuthB\b\n" +
 	"\x06action\"\xe4\x03\n" +
 	"\bJoinRoom\x12\x1d\n" +
 	"\n" +
@@ -2196,7 +2351,8 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"AppMessage\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\x12\"\n" +
-	"\rto_client_ids\x18\x03 \x03(\tR\vtoClientIds\"\xc8\t\n" +
+	"\rto_client_ids\x18\x03 \x03(\tR\vtoClientIds\"\x93\n" +
+	"\n" +
 	"\vCollabEvent\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12$\n" +
 	"\x0efrom_client_id\x18\x02 \x01(\tR\ffromClientId\x12)\n" +
@@ -2220,7 +2376,8 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x13credentials_changed\x18\x16 \x01(\v2'.massrelay.v1.models.CredentialsChangedH\x00R\x12credentialsChanged\x12H\n" +
 	"\rtitle_changed\x18\x17 \x01(\v2!.massrelay.v1.models.TitleChangedH\x00R\ftitleChanged\x12B\n" +
 	"\vapp_message\x18\x18 \x01(\v2\x1f.massrelay.v1.models.AppMessageH\x00R\n" +
-	"appMessageB\a\n" +
+	"appMessage\x12I\n" +
+	"\x0ere_auth_result\x18\x19 \x01(\v2!.massrelay.v1.models.ReAuthResultH\x00R\freAuthResultB\a\n" +
 	"\x05event\"\xd3\x03\n" +
 	"\x04Room\x12\x1d\n" +
 	"\n" +
@@ -2238,13 +2395,14 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x1d.massrelay.v1.models.PeerInfoR\x05value:\x028\x01\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa0\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe6\x01\n" +
 	"\n" +
 	"RoomJoined\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12-\n" +
 	"\x04room\x18\x02 \x01(\v2\x19.massrelay.v1.models.RoomR\x04room\x12\x1b\n" +
 	"\tmax_peers\x18\x05 \x01(\x05R\bmaxPeers\x12)\n" +
-	"\x10protocol_version\x18\a \x01(\x05R\x0fprotocolVersion\"\x80\x03\n" +
+	"\x10protocol_version\x18\a \x01(\x05R\x0fprotocolVersion\x12D\n" +
+	"\x10token_expires_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x0etokenExpiresAt\"\x80\x03\n" +
 	"\bPeerInfo\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1d\n" +
@@ -2275,7 +2433,14 @@ const file_massrelay_v1_models_collab_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"&\n" +
 	"\fSessionEnded\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"=\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"$\n" +
+	"\fReAuthAction\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"y\n" +
+	"\fReAuthResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x129\n" +
+	"\n" +
+	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"=\n" +
 	"\fOwnerChanged\x12-\n" +
 	"\x13new_owner_client_id\x18\x01 \x01(\tR\x10newOwnerClientId\",\n" +
 	"\x12CredentialsChanged\x12\x16\n" +
@@ -2311,7 +2476,7 @@ func file_massrelay_v1_models_collab_proto_rawDescGZIP() []byte {
 	return file_massrelay_v1_models_collab_proto_rawDescData
 }
 
-var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_massrelay_v1_models_collab_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_massrelay_v1_models_collab_proto_goTypes = []any{
 	(*CollabAction)(nil),          // 0: massrelay.v1.models.CollabAction
 	(*JoinRoom)(nil),              // 1: massrelay.v1.models.JoinRoom
@@ -2333,20 +2498,22 @@ var file_massrelay_v1_models_collab_proto_goTypes = []any{
 	(*PeerLeft)(nil),              // 17: massrelay.v1.models.PeerLeft
 	(*ErrorEvent)(nil),            // 18: massrelay.v1.models.ErrorEvent
 	(*SessionEnded)(nil),          // 19: massrelay.v1.models.SessionEnded
-	(*OwnerChanged)(nil),          // 20: massrelay.v1.models.OwnerChanged
-	(*CredentialsChanged)(nil),    // 21: massrelay.v1.models.CredentialsChanged
-	(*TitleChanged)(nil),          // 22: massrelay.v1.models.TitleChanged
-	(*GetRoomRequest)(nil),        // 23: massrelay.v1.models.GetRoomRequest
-	(*GetRoomResponse)(nil),       // 24: massrelay.v1.models.GetRoomResponse
-	(*ListRoomsRequest)(nil),      // 25: massrelay.v1.models.ListRoomsRequest
-	(*ListRoomsResponse)(nil),     // 26: massrelay.v1.models.ListRoomsResponse
-	(*RoomSummary)(nil),           // 27: massrelay.v1.models.RoomSummary
-	nil,                           // 28: massrelay.v1.models.JoinRoom.MetadataEntry
-	nil,                           // 29: massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
-	nil,                           // 30: massrelay.v1.models.Room.PeersEntry
-	nil,                           // 31: massrelay.v1.models.Room.MetadataEntry
-	nil,                           // 32: massrelay.v1.models.PeerInfo.MetadataEntry
-	(*timestamppb.Timestamp)(nil), // 33: google.protobuf.Timestamp
+	(*ReAuthAction)(nil),          // 20: massrelay.v1.models.ReAuthAction
+	(*ReAuthResult)(nil),          // 21: massrelay.v1.models.ReAuthResult
+	(*OwnerChanged)(nil),          // 22: massrelay.v1.models.OwnerChanged
+	(*CredentialsChanged)(nil),    // 23: massrelay.v1.models.CredentialsChanged
+	(*TitleChanged)(nil),          // 24: massrelay.v1.models.TitleChanged
+	(*GetRoomRequest)(nil),        // 25: massrelay.v1.models.GetRoomRequest
+	(*GetRoomResponse)(nil),       // 26: massrelay.v1.models.GetRoomResponse
+	(*ListRoomsRequest)(nil),      // 27: massrelay.v1.models.ListRoomsRequest
+	(*ListRoomsResponse)(nil),     // 28: massrelay.v1.models.ListRoomsResponse
+	(*RoomSummary)(nil),           // 29: massrelay.v1.models.RoomSummary
+	nil,                           // 30: massrelay.v1.models.JoinRoom.MetadataEntry
+	nil,                           // 31: massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
+	nil,                           // 32: massrelay.v1.models.Room.PeersEntry
+	nil,                           // 33: massrelay.v1.models.Room.MetadataEntry
+	nil,                           // 34: massrelay.v1.models.PeerInfo.MetadataEntry
+	(*timestamppb.Timestamp)(nil), // 35: google.protobuf.Timestamp
 }
 var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	1,  // 0: massrelay.v1.models.CollabAction.join:type_name -> massrelay.v1.models.JoinRoom
@@ -2357,43 +2524,47 @@ var file_massrelay_v1_models_collab_proto_depIdxs = []int32{
 	7,  // 5: massrelay.v1.models.CollabAction.text_update:type_name -> massrelay.v1.models.TextUpdate
 	8,  // 6: massrelay.v1.models.CollabAction.scene_init_request:type_name -> massrelay.v1.models.SceneInitRequest
 	9,  // 7: massrelay.v1.models.CollabAction.scene_init_response:type_name -> massrelay.v1.models.SceneInitResponse
-	21, // 8: massrelay.v1.models.CollabAction.credentials_changed:type_name -> massrelay.v1.models.CredentialsChanged
-	22, // 9: massrelay.v1.models.CollabAction.title_changed:type_name -> massrelay.v1.models.TitleChanged
+	23, // 8: massrelay.v1.models.CollabAction.credentials_changed:type_name -> massrelay.v1.models.CredentialsChanged
+	24, // 9: massrelay.v1.models.CollabAction.title_changed:type_name -> massrelay.v1.models.TitleChanged
 	10, // 10: massrelay.v1.models.CollabAction.app_message:type_name -> massrelay.v1.models.AppMessage
-	28, // 11: massrelay.v1.models.JoinRoom.metadata:type_name -> massrelay.v1.models.JoinRoom.MetadataEntry
-	5,  // 12: massrelay.v1.models.SceneUpdate.elements:type_name -> massrelay.v1.models.ElementUpdate
-	29, // 13: massrelay.v1.models.CursorUpdate.selected_element_ids:type_name -> massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
-	13, // 14: massrelay.v1.models.CollabEvent.room_joined:type_name -> massrelay.v1.models.RoomJoined
-	16, // 15: massrelay.v1.models.CollabEvent.peer_joined:type_name -> massrelay.v1.models.PeerJoined
-	17, // 16: massrelay.v1.models.CollabEvent.peer_left:type_name -> massrelay.v1.models.PeerLeft
-	3,  // 17: massrelay.v1.models.CollabEvent.presence:type_name -> massrelay.v1.models.PresenceUpdate
-	4,  // 18: massrelay.v1.models.CollabEvent.scene_update:type_name -> massrelay.v1.models.SceneUpdate
-	6,  // 19: massrelay.v1.models.CollabEvent.cursor_update:type_name -> massrelay.v1.models.CursorUpdate
-	7,  // 20: massrelay.v1.models.CollabEvent.text_update:type_name -> massrelay.v1.models.TextUpdate
-	9,  // 21: massrelay.v1.models.CollabEvent.scene_init_response:type_name -> massrelay.v1.models.SceneInitResponse
-	18, // 22: massrelay.v1.models.CollabEvent.error:type_name -> massrelay.v1.models.ErrorEvent
-	8,  // 23: massrelay.v1.models.CollabEvent.scene_init_request:type_name -> massrelay.v1.models.SceneInitRequest
-	19, // 24: massrelay.v1.models.CollabEvent.session_ended:type_name -> massrelay.v1.models.SessionEnded
-	20, // 25: massrelay.v1.models.CollabEvent.owner_changed:type_name -> massrelay.v1.models.OwnerChanged
-	21, // 26: massrelay.v1.models.CollabEvent.credentials_changed:type_name -> massrelay.v1.models.CredentialsChanged
-	22, // 27: massrelay.v1.models.CollabEvent.title_changed:type_name -> massrelay.v1.models.TitleChanged
-	10, // 28: massrelay.v1.models.CollabEvent.app_message:type_name -> massrelay.v1.models.AppMessage
-	30, // 29: massrelay.v1.models.Room.peers:type_name -> massrelay.v1.models.Room.PeersEntry
-	33, // 30: massrelay.v1.models.Room.created_at:type_name -> google.protobuf.Timestamp
-	31, // 31: massrelay.v1.models.Room.metadata:type_name -> massrelay.v1.models.Room.MetadataEntry
-	12, // 32: massrelay.v1.models.RoomJoined.room:type_name -> massrelay.v1.models.Room
-	32, // 33: massrelay.v1.models.PeerInfo.metadata:type_name -> massrelay.v1.models.PeerInfo.MetadataEntry
-	15, // 34: massrelay.v1.models.PeerInfo.identity:type_name -> massrelay.v1.models.PeerIdentity
-	14, // 35: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
-	12, // 36: massrelay.v1.models.GetRoomResponse.room:type_name -> massrelay.v1.models.Room
-	27, // 37: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
-	33, // 38: massrelay.v1.models.RoomSummary.created_at:type_name -> google.protobuf.Timestamp
-	14, // 39: massrelay.v1.models.Room.PeersEntry.value:type_name -> massrelay.v1.models.PeerInfo
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	20, // 11: massrelay.v1.models.CollabAction.re_auth:type_name -> massrelay.v1.models.ReAuthAction
+	30, // 12: massrelay.v1.models.JoinRoom.metadata:type_name -> massrelay.v1.models.JoinRoom.MetadataEntry
+	5,  // 13: massrelay.v1.models.SceneUpdate.elements:type_name -> massrelay.v1.models.ElementUpdate
+	31, // 14: massrelay.v1.models.CursorUpdate.selected_element_ids:type_name -> massrelay.v1.models.CursorUpdate.SelectedElementIdsEntry
+	13, // 15: massrelay.v1.models.CollabEvent.room_joined:type_name -> massrelay.v1.models.RoomJoined
+	16, // 16: massrelay.v1.models.CollabEvent.peer_joined:type_name -> massrelay.v1.models.PeerJoined
+	17, // 17: massrelay.v1.models.CollabEvent.peer_left:type_name -> massrelay.v1.models.PeerLeft
+	3,  // 18: massrelay.v1.models.CollabEvent.presence:type_name -> massrelay.v1.models.PresenceUpdate
+	4,  // 19: massrelay.v1.models.CollabEvent.scene_update:type_name -> massrelay.v1.models.SceneUpdate
+	6,  // 20: massrelay.v1.models.CollabEvent.cursor_update:type_name -> massrelay.v1.models.CursorUpdate
+	7,  // 21: massrelay.v1.models.CollabEvent.text_update:type_name -> massrelay.v1.models.TextUpdate
+	9,  // 22: massrelay.v1.models.CollabEvent.scene_init_response:type_name -> massrelay.v1.models.SceneInitResponse
+	18, // 23: massrelay.v1.models.CollabEvent.error:type_name -> massrelay.v1.models.ErrorEvent
+	8,  // 24: massrelay.v1.models.CollabEvent.scene_init_request:type_name -> massrelay.v1.models.SceneInitRequest
+	19, // 25: massrelay.v1.models.CollabEvent.session_ended:type_name -> massrelay.v1.models.SessionEnded
+	22, // 26: massrelay.v1.models.CollabEvent.owner_changed:type_name -> massrelay.v1.models.OwnerChanged
+	23, // 27: massrelay.v1.models.CollabEvent.credentials_changed:type_name -> massrelay.v1.models.CredentialsChanged
+	24, // 28: massrelay.v1.models.CollabEvent.title_changed:type_name -> massrelay.v1.models.TitleChanged
+	10, // 29: massrelay.v1.models.CollabEvent.app_message:type_name -> massrelay.v1.models.AppMessage
+	21, // 30: massrelay.v1.models.CollabEvent.re_auth_result:type_name -> massrelay.v1.models.ReAuthResult
+	32, // 31: massrelay.v1.models.Room.peers:type_name -> massrelay.v1.models.Room.PeersEntry
+	35, // 32: massrelay.v1.models.Room.created_at:type_name -> google.protobuf.Timestamp
+	33, // 33: massrelay.v1.models.Room.metadata:type_name -> massrelay.v1.models.Room.MetadataEntry
+	12, // 34: massrelay.v1.models.RoomJoined.room:type_name -> massrelay.v1.models.Room
+	35, // 35: massrelay.v1.models.RoomJoined.token_expires_at:type_name -> google.protobuf.Timestamp
+	34, // 36: massrelay.v1.models.PeerInfo.metadata:type_name -> massrelay.v1.models.PeerInfo.MetadataEntry
+	15, // 37: massrelay.v1.models.PeerInfo.identity:type_name -> massrelay.v1.models.PeerIdentity
+	14, // 38: massrelay.v1.models.PeerJoined.peer:type_name -> massrelay.v1.models.PeerInfo
+	35, // 39: massrelay.v1.models.ReAuthResult.expires_at:type_name -> google.protobuf.Timestamp
+	12, // 40: massrelay.v1.models.GetRoomResponse.room:type_name -> massrelay.v1.models.Room
+	29, // 41: massrelay.v1.models.ListRoomsResponse.rooms:type_name -> massrelay.v1.models.RoomSummary
+	35, // 42: massrelay.v1.models.RoomSummary.created_at:type_name -> google.protobuf.Timestamp
+	14, // 43: massrelay.v1.models.Room.PeersEntry.value:type_name -> massrelay.v1.models.PeerInfo
+	44, // [44:44] is the sub-list for method output_type
+	44, // [44:44] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_massrelay_v1_models_collab_proto_init() }
@@ -2413,6 +2584,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 		(*CollabAction_CredentialsChanged)(nil),
 		(*CollabAction_TitleChanged)(nil),
 		(*CollabAction_AppMessage)(nil),
+		(*CollabAction_ReAuth)(nil),
 	}
 	file_massrelay_v1_models_collab_proto_msgTypes[11].OneofWrappers = []any{
 		(*CollabEvent_RoomJoined)(nil),
@@ -2430,6 +2602,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 		(*CollabEvent_CredentialsChanged)(nil),
 		(*CollabEvent_TitleChanged)(nil),
 		(*CollabEvent_AppMessage)(nil),
+		(*CollabEvent_ReAuthResult)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2437,7 +2610,7 @@ func file_massrelay_v1_models_collab_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_massrelay_v1_models_collab_proto_rawDesc), len(file_massrelay_v1_models_collab_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   33,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
