@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +74,7 @@ type RelayAuthenticator struct {
 	mw       *apiauth.APIMiddleware
 	config   RelayAuthConfig
 	denyList map[string]struct{}
+	onDeny   []func(sub string)
 	denyMu   sync.RWMutex
 }
 
@@ -126,14 +128,50 @@ func NewRelayAuthenticator(cfg RelayAuthConfig) *RelayAuthenticator {
 	}
 }
 
-// DenySub adds a subject to the deny list. Denied subjects get 403 even with valid tokens.
+// DenySub adds a subject to the deny list. Denied subjects get 403 on
+// upgrade and have every ReAuth refused, even with valid tokens. It then
+// calls each OnDeny listener with sub, every time, so denying a subject
+// twice ends whatever it opened in between. The list is in memory only and
+// a restarted relay forgets it.
 func (a *RelayAuthenticator) DenySub(sub string) {
 	if a == nil {
 		return
 	}
 	a.denyMu.Lock()
-	defer a.denyMu.Unlock()
 	a.denyList[sub] = struct{}{}
+	listeners := append([]func(string){}, a.onDeny...)
+	a.denyMu.Unlock()
+	for _, fn := range listeners {
+		fn(sub)
+	}
+}
+
+// OnDeny registers fn to run after each DenySub, outside the authenticator's
+// lock. The relay's streams register one that ends the subject's open
+// connections, so an embedder calling DenySub directly gets that too.
+// Nil-safe.
+func (a *RelayAuthenticator) OnDeny(fn func(sub string)) {
+	if a == nil {
+		return
+	}
+	a.denyMu.Lock()
+	defer a.denyMu.Unlock()
+	a.onDeny = append(a.onDeny, fn)
+}
+
+// DeniedSubs returns the deny list, sorted. Nil on a nil authenticator.
+func (a *RelayAuthenticator) DeniedSubs() []string {
+	if a == nil {
+		return nil
+	}
+	a.denyMu.RLock()
+	defer a.denyMu.RUnlock()
+	subs := make([]string, 0, len(a.denyList))
+	for sub := range a.denyList {
+		subs = append(subs, sub)
+	}
+	sort.Strings(subs)
+	return subs
 }
 
 // AllowSub removes a subject from the deny list.

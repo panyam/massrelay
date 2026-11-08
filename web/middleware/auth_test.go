@@ -599,3 +599,31 @@ func TestValidateToken(t *testing.T) {
 		t.Errorf("nil authenticator: err %v, want ErrAuthDisabled", err)
 	}
 }
+
+func TestDeniedSubsAndOnDeny(t *testing.T) {
+	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{KeyStore: testKeyStore(testClientID, testSecret)})
+	var told []string
+	auth.OnDeny(func(sub string) { told = append(told, sub) })
+
+	auth.DenySub("zed")
+	auth.DenySub("amy")
+	if got := auth.DeniedSubs(); !reflect.DeepEqual(got, []string{"amy", "zed"}) {
+		t.Fatalf("DeniedSubs = %v, want [amy zed]", got)
+	}
+	if !reflect.DeepEqual(told, []string{"zed", "amy"}) {
+		t.Fatalf("OnDeny saw %v, want [zed amy]", told)
+	}
+	auth.AllowSub("zed")
+	if got := auth.DeniedSubs(); !reflect.DeepEqual(got, []string{"amy"}) {
+		t.Fatalf("DeniedSubs after allow = %v, want [amy]", got)
+	}
+	if len(told) != 2 {
+		t.Fatalf("AllowSub called OnDeny: %v", told)
+	}
+
+	var none *middleware.RelayAuthenticator
+	none.OnDeny(func(string) {})
+	if got := none.DeniedSubs(); got != nil {
+		t.Fatalf("nil authenticator DeniedSubs = %v, want nil", got)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "github.com/panyam/massrelay/gen/go/massrelay/v1/models"
+	"github.com/panyam/massrelay/web/middleware"
 	"github.com/panyam/oneauth/apiauth"
 
 	"github.com/panyam/servicekit/grpcws"
@@ -35,6 +36,8 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 	// WebSocket bidi endpoint using servicekit grpcws
 	streamCfg := DefaultStreamConfig()
 	streamCfg.Auth = h.app.Guard.Authenticator()
+	streamCfg.registry = newStreamRegistry()
+	streamCfg.Auth.OnDeny(streamCfg.registry.endSubject)
 	wsHandler := grpcws.NewBidiStreamHandler(
 		func(ctx context.Context) (*CollabBidiStream, error) {
 			return NewCollabBidiStream(ctx, h.app.Service, streamCfg), nil
@@ -68,6 +71,9 @@ func (h *ApiHandler) SetupRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /admin/rooms", h.requireAdmin(h.HandleAdminListRooms))
 		mux.HandleFunc("GET /admin/rooms/{session_id}", h.requireAdmin(h.HandleAdminGetRoom))
 		mux.HandleFunc("GET /admin/status", h.requireAdmin(h.HandleAdminStatus))
+		mux.HandleFunc("POST /admin/subjects/{sub}/deny", h.requireAdmin(h.HandleAdminDenySubject))
+		mux.HandleFunc("DELETE /admin/subjects/{sub}/deny", h.requireAdmin(h.HandleAdminAllowSubject))
+		mux.HandleFunc("GET /admin/subjects/denied", h.requireAdmin(h.HandleAdminListDenied))
 	}
 }
 
@@ -182,6 +188,59 @@ func (h *ApiHandler) HandleAdminGetRoom(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// authOr409 returns the relay's authenticator, or answers 409 and returns nil
+// when auth is off, since there is no deny list to change.
+func (h *ApiHandler) authOr409(w http.ResponseWriter) *middleware.RelayAuthenticator {
+	auth := h.app.Guard.Authenticator()
+	if auth == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte(`{"error":"auth is not configured on this relay"}`))
+	}
+	return auth
+}
+
+// HandleAdminDenySubject denies a token subject: its new upgrades get 403,
+// its ReAuths are refused, and every connection it has open ends with
+// SessionEnded{denied}. Idempotent; answers 204, or 409 when auth is off.
+// POST /admin/subjects/{sub}/deny
+func (h *ApiHandler) HandleAdminDenySubject(w http.ResponseWriter, r *http.Request) {
+	auth := h.authOr409(w)
+	if auth == nil {
+		return
+	}
+	sub := r.PathValue("sub")
+	slog.Warn("Admin denied subject", "component", "http", "sub", sub)
+	auth.DenySub(sub)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleAdminAllowSubject takes a subject off the deny list, so it can
+// connect again. Idempotent; answers 204, or 409 when auth is off.
+// DELETE /admin/subjects/{sub}/deny
+func (h *ApiHandler) HandleAdminAllowSubject(w http.ResponseWriter, r *http.Request) {
+	auth := h.authOr409(w)
+	if auth == nil {
+		return
+	}
+	sub := r.PathValue("sub")
+	slog.Info("Admin allowed subject", "component", "http", "sub", sub)
+	auth.AllowSub(sub)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleAdminListDenied lists the denied subjects, sorted, as
+// {"denied": [...]}. 409 when auth is off.
+// GET /admin/subjects/denied
+func (h *ApiHandler) HandleAdminListDenied(w http.ResponseWriter, r *http.Request) {
+	auth := h.authOr409(w)
+	if auth == nil {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string][]string{"denied": auth.DeniedSubs()})
 }
 
 // HandleSessionByHint looks up an active session by client hint.

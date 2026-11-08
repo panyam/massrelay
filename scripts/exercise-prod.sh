@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Mission #68's exercise: the three mission exercises (auth, reconnect, token
-# refresh) through the `make prod-up` stack: Caddy with TLS in front of the
-# relay container, auth loaded from env, and the stack's own rate limits.
+# Mission #68's exercise: the mission exercises (auth, reconnect, token
+# refresh, revoke) through the `make prod-up` stack: Caddy with TLS in front
+# of the relay container, auth loaded from env, and the stack's own rate
+# limits.
 #
 # Replaces any running prod-up stack, and takes it down when done.
 set -euo pipefail
@@ -45,4 +46,5 @@ cd ts
 NODE_EXTRA_CA_CERTS=$ca \
 MASSRELAY_RELAY_URL=wss://localhost \
 MASSRELAY_RELAY_RESTART="$compose restart relay" \
+MASSRELAY_ADMIN_TOKEN=dev-admin-token \
   npm run exercise

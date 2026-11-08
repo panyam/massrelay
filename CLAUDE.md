@@ -19,8 +19,9 @@ make test-interop
 make exercise-auth
 make exercise-reconnect
 make exercise-token-refresh
+make exercise-revoke
 
-# All three through the prod-up stack (Caddy, TLS, relay container, auth from
+# All of them through the prod-up stack (Caddy, TLS, relay container, auth from
 # env). Needs Docker and free ports 80/443; replaces a running prod-up stack.
 make exercise-prod
 ```
@@ -147,6 +148,7 @@ Active mission: #72 (`mission_revoke`): an operator revokes a user, and their op
 - `Guard` composes origin check → rate limit → auth → connection limit (wraps WebSocket handler only)
 - CORS middleware reuses same `OriginChecker` as WebSocket guard
 - Admin endpoints gated by bearer token with constant-time comparison
+- **Revocation**: `DenySub` calls its `OnDeny` listeners; `api.go` registers the stream registry's `endSubject` (`web/server/registry.go`), which ends each of the subject's streams with `SessionEnded{denied}` in its own goroutine, so a deny call never waits on a stuck client. The deny list is in memory only, like rooms
 - Caddy handles TLS (auto Let's Encrypt) and reverse-proxies to relay on port 8787
 - WebSocket keepalive (30s ping, 5min pong) handled by servicekit — don't set `ReadTimeout`/`WriteTimeout` on `http.Server`. The per-write timeout (`StreamConfig.WriteTimeout`, 10s) and `CloseOnStreamEnd` go on the grpcws handler in `web/server/api.go` instead
 - **Token lifetime**: a stream ends at its token's `exp` (`SessionEnded{token_expired}`, via the same `endSession` as a slow-consumer eviction). A `ReAuthAction` moves that timer to a fresh token's `exp`. The stream checks it with `StreamConfig.Auth`, which `api.go` takes from `Guard.Authenticator()`. Only a stream with that set fills `RoomJoined.token_expires_at`, and `CollabClient` refreshes only when it's there, since an older relay's protojson rejects an unknown action. `CollabClient` reconnects on `token_expired` only with `getToken`, and stops after two lifetimes in a row whose refresh failed. Every rejoin sends `JoinRoom.must_exist` so the relay answers `ROOM_NOT_FOUND` rather than recreating a lost room
