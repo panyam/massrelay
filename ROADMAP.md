@@ -24,7 +24,7 @@
 
 ## Recently Completed
 
-### In-session token refresh and the production-stack exercise (unreleased)
+### In-session token refresh and the production-stack exercise (v0.3.4)
 - [x] In-session token refresh (`ReAuthAction`), so an expiry doesn't cost a drop and a rejoin; a refused refresh falls back to a bounded reconnect (issue #13, PR #67)
 - [x] `make exercise-token-refresh` against the binary, in CI (mission #66)
 - [x] `make exercise-prod`: the three exercises through the `make prod-up` stack, in CI (issue #69, PR #70, mission #68)

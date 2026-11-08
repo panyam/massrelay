@@ -6,6 +6,14 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-08
+
+Full write-up in [docs/releases/v0.3.4.md](docs/releases/v0.3.4.md).
+
+A client with `getToken` now refreshes its token over the open socket and
+stays in its room past `exp`, with the same `clientId`. A v0.3.3 client keeps
+working against this relay.
+
 ### Added
 - In-session token refresh (issue 13). `ReAuthAction` hands the relay a fresh
   JWT over the open connection, and the stream then ends at the new token's
@@ -23,6 +31,9 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `onSessionEnded("token_expired")`.
 - `CollabClient` ignores event fields it doesn't know, so a newer relay's
   additions can't stop it handling an event.
+- `make exercise-prod` runs the auth, reconnect and token-refresh exercises
+  through the `make prod-up` stack (Caddy, TLS, the relay container, auth
+  from env), and a required CI job runs it (issue 69).
 
 ### Fixed
 - A rejoin refused with `ROOM_FORBIDDEN` stopped without calling
