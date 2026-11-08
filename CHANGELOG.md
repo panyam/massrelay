@@ -13,12 +13,16 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `sub` and `client_id`, and allow the connection's room. `ReAuthResult`
   answers it, and `RoomJoined.token_expires_at` gives the first `exp`.
   `RelayAuthenticator.ValidateToken`, `Guard.Authenticator` and
-  `StreamConfig.Auth` wire it.
+  `StreamConfig.Auth` wire it. The relay sets `token_expires_at` only for a
+  join with `protocol_version` 3 or higher, which `CollabClient` now sends,
+  so clients up to 0.3.3 never get a field they would fail to decode.
 - `CollabClient` with `getToken` refreshes ahead of each `exp` and keeps its
   `clientId`. `onTokenRefresh` reports each result. A failed refresh is
   retried at half the time left. If none succeeds the client reconnects, and
   if the refresh fails in two lifetimes running it ends with
   `onSessionEnded("token_expired")`.
+- `CollabClient` ignores event fields it doesn't know, so a newer relay's
+  additions can't stop it handling an event.
 
 ### Fixed
 - A rejoin refused with `ROOM_FORBIDDEN` stopped without calling

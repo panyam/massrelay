@@ -304,7 +304,7 @@ type JoinRoom struct {
 	IsOwner         bool                   `protobuf:"varint,6,opt,name=is_owner,json=isOwner,proto3" json:"is_owner,omitempty"`
 	BrowserId       string                 `protobuf:"bytes,7,opt,name=browser_id,json=browserId,proto3" json:"browser_id,omitempty"`                    // localStorage UUID for ownership transfer
 	ClientHint      string                 `protobuf:"bytes,8,opt,name=client_hint,json=clientHint,proto3" json:"client_hint,omitempty"`                 // opaque hint for session reuse (e.g. "userId:documentId")
-	ProtocolVersion int32                  `protobuf:"varint,9,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"` // client protocol version (current = 2, legacy implicit = 1)
+	ProtocolVersion int32                  `protobuf:"varint,9,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"` // client protocol version (current = 3, legacy implicit = 1); 2 = E2EE, 3 = gets RoomJoined.token_expires_at
 	Encrypted       bool                   `protobuf:"varint,10,opt,name=encrypted,proto3" json:"encrypted,omitempty"`                                   // owner declares room as encrypted (password-based E2EE)
 	Title           string                 `protobuf:"bytes,11,opt,name=title,proto3" json:"title,omitempty"`                                            // document/session title (owner sends, relay echoes to joiners)
 	MustExist       bool                   `protobuf:"varint,12,opt,name=must_exist,json=mustExist,proto3" json:"must_exist,omitempty"`                  // join only a room that already exists; ErrorEvent ROOM_NOT_FOUND otherwise (a reconnect sets it)
@@ -1371,7 +1371,9 @@ type RoomJoined struct {
 	MaxPeers        int32                  `protobuf:"varint,5,opt,name=max_peers,json=maxPeers,proto3" json:"max_peers,omitempty"`                      // relay's max-peers setting (informational for UI)
 	ProtocolVersion int32                  `protobuf:"varint,7,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"` // relay protocol version
 	// exp of the token that opened this connection, when it had one. Set only
-	// by a relay that accepts ReAuthAction, so a client refreshes only then.
+	// by a relay that accepts ReAuthAction, so a client refreshes only then,
+	// and only for a join with protocol_version >= 3, since older clients
+	// reject unknown JSON fields.
 	TokenExpiresAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=token_expires_at,json=tokenExpiresAt,proto3" json:"token_expires_at,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache

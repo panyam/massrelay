@@ -121,8 +121,13 @@ func expectNoEvent(t *testing.T, s *CollabBidiStream) {
 
 func joinStream(t *testing.T, s *CollabBidiStream, sessionId string) *pb.CollabEvent {
 	t.Helper()
+	return joinStreamAt(t, s, sessionId, 3)
+}
+
+func joinStreamAt(t *testing.T, s *CollabBidiStream, sessionId string, protocolVersion int32) *pb.CollabEvent {
+	t.Helper()
 	if err := s.Send(&pb.CollabAction{Action: &pb.CollabAction_Join{
-		Join: &pb.JoinRoom{SessionId: sessionId, Username: "claims-to-be-admin"},
+		Join: &pb.JoinRoom{SessionId: sessionId, Username: "claims-to-be-admin", ProtocolVersion: protocolVersion},
 	}}); err != nil {
 		t.Fatalf("join: %v", err)
 	}
@@ -521,5 +526,20 @@ func TestReAuthIsNotRateLimited(t *testing.T) {
 	}
 	if r := reAuthStream(t, s, mintStreamToken(t, nil)); !r.GetSuccess() {
 		t.Fatalf("got %v, want the refresh accepted over the rate limit", r)
+	}
+}
+
+// A v0.3.3 CollabClient rejects any JSON field it doesn't know, so a
+// RoomJoined carrying token_expires_at would fail to decode and the client
+// would never see its join. Only a client that says protocol 3 gets it.
+func TestTokenExpiresAtOnlyForProtocol3(t *testing.T) {
+	svc := services.NewCollabService()
+	old := streamFromRequest(t, svc, mintStreamToken(t, nil))
+	if rj := joinStreamAt(t, old, "room-v2", 2).GetRoomJoined(); rj == nil || rj.GetTokenExpiresAt() != nil {
+		t.Fatalf("protocol 2 join got %v, want RoomJoined without token_expires_at", rj)
+	}
+	cur := streamFromRequest(t, svc, mintStreamToken(t, nil))
+	if rj := joinStreamAt(t, cur, "room-v3", 3).GetRoomJoined(); rj.GetTokenExpiresAt() == nil {
+		t.Fatalf("protocol 3 join got %v, want token_expires_at", rj)
 	}
 }

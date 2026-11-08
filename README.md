@@ -263,7 +263,7 @@ Sent once after WebSocket connection to join or create a session.
 | `isOwner` | bool | `false` | `true` if this client owns the session. |
 | `browserId` | string | | localStorage UUID for same-browser ownership transfer. |
 | `clientHint` | string | | Opaque session reuse hint (e.g. `"browserId:drawingId"`). Used to find an existing session without knowing the session ID. |
-| `protocolVersion` | int32 | `1` | Client protocol version. Must be `2` to join encrypted rooms. |
+| `protocolVersion` | int32 | `1` | Client protocol version. `2` or higher to join encrypted rooms. `3` or higher gets `RoomJoined.tokenExpiresAt`, for in-session refresh. `CollabClient` sends `3`. |
 | `encrypted` | bool | `false` | Owner declares room as encrypted (E2EE). |
 | `title` | string | | Drawing title. Relay stores and echoes to joiners. |
 | `mustExist` | bool | `false` | Join only a room the relay already has, and get `ErrorEvent{ROOM_NOT_FOUND}` otherwise instead of creating it. `CollabClient` sets it on a rejoin. Relays before 0.4 ignore it. |
@@ -412,7 +412,7 @@ Sent to the joining client as confirmation of a successful join.
 | `room` | Room | Nested room state (see Room below). |
 | `maxPeers` | int32 | Relay's participant limit (informational). |
 | `protocolVersion` | int32 | Relay protocol version (currently `2`). |
-| `tokenExpiresAt` | Timestamp | `exp` of the token that opened this connection. Set only when the connection has a token and the relay accepts `ReAuthAction`. |
+| `tokenExpiresAt` | Timestamp | `exp` of the token that opened this connection. Set only when the connection has a token, the relay accepts `ReAuthAction`, and the join's `protocolVersion` is `3` or higher. Older clients reject JSON fields they don't know, so they never get it. |
 
 #### Room
 

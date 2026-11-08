@@ -271,7 +271,7 @@ export type JoinRoom = Message<"massrelay.v1.models.JoinRoom"> & {
   clientHint: string;
 
   /**
-   * client protocol version (current = 2, legacy implicit = 1)
+   * client protocol version (current = 3, legacy implicit = 1); 2 = E2EE, 3 = gets RoomJoined.token_expires_at
    *
    * @generated from field: int32 protocol_version = 9;
    */
@@ -354,7 +354,7 @@ export type JoinRoomJson = {
   clientHint?: string;
 
   /**
-   * client protocol version (current = 2, legacy implicit = 1)
+   * client protocol version (current = 3, legacy implicit = 1); 2 = E2EE, 3 = gets RoomJoined.token_expires_at
    *
    * @generated from field: int32 protocol_version = 9;
    */
@@ -1171,7 +1171,9 @@ export type RoomJoined = Message<"massrelay.v1.models.RoomJoined"> & {
 
   /**
    * exp of the token that opened this connection, when it had one. Set only
-   * by a relay that accepts ReAuthAction, so a client refreshes only then.
+   * by a relay that accepts ReAuthAction, so a client refreshes only then,
+   * and only for a join with protocol_version >= 3, since older clients
+   * reject unknown JSON fields.
    *
    * @generated from field: google.protobuf.Timestamp token_expires_at = 8;
    */
@@ -1208,7 +1210,9 @@ export type RoomJoinedJson = {
 
   /**
    * exp of the token that opened this connection, when it had one. Set only
-   * by a relay that accepts ReAuthAction, so a client refreshes only then.
+   * by a relay that accepts ReAuthAction, so a client refreshes only then,
+   * and only for a join with protocol_version >= 3, since older clients
+   * reject unknown JSON fields.
    *
    * @generated from field: google.protobuf.Timestamp token_expires_at = 8;
    */
