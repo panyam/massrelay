@@ -6,6 +6,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-11-09
+
+Go apps can mint relay tokens with massrelay's own signer.
+
 ### Added
 - `middleware.RelaySigner` (issue 78). A Go app mints relay tokens with
   `Mint(subject, rooms)`, which writes the claims `RelayAuthenticator` reads,
