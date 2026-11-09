@@ -48,6 +48,8 @@ make prod-logs       # tail logs
 
 The Go module and `@panyam/massrelay` share one version, under `## Version` in CAPABILITIES.md. A release bumps it there, in `ts/package.json` and in `ts/package-lock.json`; `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` runs `publish-npm.yml`, which tests and then calls servicekit's shared `npm-publish.yml` (npm trusted publishing, no token). Manual fallback: `cd ts && rm -rf dist && npm run build && npm run check:pack && npm publish --access public --otp=<code>`.
 
+Before tagging, ask whether a client one release back still works against this relay. A new event field broke v0.3.3 clients until #71 caught it before release (see Known Gotchas). `ts/interop/compat.interop.ts` checks the published v0.3.3 client in CI. A release that adds wire fields gets a `docs/releases/vX.Y.Z.md` write-up, which is also the GitHub Release body. A small patch reuses its CHANGELOG entry instead. Additive features have gone out as patch bumps (v0.3.4 to v0.3.6).
+
 ## Proto Regeneration
 
 ```bash

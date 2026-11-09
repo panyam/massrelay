@@ -24,6 +24,10 @@
 
 ## Recently Completed
 
+### Revocation, and oneauth's bare-token API (v0.3.5, v0.3.6)
+- [x] `POST /admin/subjects/{sub}/deny` ends a subject's open connections with `SessionEnded{denied}`; `make exercise-revoke` in CI (issues #73, #63, PR #74, mission #72)
+- [x] oneauth v0.3.1 and v0.3.2: ReAuth uses `ValidateBearer`, `RelayClaims` comes from `TokenInfo`, and a Keycloak token's client comes from `azp` (issue #37, PRs #76, #77; pushdown panyam/oneauth#456)
+
 ### In-session token refresh and the production-stack exercise (v0.3.4)
 - [x] In-session token refresh (`ReAuthAction`), so an expiry doesn't cost a drop and a rejoin; a refused refresh falls back to a bounded reconnect (issue #13, PR #67)
 - [x] `make exercise-token-refresh` against the binary, in CI (mission #66)
