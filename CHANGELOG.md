@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `middleware.RelaySigner` (issue 78). A Go app mints relay tokens with
+  `Mint(subject, rooms)`, which writes the claims `RelayAuthenticator` reads,
+  and gets the matching authenticator from `Authenticator` or the key store
+  from `KeyStore`. It signs HS256, with a key generated per process unless
+  one is passed. Nothing changes on the wire.
+
 ## [0.3.6] - 2026-11-08
 
 Keycloak user tokens now report their client. Nothing changes on the wire.

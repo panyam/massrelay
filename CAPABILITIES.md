@@ -11,6 +11,7 @@
 - app-message: generic app-defined pub-sub messages (AppMessage{kind,payload,to_client_ids}), room-wide fan-out or addressed to a set of peers in one message, in order per sender, with no editor semantics — use massrelay as a message bus without the Scene/Text protocol
 - peer-identity: PeerInfo.identity from the connection's validated JWT (sub, client_id); `rooms` claim restricts which sessions a token may join
 - jwt-auth: signing keys from a keys file or a JWKS URL, fail-closed startup when auth is required, connections ended at the token's exp (`SessionEnded{token_expired}`), or moved to a fresh token's exp by `ReAuthAction`
+- token-signer: `middleware.RelaySigner` mints HS256 relay tokens (sub, client_id, iss, rooms, exp) and builds the `RelayAuthenticator` that accepts them, for apps that embed or run their own relay
 - client-reconnect: CollabClient rejoins the same session after a drop, eviction or expiry, only if the relay still has the room (`must_exist`), with `getToken` for fresh JWTs
 - token-refresh: CollabClient hands the relay a fresh token over the open socket before `exp` (`ReAuthAction`), keeping its `clientId`; a failed refresh falls back to a bounded reconnect
 - admin-api: Token-gated admin endpoints (/admin/status, /admin/rooms, /admin/subjects/{sub}/deny); a deny ends the subject's open connections with `SessionEnded{denied}`
