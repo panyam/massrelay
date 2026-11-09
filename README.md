@@ -776,6 +776,32 @@ Besides `sub`, the relay reads these from a validated JWT:
 
 A connection lasts as long as its token. When `exp` passes, the relay takes the peer out of its room, sends it `SessionEnded{reason: "token_expired"}`, and closes the socket. A client can avoid that by sending a fresh token over the open socket first (`ReAuthAction`). The connection then ends at the new token's `exp`, and the peer keeps its `clientId`. A `CollabClient` with `getToken` set does this on its own (see [Token refresh](#token-refresh)). If the refresh fails it reconnects on a fresh token. One with only `token` reports `onSessionEnded('token_expired')`.
 
+### Minting Relay Tokens
+
+A Go app can mint these tokens with `middleware.RelaySigner` instead of writing the claims itself. It signs HS256 tokens with the claims above, and builds the authenticator that accepts them:
+
+```go
+import relaymw "github.com/panyam/massrelay/web/middleware"
+
+signer, err := relaymw.NewRelaySigner(relaymw.RelaySignerConfig{
+    ClientID: "my-app",
+    Issuer:   "my-app",
+    TTL:      15 * time.Minute, // default one hour
+    // Key: nil generates a key for this process; pass one if another process runs the relay
+})
+
+relayApp := relayserver.NewRelayApp()
+relayApp.Guard = relaymw.NewGuard(nil, nil, signer.Authenticator(relaymw.RelayAuthConfig{
+    Required: true, TokenQueryParam: "token",
+}), nil, nil)
+relayApp.Init()
+
+// After authenticating a user:
+token, expiresAt, err := signer.Mint(userID, []string{"design:" + docID})
+```
+
+`Mint` with no rooms leaves the `rooms` claim out, and that token may join any session. `signer.KeyStore()` returns the key store on its own, for an authenticator built by hand.
+
 ### Admin API
 
 Set `RELAY_ADMIN_TOKEN` to enable these, and call them with `Authorization: Bearer <token>`. Without a token the routes aren't registered.
