@@ -131,7 +131,7 @@ For Caddyfile-only changes, `docker compose restart caddy` (not just `up -d`).
 
 ## Issues and missions
 
-No active mission. #72 (`make exercise-revoke`, an admin deny ends a user's open connections) closed on 2026-11-08. Earlier: #68 (`make exercise-prod`, the three exercises through the `make prod-up` stack) closed on 2026-11-08, #66 (`make exercise-token-refresh`) the same day, #53 (`make exercise-auth`) on 2026-10-25 and #54 (`make exercise-reconnect`) on 2026-10-24. All four exercises run in CI. `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
+No active mission, by choice: massrelay waits until mcpkit or a deployment turns up the next gap. #72 (`make exercise-revoke`, an admin deny ends a user's open connections) closed on 2026-11-08. Earlier: #68 (`make exercise-prod`, the three exercises through the `make prod-up` stack) closed on 2026-11-08, #66 (`make exercise-token-refresh`) the same day, #53 (`make exercise-auth`) on 2026-10-25 and #54 (`make exercise-reconnect`) on 2026-10-24. All four exercises run in CI. `~/.claude/skills/retriage/queue.sh` prints the queue. A new issue gets a `P0`–`P3` label when it's filed, plus either a mission link (blocked-by, and the `mission_<slug>` label) or `waiting` with its trigger in the body.
 
 ## Code Conventions
 
