@@ -12,3 +12,4 @@ Maintained by /checkpoint: one thread per branch, pruned when the branch merges.
 
 ## Across threads
 
+- None. mcpkit pins massrelay v0.3.6 and oneauth v0.3.2 (checked 2026-11-08).
