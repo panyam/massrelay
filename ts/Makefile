@@ -1,6 +1,6 @@
 
 build:
-	npm run build
+	pnpm run build
 
 publish:
 	npm publish --access public

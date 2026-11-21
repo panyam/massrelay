@@ -5,27 +5,27 @@ test-go:
 	go test ./...
 
 test-ts:
-	cd ts && npm test
+	cd ts && pnpm test
 
 # TS client against the real relay binary (needs Go and Node 22+)
 test-interop:
-	cd ts && npm run test:interop
+	cd ts && pnpm run test:interop
 
 # Mission #53's exercise: auth on the relay binary (allowed room, off-claim room, no token)
 exercise-auth:
-	cd ts && npm run exercise -- exercise/auth.exercise.ts
+	cd ts && pnpm run exercise exercise/auth.exercise.ts
 
 # Mission #54's exercise: a client evicted as a slow consumer rejoins; after a relay restart both report the session gone
 exercise-reconnect:
-	cd ts && npm run exercise -- exercise/reconnect.exercise.ts
+	cd ts && pnpm run exercise exercise/reconnect.exercise.ts
 
 # Mission #66's exercise: a client on 3s tokens refreshes them over the open socket and stays in its room; a refused refresh ends it
 exercise-token-refresh:
-	cd ts && npm run exercise -- exercise/token-refresh.exercise.ts
+	cd ts && pnpm run exercise exercise/token-refresh.exercise.ts
 
 # Mission #72's exercise: an admin deny call ends a user's open connections, and allow lets them back
 exercise-revoke:
-	cd ts && npm run exercise -- exercise/revoke.exercise.ts
+	cd ts && pnpm run exercise exercise/revoke.exercise.ts
 
 # Mission #68's exercise: the three exercises above through the prod-up stack (Caddy, TLS, the relay container, auth from env)
 exercise-prod:

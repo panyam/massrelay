@@ -23,15 +23,18 @@ jobs:
         working-directory: ts
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: ts/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: ../scripts/check-versions.sh
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
-      - run: npm run build
-      - run: npm run check:pack
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
+      - run: pnpm run build
+      - run: pnpm run check:pack
 
   interop:
     runs-on: ubuntu-latest
@@ -43,23 +46,29 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: ts/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci
-      - run: npx tsc --noEmit -p tsconfig.interop.json
-      - run: npm run test:interop
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit -p tsconfig.interop.json
+      - run: pnpm run test:interop
       - name: Mission exercises
-        run: npm run exercise
+        run: pnpm run exercise
 
   exercise-prod:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: ts/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
         working-directory: ts
       - name: Mission exercises through the prod-up stack
         run: make exercise-prod

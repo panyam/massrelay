@@ -7,7 +7,7 @@
 go test ./...
 
 # TypeScript tests
-cd ts && npm test
+cd ts && pnpm test
 
 # All tests (pre-push hook runs this)
 make tests
@@ -46,7 +46,7 @@ make prod-logs       # tail logs
 
 ## Releases
 
-The Go module and `@panyam/massrelay` share one version, under `## Version` in CAPABILITIES.md. A release bumps it there, in `ts/package.json` and in `ts/package-lock.json`; `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` runs `publish-npm.yml`, which tests and then calls servicekit's shared `npm-publish.yml` (npm trusted publishing, no token). Manual fallback: `cd ts && rm -rf dist && npm run build && npm run check:pack && npm publish --access public --otp=<code>`.
+The Go module and `@panyam/massrelay` share one version, under `## Version` in CAPABILITIES.md. A release bumps it there and in `ts/package.json`; `scripts/check-versions.sh` fails CI when they drift. Pushing tag `vX.Y.Z` runs `publish-npm.yml`, which tests and then calls servicekit's shared `npm-publish.yml` (npm trusted publishing, no token). Manual fallback: `cd ts && rm -rf dist && pnpm run build && pnpm run check:pack && npm publish --access public --otp=<code>`.
 
 Before tagging, ask whether a client one release back still works against this relay. A new event field broke v0.3.3 clients until #71 caught it before release (see Known Gotchas). `ts/interop/compat.interop.ts` checks the published v0.3.3 client in CI. A release that adds wire fields gets a `docs/releases/vX.Y.Z.md` write-up, which is also the GitHub Release body. A small patch reuses its CHANGELOG entry instead. Additive features have gone out as patch bumps (v0.3.4 to v0.3.6).
 
@@ -167,7 +167,7 @@ No active mission, by choice: massrelay waits until mcpkit or a deployment turns
 - **`make prod-up` before deploy**: Always test the full Caddy + relay stack locally to catch routing issues
 - **WebSocket upgrades need a hijackable writer all the way down**: any middleware wrapping `http.ResponseWriter` in front of `/ws/` must implement `http.Hijacker`, since gorilla/websocket asserts it directly. servicekit's `RequestLogger` didn't until v0.1.7, which broke every upgrade in the relay binary from v0.1.0 to v0.2.0. Handler-level Go tests can't see this; `TestRelayHandlerAcceptsWebSocket` and `make test-interop` (real binary) can.
 - **A paused Node socket never sees the peer hang up**: `socket.pause()` stops reading, so the FIN behind the unread bytes never arrives and `close` doesn't fire. `ts/interop/slow-consumer.interop.ts` stalls the relay that way, then reads and discards to observe whether the relay already dropped the connection.
-- **`check:pack` fails locally on a stale `dist/`**: `tsc` never deletes old output, so test files compiled before `tsconfig.build.json` existed linger. `rm -rf dist` before `npm run build`. CI checks out clean.
+- **`check:pack` fails locally on a stale `dist/`**: `tsc` never deletes old output, so test files compiled before `tsconfig.build.json` existed linger. `rm -rf dist` before `pnpm run build`. CI checks out clean.
 - **npm 12 changed `npm pack --json`** from an array to an object keyed by package name. `scripts/check-pack.mjs` and servicekit's shared workflow accept both; anything else parsing it must too.
 - **`npm trust` needs a newer npm than Node 22 ships**: run `npx npm@latest trust github <pkg> --repo panyam/<repo> --file publish-npm.yml --allow-publish`.
 - **Releases: never chain `gh release create` after a check with `;`**. A failed check once let the release tag the wrong commit. Use `set -e` / `&&`.
@@ -180,6 +180,6 @@ No active mission, by choice: massrelay waits until mcpkit or a deployment turns
 - **Exercises take an external relay**: with `MASSRELAY_RELAY_URL` set, `relayForExercise` in `ts/interop/relay.ts` uses that relay instead of building the binary, and `restart()` runs `MASSRELAY_RELAY_RESTART`. It ignores the env an exercise asks for, so `scripts/exercise-prod.sh` starts the stack with the one config all three need (auth required, `exercise-app`/`exercise-issuer`). Unlike `startRelay`, it leaves the rate limits at the stack's values. Node trusts Caddy's local CA through `NODE_EXTRA_CA_CERTS`, and the stall proxy forwards TLS bytes, so `relayCloses` sees nothing on `wss://`.
 - **The relay orders messages per sender only.** A test that sends from two peers at once and asserts the receive order flakes. `identity.interop.ts` failed 2 of 20 runs on main that way until #67 made it wait for the first message before sending the second.
 - **Unknown JSON fields break both directions.** An older relay's protojson rejects an unknown `CollabAction` field. A `CollabClient` up to v0.3.3 rejects an unknown field anywhere in a `CollabEvent` (protobuf-es `fromJson` without `ignoreUnknownFields`), so it never sees that event. A new action waits for something the relay advertises (ReAuth waits for `RoomJoined.token_expires_at`). A new event field goes only to a join whose `protocol_version` says the client knows it (3 for `token_expires_at`). `ts/interop/compat.interop.ts` runs the published v0.3.3 client against the binary to catch this.
-- **`npm install` with npm 10 strips the lockfile's `libc` fields.** Use `npx npm@latest install` so the `package-lock.json` diff is only your change.
+- **ts/ uses pnpm 12** (`packageManager` in `ts/package.json`, lockfile `ts/pnpm-lock.yaml`). Publishing still uses `npm publish`, in servicekit's shared workflow (`package-manager: pnpm`) and the manual fallback.
 - **The keys file is mounted as a directory** (`deploy/production/secrets` → `/etc/massrelay`) because docker turns a missing single-file mount into an empty directory.
 - **oneauth 0.0.x → 0.1.x API migration** (done at massrelay v0.1.0): `apiauth.APIMiddleware.TokenQueryParam` → `LegacyQueryParamBearer`; `apiauth.GetUserIDFromAPIContext` → `GetSubjectFromAPIContext`; `keys.InMemoryKeyStore.RegisterKey(id, key, alg)` → request/response `PutKey(ctx, &keys.PutKeyRequest{Record: &keys.KeyRecord{ClientID, Key, Algorithm}})`. oneauth v0.3.0 through v0.3.2 require **Go 1.26.9+** (v0.1.36 needed 1.26.4+).

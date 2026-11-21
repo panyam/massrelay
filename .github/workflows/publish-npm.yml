@@ -30,17 +30,21 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: ts/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: ../scripts/check-versions.sh "$GITHUB_REF_NAME"
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
-      - run: npm run test:interop
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
+      - run: pnpm run test:interop
 
   publish:
     needs: test
     uses: panyam/servicekit/.github/workflows/npm-publish.yml@master
     with:
       working-directory: ts
+      package-manager: pnpm
