@@ -1,6 +1,6 @@
 module github.com/panyam/massrelay
 
-go 1.26.9
+go 1.27.4
 
 require (
 	connectrpc.com/connect v1.19.2
