@@ -1,4 +1,4 @@
-// Fails if the npm tarball would ship test files. Run after `npm run build`.
+// Fails if the npm tarball would ship test files. Run after `pnpm run build`.
 import { execFileSync } from 'node:child_process';
 
 // npm 10/11 print an array of packs, npm 12 an object keyed by package name.

@@ -58,7 +58,7 @@
     "test:watch": "vitest",
     "test:interop": "vitest run --config vitest.interop.config.ts",
     "exercise": "vitest run --config vitest.exercise.config.ts",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "pnpm run build",
     "check:pack": "node scripts/check-pack.mjs"
   },
   "files": [
@@ -75,5 +75,6 @@
     "massrelay-v033": "npm:@panyam/massrelay@0.3.3",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
-  }
+  },
+  "packageManager": "pnpm@12.11.2"
 }

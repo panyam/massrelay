@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
 // Runs the TS client against a Go relay built from this checkout. Needs Go on
-// PATH and a global WebSocket (Node 22+). `npm run test:interop`.
+// PATH and a global WebSocket (Node 22+). `pnpm run test:interop`.
 export default defineConfig({
   test: {
     include: ['interop/**/*.interop.ts'],

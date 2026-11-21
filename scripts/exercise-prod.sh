@@ -47,4 +47,4 @@ NODE_EXTRA_CA_CERTS=$ca \
 MASSRELAY_RELAY_URL=wss://localhost \
 MASSRELAY_RELAY_RESTART="$compose restart relay" \
 MASSRELAY_ADMIN_TOKEN=dev-admin-token \
-  npm run exercise
+  pnpm run exercise
