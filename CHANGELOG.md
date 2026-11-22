@@ -6,8 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-11-22
+
+Dependency bumps, and the relay reads the client IP correctly behind Caddy.
+Nothing changes on the wire.
+
 ### Changed
-- oneauth v0.3.18. The WebSocket upgrade now refuses a DPoP-bound token
+- oneauth v0.3.18 (PR 84). The WebSocket upgrade now refuses a DPoP-bound token
   (`cnf.jkt`) with 401, as ReAuth already did (oneauth PR 488).
 - servicekit v0.2.5 and `@panyam/servicekit-client` 0.2.5, gocurrent v0.1.3,
   goutils v0.1.16. With `RELAY_TRUSTED_PROXIES` set, the client IP comes from
@@ -19,6 +24,16 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `172.16.0.0/12,192.168.0.0/16`, Docker's bridge address pools. Empty
   trusted every peer, so a client behind Caddy could set its own rate-limit
   key.
+- The TypeScript package builds with pnpm (PR 82). CI scans for known
+  vulnerabilities weekly and on each tag, and files an issue when the scan
+  fails (PR 81). Publishing and the scan use panyam/ci-actions v0.1.4
+  (PRs 83 and 84).
+
+### Upgrading
+- A deployment whose `.env` sets `RELAY_TRUSTED_PROXIES=172.17.0.0/16,...`
+  from the old guide doesn't trust Caddy, whose compose network sits outside
+  that range. Every client then shares Caddy's per-IP limit. Delete the line
+  to use the compose default.
 
 ## [0.3.7] - 2026-11-09
 
