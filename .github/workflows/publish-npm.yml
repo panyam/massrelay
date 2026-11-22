@@ -1,7 +1,7 @@
 name: Publish npm
 
 # Publishes ts/ as @panyam/massrelay when a release tag is pushed, through
-# servicekit's shared workflow, which uses npm trusted publishing (no token).
+# panyam/ci-actions' shared workflow, which uses npm trusted publishing (no token).
 # The Go module and the TS package share one version (CAPABILITIES.md's
 # "## Version"), and scripts/check-versions.sh fails the run when the tag,
 # CAPABILITIES.md or ts/package.json disagree. Run it by
@@ -44,7 +44,7 @@ jobs:
 
   publish:
     needs: test
-    uses: panyam/servicekit/.github/workflows/npm-publish.yml@master
+    uses: panyam/ci-actions/.github/workflows/npm-publish.yml@v0.1.4
     with:
       working-directory: ts
       package-manager: pnpm
