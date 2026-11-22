@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@panyam/servicekit-client@0.2.5'

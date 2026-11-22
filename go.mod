@@ -7,8 +7,8 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/panyam/oneauth v0.3.2
-	github.com/panyam/servicekit v0.2.2
+	github.com/panyam/oneauth v0.3.18
+	github.com/panyam/servicekit v0.2.5
 	github.com/prometheus/client_golang v1.24.1
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0
@@ -31,8 +31,8 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/panyam/gocurrent v0.1.1 // indirect
-	github.com/panyam/goutils v0.1.13 // indirect
+	github.com/panyam/gocurrent v0.1.3 // indirect
+	github.com/panyam/goutils v0.1.16 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect

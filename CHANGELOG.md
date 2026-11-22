@@ -6,6 +6,20 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- oneauth v0.3.18. The WebSocket upgrade now refuses a DPoP-bound token
+  (`cnf.jkt`) with 401, as ReAuth already did (oneauth PR 488).
+- servicekit v0.2.5 and `@panyam/servicekit-client` 0.2.5, gocurrent v0.1.3,
+  goutils v0.1.16. With `RELAY_TRUSTED_PROXIES` set, the client IP comes from
+  `X-Forwarded-For` read right to left past trusted hops. Before, the client
+  wrote the entry the relay used, so it could pick its own rate-limit key.
+- A bad `RELAY_TRUSTED_PROXIES` entry makes `Init` fail. Before, the relay
+  dropped it and trusted fewer proxies than configured.
+- The production compose file defaults `RELAY_TRUSTED_PROXIES` to
+  `172.16.0.0/12,192.168.0.0/16`, Docker's bridge address pools. Empty
+  trusted every peer, so a client behind Caddy could set its own rate-limit
+  key.
+
 ## [0.3.7] - 2026-11-09
 
 Go apps can mint relay tokens with massrelay's own signer.

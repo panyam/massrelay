@@ -116,7 +116,6 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-us-east-0.grafana.net/otlp
 
 # Security (optional but recommended for production)
 RELAY_ALLOWED_ORIGINS=excaliframe.com,*.excaliframe.com,localhost
-RELAY_TRUSTED_PROXIES=172.17.0.0/16,127.0.0.1,::1
 RELAY_MAX_CONNECTIONS=500
 RELAY_GLOBAL_RATE=100
 RELAY_PER_IP_RATE=5
@@ -475,14 +474,15 @@ Supports exact domains, wildcard subdomains, and `localhost` (any port). When no
 
 ### Trusted Proxies
 
-Set `RELAY_TRUSTED_PROXIES` to prevent IP spoofing via `X-Forwarded-For`:
+`RELAY_TRUSTED_PROXIES` names the peers whose `X-Forwarded-For` / `X-Real-IP` headers the relay honors. A client that forges those headers is rate-limited by its real IP.
+
+The production compose file defaults it to Docker's bridge address pools:
 
 ```bash
-# Trust Caddy on Docker bridge + localhost
-RELAY_TRUSTED_PROXIES=172.17.0.0/16,127.0.0.1,::1
+RELAY_TRUSTED_PROXIES=172.16.0.0/12,192.168.0.0/16
 ```
 
-Only requests from trusted CIDRs have their `X-Forwarded-For` / `X-Real-IP` headers honored. Direct clients that send forged headers are rate-limited by their real IP. When not set, all proxies are trusted (backwards-compatible for single-proxy setups).
+The relay port is exposed only on the compose network, so Caddy is the only peer in those ranges. Compose networks get addresses from 172.18.0.0/16 up, so `172.17.0.0/16` alone misses Caddy. A bad entry stops the relay at startup. With the variable empty, the relay trusts every peer, and any client can choose its own rate-limit key.
 
 ## Troubleshooting
 
