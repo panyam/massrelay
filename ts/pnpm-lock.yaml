@@ -170,14 +170,14 @@ importers:
         specifier: ^2.11.0
         version: 2.16.0
       '@panyam/servicekit-client':
-        specifier: ^0.2.2
-        version: 0.2.2
+        specifier: ^0.2.5
+        version: 0.2.5
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
       massrelay-v033:
         specifier: npm:@panyam/massrelay@0.3.3
-        version: '@panyam/massrelay@0.3.3(@bufbuild/protobuf@2.16.0)(@panyam/servicekit-client@0.2.2)'
+        version: '@panyam/massrelay@0.3.3(@bufbuild/protobuf@2.16.0)(@panyam/servicekit-client@0.2.5)'
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -202,8 +202,8 @@ packages:
       '@bufbuild/protobuf': ^2.0.0
       '@panyam/servicekit-client': ^0.0.7 || ^0.1.9 || ^0.2.0
 
-  '@panyam/servicekit-client@0.2.2':
-    resolution: {integrity: sha512-Rr5lMs9vYwBt34Sbt18lzZl4Mq0udcgkrdxLIyjHw7+k7tyVIgtE0cemOGh04PS0ROPAmYOi7OGypefBAcktig==}
+  '@panyam/servicekit-client@0.2.5':
+    resolution: {integrity: sha512-xl5rWzIcaxVFHDIvLAq2etQzj0JSsL14G2NW/y3MI7UepCQwamcIt4ljmg9iRHJ7yzAntbkkgMU6S/Vy/ugBKg==}
     engines: {node: '>=16.0.0'}
 
   '@rolldown/binding-android-arm-eabi@1.2.15':
@@ -626,12 +626,12 @@ snapshots:
 
   '@oxc-project/types@0.155.0': {}
 
-  '@panyam/massrelay@0.3.3(@bufbuild/protobuf@2.16.0)(@panyam/servicekit-client@0.2.2)':
+  '@panyam/massrelay@0.3.3(@bufbuild/protobuf@2.16.0)(@panyam/servicekit-client@0.2.5)':
     dependencies:
       '@bufbuild/protobuf': 2.16.0
-      '@panyam/servicekit-client': 0.2.2
+      '@panyam/servicekit-client': 0.2.5
 
-  '@panyam/servicekit-client@0.2.2': {}
+  '@panyam/servicekit-client@0.2.5': {}
 
   '@rolldown/binding-android-arm-eabi@1.2.15':
     optional: true

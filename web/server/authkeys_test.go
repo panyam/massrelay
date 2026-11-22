@@ -247,3 +247,15 @@ func TestCloseWithoutJWKS(t *testing.T) {
 	}
 	failed.Close()
 }
+
+// A typo in RELAY_TRUSTED_PROXIES fails Init. servicekit's old parser
+// dropped the entry, and the relay then trusted fewer proxies than asked.
+func TestInitRejectsBadTrustedProxy(t *testing.T) {
+	t.Setenv("RELAY_TRUSTED_PROXIES", "127.0.0.1,172.17.0.0/99")
+	app := NewRelayApp()
+	defer app.Close()
+	err := app.Init()
+	if err == nil || !strings.Contains(err.Error(), "RELAY_TRUSTED_PROXIES") {
+		t.Fatalf("Init() = %v, want a RELAY_TRUSTED_PROXIES error", err)
+	}
+}

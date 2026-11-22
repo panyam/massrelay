@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -55,7 +56,8 @@ type RelayApp struct {
 //	                              Empty = allow all origins.
 //	RELAY_TRUSTED_PROXIES=...   — comma-separated CIDR ranges of trusted reverse proxies
 //	                              (e.g. "127.0.0.1,172.17.0.0/16,::1")
-//	                              Empty = trust all (backwards-compatible, suitable behind proxy)
+//	                              Empty = trust all (backwards-compatible). A bad entry
+//	                              makes Init fail.
 //	RELAY_MAX_CONNECTIONS=N     — max concurrent WebSocket connections (0 = unlimited, default 500)
 //	RELAY_GLOBAL_RATE=N         — max WebSocket connections/sec globally (default 100)
 //	RELAY_PER_IP_RATE=N         — max WebSocket connections/sec per IP (default 5)
@@ -78,11 +80,17 @@ func NewRelayApp() *RelayApp {
 		}
 	}
 
-	// Trusted proxies (for X-Forwarded-For)
+	// Trusted proxies (for X-Forwarded-For). Unset keeps servicekit's
+	// trust-every-peer default. A bad entry is a config error from Init.
+	var proxyErr error
 	if v := os.Getenv("RELAY_TRUSTED_PROXIES"); v != "" {
-		cidrs := strings.Split(v, ",")
-		mw.SetTrustedProxies(cidrs)
-		slog.Info("Trusted proxies configured", "cidrs", cidrs)
+		entries := strings.Split(v, ",")
+		if tp, err := mw.ParseTrustedProxies(entries); err != nil {
+			proxyErr = fmt.Errorf("RELAY_TRUSTED_PROXIES: %w", err)
+		} else {
+			mw.SetDefaultTrustedProxies(tp)
+			slog.Info("Trusted proxies configured", "cidrs", entries)
+		}
 	}
 
 	// Origin allowlist (shared between WebSocket guard and CORS)
@@ -147,6 +155,9 @@ func NewRelayApp() *RelayApp {
 	authIssuer := os.Getenv("RELAY_AUTH_ISSUER")
 	if initErr == nil && authRequired && authKeyStore == nil {
 		initErr = ErrAuthRequiredNoKeys
+	}
+	if initErr == nil {
+		initErr = proxyErr
 	}
 
 	auth := middleware.NewRelayAuthenticator(middleware.RelayAuthConfig{

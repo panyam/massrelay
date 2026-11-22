@@ -743,11 +743,11 @@ In `deploy/production`, put the file in `deploy/production/secrets/` (mounted re
 When deploying behind a reverse proxy (Caddy, nginx, etc.), configure trusted proxies so the relay uses the real client IP for rate limiting instead of the proxy IP:
 
 ```bash
-# Trust Docker bridge network and localhost
-RELAY_TRUSTED_PROXIES=172.17.0.0/16,127.0.0.1,::1
+# Docker's bridge address pools (the production compose default) and localhost
+RELAY_TRUSTED_PROXIES=172.16.0.0/12,192.168.0.0/16,127.0.0.1,::1
 ```
 
-The relay checks `X-Forwarded-For` and `X-Real-IP` headers only when `RemoteAddr` is from a trusted CIDR. This prevents direct clients from spoofing their IP to bypass rate limits. If not set, all proxies are trusted (backwards-compatible for single-proxy deployments).
+The relay checks `X-Forwarded-For` and `X-Real-IP` headers only when `RemoteAddr` is from a trusted CIDR. This prevents direct clients from spoofing their IP to bypass rate limits. If not set, every peer is trusted, so any client can choose its own rate-limit key. A bad entry stops the relay at startup.
 
 ### Per-Subject Rate Limiting
 
